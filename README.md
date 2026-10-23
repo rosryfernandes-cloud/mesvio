@@ -18,7 +18,7 @@ npm run demo:urls  # URLs das 10 mesas de demonstração
 Abra `http://localhost:3000` (página comercial da MESVIO) ou `http://localhost:3000/demo` para escolher uma mesa de demonstração, ou vá diretamente a um URL de mesa (ex.: `/m/jG6WQHgwr4fQ5qQEOKtZJw`).
 
 ### Línguas da ementa
-O cliente vê a ementa, o pedido e a conta em PT, EN, ES, FR ou DE: escolhida pelo telemóvel (Accept-Language) ou no seletor da ementa (fica guardada num cookie). Botões, avisos, alergénios e etiquetas estão em `src/lib/i18n/`; pratos e categorias vêm da tabela `menu_translations` (por restaurante, com RLS). A demo tem inglês completo. O POS e o painel continuam em português.
+O cliente vê a ementa, o pedido e a conta em português ou inglês: telemóveis em português abrem em português, todos os outros em inglês, e há um seletor na ementa (a escolha fica num cookie). Botões, avisos, alergénios e etiquetas estão em `src/lib/i18n/`; pratos e categorias vêm da tabela `menu_translations` (por restaurante, com RLS). A demo tem inglês completo. O POS e o painel continuam em português.
 
 ### Publicar
 Passo a passo (domínio, Supabase, GitHub, Vercel) em [docs/14-PUBLICAR.md](docs/14-PUBLICAR.md).
@@ -34,7 +34,7 @@ Identidade, cores, logótipos e regras de uso em [docs/13-MARCA.md](docs/13-MARC
 - **Aprovar cada pedido antes de seguir para a cozinha** (opcional): os pedidos ficam à espera até o staff aprovar ou recusar.
 - **Precisa de atenção** (o POS não recebeu): tentar de novo, "já lancei no POS" ou cancelar.
 - **Aparência** (dono/gerente): cor principal e logótipo (URL https) do restaurante na ementa, no estado do pedido e na conta, com pré-visualização. Só aceita cores com contraste WCAG AA; a MESVIO fica só no rodapé.
-- **Traduções** (dono/gerente): nomes e descrições da ementa em inglês, espanhol, francês e alemão, com contagem do que falta. O que não estiver traduzido aparece em inglês ou no original.
+- **Inglês** (dono/gerente): nomes e descrições da ementa em inglês, com contagem do que falta. O que não estiver traduzido aparece em português.
 - **Esgotados**: tira artigos da ementa do cliente na hora (não consegue repor o que o POS dá como esgotado).
 - **Mesas**: mesas livres e ocupadas, com a conta de cada uma; **Fechar mesa** quando os clientes pagam (avisa se houver pedidos por resolver). A mesa fica limpa para os clientes seguintes; uma conta esquecida fecha sozinha 6 h após o último pedido.
 

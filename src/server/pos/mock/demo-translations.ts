@@ -1,121 +1,119 @@
 /**
- * Traduções da ementa de demonstração (Swara Beach ClubHouse). Inglês completo; em espanhol,
- * francês e alemão traduzem-se secções, categorias e opções, e os pratos usam o inglês como
- * reserva (como num restaurante real que ainda só traduziu para inglês).
+ * Traduções para inglês da ementa de demonstração (Swara Beach ClubHouse).
  * Marcas e nomes próprios (vinhos, gins, cervejas) não se traduzem.
  */
-type Row = { locale: "en" | "es" | "fr" | "de"; kind: "section" | "category" | "product" | "group" | "modifier"; ref: string; name: string; description?: string };
+type Row = { locale: "en"; kind: "section" | "category" | "product" | "group" | "modifier"; ref: string; name: string; description?: string };
 
-const SECTIONS: Record<string, Record<"en" | "es" | "fr" | "de", string>> = {
-  Comida: { en: "Food", es: "Comida", fr: "Cuisine", de: "Essen" },
-  Bebidas: { en: "Drinks", es: "Bebidas", fr: "Boissons", de: "Getränke" },
-  "Bar & Cocktails": { en: "Bar & Cocktails", es: "Bar y cócteles", fr: "Bar & cocktails", de: "Bar & Cocktails" },
+const SECTIONS: Record<string, string> = {
+  Comida: "Food",
+  Bebidas: "Drinks",
+  "Bar & Cocktails": "Bar & Cocktails",
 };
 
-/** ref → [en, es, fr, de] */
-const CATEGORIES: Record<string, [string, string, string, string]> = {
-  "F-COUVERT": ["Bread & starters", "Pan y aperitivos", "Pain et amuse-bouches", "Brot & Vorspeisen"],
-  "F-ENTRADAS": ["Starters", "Entrantes", "Entrées", "Vorspeisen"],
-  "F-PARTILHAR": ["To share", "Para compartir", "À partager", "Zum Teilen"],
-  "F-MAR": ["From the sea", "Del mar", "De la mer", "Aus dem Meer"],
-  "F-TERRA": ["From the land", "De la tierra", "De la terre", "Vom Land"],
-  "F-ACOMP": ["Sides", "Guarniciones", "Accompagnements", "Beilagen"],
-  "F-HAMBURGUERES": ["Burgers", "Hamburguesas", "Burgers", "Burger"],
-  "F-TOSTAS": ["Toasties", "Tostas", "Croque-monsieur", "Toasts"],
-  "F-WRAPS": ["Wraps", "Wraps", "Wraps", "Wraps"],
-  "F-MASSAS": ["Pasta", "Pasta", "Pâtes", "Pasta"],
-  "F-KIDS": ["Kids menu", "Menú infantil", "Menu enfant", "Kindermenü"],
-  "F-SOBREMESAS": ["Desserts", "Postres", "Desserts", "Desserts"],
-  "F-APERITIVOS": ["Snacks", "Picoteo", "Grignotages", "Snacks"],
-  "D-AGUAS": ["Water & soft drinks", "Agua y refrescos", "Eaux et sodas", "Wasser & Softdrinks"],
-  "D-CAFETARIA": ["Coffee", "Cafetería", "Cafés", "Kaffee"],
-  "D-SUMOS": ["Juices & milkshakes", "Zumos y batidos", "Jus et milkshakes", "Säfte & Milchshakes"],
-  "D-CHAS": ["Teas", "Infusiones", "Thés", "Tee"],
-  "D-CERVEJAS": ["Beers & ciders", "Cervezas y sidras", "Bières et cidres", "Bier & Cider"],
-  "D-TINTOS": ["Red wines", "Vinos tintos", "Vins rouges", "Rotweine"],
-  "D-BRANCOS": ["White wines", "Vinos blancos", "Vins blancs", "Weißweine"],
-  "D-VERDES": ["Vinho Verde", "Vinho Verde", "Vinho Verde", "Vinho Verde"],
-  "D-ROSES": ["Rosé wines", "Vinos rosados", "Vins rosés", "Roséweine"],
-  "D-ESPUMANTES": ["Champagne & sparkling", "Champán y espumosos", "Champagne et mousseux", "Champagner & Schaumwein"],
-  "X-MOCKTAILS": ["Mocktails", "Cócteles sin alcohol", "Mocktails", "Alkoholfreie Cocktails"],
-  "X-SWARA": ["Swara cocktails", "Cócteles Swara", "Cocktails Swara", "Swara-Cocktails"],
-  "X-CLASSICOS": ["Classic cocktails", "Cócteles clásicos", "Cocktails classiques", "Klassische Cocktails"],
-  "X-SANGRIAS": ["Sangrias", "Sangrías", "Sangrias", "Sangrias"],
-  "X-APERITIVOS": ["Aperitifs", "Aperitivos", "Apéritifs", "Aperitifs"],
-  "X-DIGESTIVOS": ["Digestifs", "Digestivos", "Digestifs", "Digestifs"],
-  "X-GINS": ["Gins", "Ginebras", "Gins", "Gins"],
-  "X-ESPIRITUOSAS": ["Whiskey, vodka & rum", "Whisky, vodka y ron", "Whisky, vodka et rhum", "Whiskey, Wodka & Rum"],
-  "X-SHOTS": ["Shots", "Chupitos", "Shots", "Shots"],
+/** ref → nome em inglês */
+const CATEGORIES: Record<string, string> = {
+  "F-COUVERT": "Bread & starters",
+  "F-ENTRADAS": "Starters",
+  "F-PARTILHAR": "To share",
+  "F-MAR": "From the sea",
+  "F-TERRA": "From the land",
+  "F-ACOMP": "Sides",
+  "F-HAMBURGUERES": "Burgers",
+  "F-TOSTAS": "Toasties",
+  "F-WRAPS": "Wraps",
+  "F-MASSAS": "Pasta",
+  "F-KIDS": "Kids menu",
+  "F-SOBREMESAS": "Desserts",
+  "F-APERITIVOS": "Snacks",
+  "D-AGUAS": "Water & soft drinks",
+  "D-CAFETARIA": "Coffee",
+  "D-SUMOS": "Juices & milkshakes",
+  "D-CHAS": "Teas",
+  "D-CERVEJAS": "Beers & ciders",
+  "D-TINTOS": "Red wines",
+  "D-BRANCOS": "White wines",
+  "D-VERDES": "Vinho Verde",
+  "D-ROSES": "Rosé wines",
+  "D-ESPUMANTES": "Champagne & sparkling",
+  "X-MOCKTAILS": "Mocktails",
+  "X-SWARA": "Swara cocktails",
+  "X-CLASSICOS": "Classic cocktails",
+  "X-SANGRIAS": "Sangrias",
+  "X-APERITIVOS": "Aperitifs",
+  "X-DIGESTIVOS": "Digestifs",
+  "X-GINS": "Gins",
+  "X-ESPIRITUOSAS": "Whiskey, vodka & rum",
+  "X-SHOTS": "Shots",
 };
 
-/** Grupos de opções: ref → [en, es, fr, de] */
-const GROUPS: Record<string, [string, string, string, string]> = {
-  "GRP-PEIXE": ["Fish", "Pescado", "Poisson", "Fisch"],
-  "GRP-BATATA": ["Fries", "Patatas", "Frites", "Pommes"],
-  "GRP-EXTRAS-HAMB": ["Extras", "Extras", "Suppléments", "Extras"],
-  "GRP-TORRADA": ["With", "Con", "Avec", "Mit"],
-  "GRP-KIDS": ["Choice", "Elige", "Au choix", "Auswahl"],
-  "GRP-ACAI": ["Topping", "Topping", "Garniture", "Topping"],
-  "GRP-FRIZE": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-COCA": ["Choice", "Elige", "Au choix", "Auswahl"],
-  "GRP-ICETEA": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-LEITE": ["Milk", "Leche", "Lait", "Milch"],
-  "GRP-BATIDO": ["Fruit", "Fruta", "Fruit", "Frucht"],
-  "GRP-CHA-TEMP": ["Hot or iced", "Caliente o frío", "Chaud ou glacé", "Heiß oder kalt"],
-  "GRP-CHA": ["Tea", "Infusión", "Thé", "Tee"],
-  "GRP-CHA-MEL": ["Extras", "Extras", "Suppléments", "Extras"],
-  "GRP-PANACHE-S": ["Choice", "Elige", "Au choix", "Auswahl"],
-  "GRP-PANACHE-L": ["Choice", "Elige", "Au choix", "Auswahl"],
-  "GRP-SOMERSBY": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-CAIPIRINHA": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-CAIPIROSKA": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-MOJITO": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-DAIQUIRI": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-MARGARITA": ["Flavour", "Sabor", "Parfum", "Geschmack"],
-  "GRP-SPRITZ": ["Choice", "Elige", "Au choix", "Auswahl"],
-  "GRP-SOUR": ["Base spirit", "Base", "Alcool de base", "Basis"],
+/** Grupos de opções: ref → nome em inglês */
+const GROUPS: Record<string, string> = {
+  "GRP-PEIXE": "Fish",
+  "GRP-BATATA": "Fries",
+  "GRP-EXTRAS-HAMB": "Extras",
+  "GRP-TORRADA": "With",
+  "GRP-KIDS": "Choice",
+  "GRP-ACAI": "Topping",
+  "GRP-FRIZE": "Flavour",
+  "GRP-COCA": "Choice",
+  "GRP-ICETEA": "Flavour",
+  "GRP-LEITE": "Milk",
+  "GRP-BATIDO": "Fruit",
+  "GRP-CHA-TEMP": "Hot or iced",
+  "GRP-CHA": "Tea",
+  "GRP-CHA-MEL": "Extras",
+  "GRP-PANACHE-S": "Choice",
+  "GRP-PANACHE-L": "Choice",
+  "GRP-SOMERSBY": "Flavour",
+  "GRP-CAIPIRINHA": "Flavour",
+  "GRP-CAIPIROSKA": "Flavour",
+  "GRP-MOJITO": "Flavour",
+  "GRP-DAIQUIRI": "Flavour",
+  "GRP-MARGARITA": "Flavour",
+  "GRP-SPRITZ": "Choice",
+  "GRP-SOUR": "Base spirit",
 };
 
-/** Opções por nome original (iguais em vários grupos): nome → [en, es, fr, de]. Marcas ficam como estão. */
-const MODIFIER_NAMES: Record<string, [string, string, string, string]> = {
-  Robalo: ["Sea bass", "Lubina", "Bar", "Wolfsbarsch"],
-  Dourada: ["Sea bream", "Dorada", "Dorade", "Dorade"],
-  "Mediterrânea": ["Mediterranean potatoes", "Patatas mediterráneas", "Pommes méditerranéennes", "Mediterrane Kartoffeln"],
-  Palito: ["French fries", "Patatas fritas", "Frites", "Pommes frites"],
-  Doce: ["Sweet potato fries", "Boniato frito", "Frites de patate douce", "Süßkartoffel-Pommes"],
-  Queijo: ["Cheese", "Queso", "Fromage", "Käse"],
-  "Ovo estrelado": ["Fried egg", "Huevo frito", "Œuf au plat", "Spiegelei"],
-  "Mix de cogumelos": ["Mixed mushrooms", "Mezcla de setas", "Mélange de champignons", "Pilzmischung"],
-  "Hambúrguer duplo": ["Double patty", "Doble hamburguesa", "Double steak", "Doppeltes Patty"],
-  Manteiga: ["Butter", "Mantequilla", "Beurre", "Butter"],
-  Mel: ["Honey", "Miel", "Miel", "Honig"],
-  "Hambúrguer de novilho": ["Beef burger", "Hamburguesa de ternera", "Burger de bœuf", "Rindfleisch-Burger"],
-  "Hambúrguer de frango": ["Chicken burger", "Hamburguesa de pollo", "Burger de poulet", "Hähnchen-Burger"],
-  "Panado de frango": ["Breaded chicken", "Pollo empanado", "Poulet pané", "Paniertes Hähnchen"],
-  "Leite condensado": ["Condensed milk", "Leche condensada", "Lait concentré sucré", "Kondensmilch"],
-  "Limão": ["Lemon", "Limón", "Citron", "Zitrone"],
-  Groselha: ["Redcurrant", "Grosella", "Groseille", "Johannisbeere"],
-  "Pêssego": ["Peach", "Melocotón", "Pêche", "Pfirsich"],
-  Manga: ["Mango", "Mango", "Mangue", "Mango"],
-  Normal: ["Regular", "Normal", "Normal", "Normal"],
-  "Sem lactose": ["Lactose-free", "Sin lactosa", "Sans lactose", "Laktosefrei"],
-  "Bebida de amêndoa": ["Almond drink", "Bebida de almendra", "Boisson à l'amande", "Mandeldrink"],
-  "Bebida de aveia": ["Oat drink", "Bebida de avena", "Boisson à l'avoine", "Haferdrink"],
-  Abacaxi: ["Pineapple", "Piña", "Ananas", "Ananas"],
-  "Maracujá": ["Passion fruit", "Maracuyá", "Fruit de la passion", "Maracuja"],
-  Morango: ["Strawberry", "Fresa", "Fraise", "Erdbeere"],
-  Quente: ["Hot", "Caliente", "Chaud", "Heiß"],
-  Frio: ["Iced", "Frío", "Glacé", "Kalt"],
-  Camomila: ["Chamomile", "Manzanilla", "Camomille", "Kamille"],
-  Cidreira: ["Lemon balm", "Melisa", "Mélisse", "Melisse"],
-  "Lúcia-lima": ["Lemon verbena", "Hierbaluisa", "Verveine", "Zitronenverbene"],
-  Verde: ["Green", "Verde", "Vert", "Grün"],
-  Preto: ["Black", "Negro", "Noir", "Schwarz"],
-  Menta: ["Mint", "Menta", "Menthe", "Minze"],
-  "Frutos vermelhos": ["Red berries", "Frutos rojos", "Fruits rouges", "Rote Beeren"],
-  "Adoçado com mel": ["Sweetened with honey", "Endulzado con miel", "Sucré au miel", "Mit Honig gesüßt"],
-  "Maçã": ["Apple", "Manzana", "Pomme", "Apfel"],
-  "Clássico": ["Classic", "Clásico", "Classique", "Klassisch"],
+/** Opções por nome original (iguais em vários grupos): nome → inglês. Marcas ficam como estão. */
+const MODIFIER_NAMES: Record<string, string> = {
+  Robalo: "Sea bass",
+  Dourada: "Sea bream",
+  "Mediterrânea": "Mediterranean potatoes",
+  Palito: "French fries",
+  Doce: "Sweet potato fries",
+  Queijo: "Cheese",
+  "Ovo estrelado": "Fried egg",
+  "Mix de cogumelos": "Mixed mushrooms",
+  "Hambúrguer duplo": "Double patty",
+  Manteiga: "Butter",
+  Mel: "Honey",
+  "Hambúrguer de novilho": "Beef burger",
+  "Hambúrguer de frango": "Chicken burger",
+  "Panado de frango": "Breaded chicken",
+  "Leite condensado": "Condensed milk",
+  "Limão": "Lemon",
+  Groselha: "Redcurrant",
+  "Pêssego": "Peach",
+  Manga: "Mango",
+  Normal: "Regular",
+  "Sem lactose": "Lactose-free",
+  "Bebida de amêndoa": "Almond drink",
+  "Bebida de aveia": "Oat drink",
+  Abacaxi: "Pineapple",
+  "Maracujá": "Passion fruit",
+  Morango: "Strawberry",
+  Quente: "Hot",
+  Frio: "Iced",
+  Camomila: "Chamomile",
+  Cidreira: "Lemon balm",
+  "Lúcia-lima": "Lemon verbena",
+  Verde: "Green",
+  Preto: "Black",
+  Menta: "Mint",
+  "Frutos vermelhos": "Red berries",
+  "Adoçado com mel": "Sweetened with honey",
+  "Maçã": "Apple",
+  "Clássico": "Classic",
 };
 
 /** Pratos em inglês: ref → [nome, descrição?]. Os que só têm marca/nome próprio ficam de fora. */
@@ -315,26 +313,22 @@ const PRODUCTS_EN: Record<string, [string, string?]> = {
   X604: ["B52", "Coffee liqueur, Baileys and rum."],
 };
 
-/** Opções com o mesmo nome mas sentido diferente noutro grupo: ref → [en, es, fr, de]. */
-const MODIFIER_REFS: Record<string, [string, string, string, string]> = {
-  "GRP-TORRADA-3": ["Jam", "Mermelada", "Confiture", "Marmelade"],
+/** Opções com o mesmo nome mas sentido diferente noutro grupo: ref → inglês. */
+const MODIFIER_REFS: Record<string, string> = {
+  "GRP-TORRADA-3": "Jam",
 };
-
-const LANGS = ["en", "es", "fr", "de"] as const;
 
 /** Todas as linhas de tradução da demo. `modifiers`: refs das opções e o seu nome original. */
 export function demoTranslationRows(modifiers: { ref: string; name: string }[]): Row[] {
   const rows: Row[] = [];
-  for (const [section, byLang] of Object.entries(SECTIONS))
-    for (const locale of LANGS) rows.push({ locale, kind: "section", ref: section, name: byLang[locale] });
-  for (const [ref, names] of Object.entries(CATEGORIES))
-    LANGS.forEach((locale, i) => rows.push({ locale, kind: "category", ref, name: names[i] }));
-  for (const [ref, names] of Object.entries(GROUPS))
-    LANGS.forEach((locale, i) => rows.push({ locale, kind: "group", ref, name: names[i] }));
+  const add = (kind: Row["kind"], ref: string, name: string, description?: string) => rows.push({ locale: "en", kind, ref, name, description });
+  for (const [section, name] of Object.entries(SECTIONS)) add("section", section, name);
+  for (const [ref, name] of Object.entries(CATEGORIES)) add("category", ref, name);
+  for (const [ref, name] of Object.entries(GROUPS)) add("group", ref, name);
   for (const m of modifiers) {
-    const names = MODIFIER_REFS[m.ref] ?? MODIFIER_NAMES[m.name];
-    if (names) LANGS.forEach((locale, i) => rows.push({ locale, kind: "modifier", ref: m.ref, name: names[i] }));
+    const name = MODIFIER_REFS[m.ref] ?? MODIFIER_NAMES[m.name];
+    if (name) add("modifier", m.ref, name);
   }
-  for (const [ref, [name, description]] of Object.entries(PRODUCTS_EN)) rows.push({ locale: "en", kind: "product", ref, name, description });
+  for (const [ref, [name, description]] of Object.entries(PRODUCTS_EN)) add("product", ref, name, description);
   return rows;
 }

@@ -3,12 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TranslatableItem, TranslationLocale } from "@/server/staff/translations-service";
 
-const LANGS: { code: TranslationLocale; label: string }[] = [
-  { code: "en", label: "Inglês" },
-  { code: "es", label: "Espanhol" },
-  { code: "fr", label: "Francês" },
-  { code: "de", label: "Alemão" },
-];
+/** Hoje só há inglês; o resto da ementa fica em português. */
+const LOCALE: TranslationLocale = "en";
 
 type Filter = "product" | "category" | "option";
 const FILTERS: { id: Filter; label: string }[] = [
@@ -27,7 +23,7 @@ const keyOf = (i: Pick<TranslatableItem, "kind" | "ref">) => `${i.kind}|${i.ref}
 
 /** Traduções da ementa feitas pelo restaurante (dono/gerente). */
 export function TranslationsView() {
-  const [locale, setLocale] = useState<TranslationLocale>("en");
+  const locale = LOCALE;
   const [filter, setFilter] = useState<Filter>("product");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [query, setQuery] = useState("");
@@ -105,31 +101,16 @@ export function TranslationsView() {
     await load(locale);
   }
 
-  const langLabel = LANGS.find((l) => l.code === locale)!.label.toLowerCase();
+  const langLabel = "inglês";
 
   return (
     <div className="grid gap-5 pb-24">
       <div>
-        <h2 className="text-xl">Traduções da ementa</h2>
+        <h2 className="text-xl">Ementa em inglês</h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-          Os clientes veem a ementa na língua do telemóvel. Botões, alergénios e avisos já estão traduzidos; aqui traduz os nomes e
-          descrições do seu POS. O que ficar por traduzir aparece em inglês (se existir) ou em português.
+          Clientes com o telemóvel noutra língua veem a ementa em inglês (e podem mudar para português). Botões, alergénios e avisos
+          já estão traduzidos; aqui traduz os nomes e descrições do seu POS. O que ficar por traduzir aparece em português.
         </p>
-      </div>
-
-      <div role="tablist" aria-label="Língua" className="flex flex-wrap gap-2">
-        {LANGS.map((l) => (
-          <button
-            key={l.code}
-            type="button"
-            role="tab"
-            aria-selected={locale === l.code}
-            onClick={() => setLocale(l.code)}
-            className={`min-h-10 rounded-full px-4 text-sm font-semibold ${locale === l.code ? "bg-brand text-white" : "border border-line bg-card"}`}
-          >
-            {l.label}
-          </button>
-        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

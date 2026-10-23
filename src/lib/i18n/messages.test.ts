@@ -1,46 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorText, issueText, LOCALES, MESSAGES, pickLocale } from "./messages";
+import { apiErrorText, issueText, MESSAGES, pickLocale } from "./messages";
 import { translateAllergen, translateTag } from "./food-terms";
 
 describe("escolha da língua", () => {
   it("usa a escolha guardada antes da língua do telemóvel", () => {
-    expect(pickLocale("de", "en-GB,en;q=0.9")).toBe("de");
+    expect(pickLocale("pt", "en-GB,en;q=0.9")).toBe("pt");
+    expect(pickLocale("en", "pt-PT")).toBe("en");
   });
-  it("segue a preferência do telemóvel por ordem de q", () => {
-    expect(pickLocale(undefined, "nl-NL,nl;q=0.9,fr;q=0.8,en;q=0.7")).toBe("fr");
-    expect(pickLocale(undefined, "en-US")).toBe("en");
-    expect(pickLocale(undefined, "es;q=0.5, de;q=0.9")).toBe("de");
+  it("telemóvel em português fica em português; qualquer outra língua passa a inglês", () => {
+    expect(pickLocale(undefined, "pt-PT,pt;q=0.9")).toBe("pt");
+    expect(pickLocale(undefined, "pt-BR")).toBe("pt");
+    expect(pickLocale(undefined, "de-DE,de;q=0.9,en;q=0.8")).toBe("en");
+    expect(pickLocale(undefined, "es;q=0.5, pt;q=0.9")).toBe("pt");
   });
-  it("português quando nada coincide ou o cookie é inválido", () => {
-    expect(pickLocale("xx", "ja-JP,zh;q=0.8")).toBe("pt");
+  it("português sem preferência; uma escolha antiga (ex.: espanhol) já não conta", () => {
     expect(pickLocale(undefined, null)).toBe("pt");
+    expect(pickLocale("es", "pt-PT")).toBe("pt");
+    expect(pickLocale("fr", "fr-FR")).toBe("en");
   });
 });
 
 describe("dicionários", () => {
-  it("todas as línguas traduzem os mesmos erros da API", () => {
-    const keys = Object.keys(MESSAGES.en.apiError).sort();
-    for (const l of LOCALES.filter((x) => x !== "pt")) expect(Object.keys(MESSAGES[l].apiError).sort(), l).toEqual(keys);
-  });
-  it("erros: português usa a mensagem do servidor; as outras línguas, o código", () => {
+  it("erros: português usa a mensagem do servidor; inglês traduz pelo código", () => {
     const data = { code: "RATE_LIMITED", message: "Demasiados pedidos (servidor)." };
     expect(apiErrorText(MESSAGES.pt, "pt", data, "x")).toBe("Demasiados pedidos (servidor).");
     expect(apiErrorText(MESSAGES.en, "en", data, "x")).toBe(MESSAGES.en.apiError.RATE_LIMITED);
-    expect(apiErrorText(MESSAGES.de, "de", { code: "DESCONHECIDO" }, "fallback")).toBe("fallback");
+    expect(apiErrorText(MESSAGES.en, "en", { code: "DESCONHECIDO" }, "fallback")).toBe("fallback");
   });
-  it("motivos do carrinho na língua do cliente", () => {
+  it("motivos do carrinho em inglês", () => {
     expect(issueText(MESSAGES.en, { kind: "choose", group: "Fries", name: "Swara burger" })).toBe("Choose fries for Swara burger.");
-    expect(issueText(MESSAGES.fr, { kind: "notOnMenu" })).toBe("N'est plus à la carte.");
+    expect(issueText(MESSAGES.en, { kind: "notOnMenu" })).toBe("No longer on the menu.");
   });
 });
 
 describe("alergénios e etiquetas", () => {
   it("traduz os 14 alergénios vindos do POS e deixa o resto como está", () => {
     expect(translateAllergen("glúten", "en")).toBe("gluten");
-    expect(translateAllergen("Frutos de casca rija", "de")).toBe("Schalenfrüchte");
-    expect(translateAllergen("tremoço", "fr")).toBe("lupin");
+    expect(translateAllergen("Frutos de casca rija", "en")).toBe("tree nuts");
+    expect(translateAllergen("tremoço", "en")).toBe("lupin");
     expect(translateAllergen("glúten", "pt")).toBe("glúten");
-    expect(translateTag("vegetariano", "es")).toBe("vegetariano");
+    expect(translateTag("vegetariano", "en")).toBe("vegetarian");
     expect(translateTag("12h–15h · 19h–22h", "en")).toBe("12h–15h · 19h–22h");
   });
 });

@@ -11,7 +11,7 @@ import type { TranslationKind } from "@/server/menu/menu-translations";
 type Scope = Pick<StaffContext, "userId" | "organizationId" | "establishmentId">;
 const tenantOf = (s: Scope) => ({ organizationId: s.organizationId, userId: s.userId });
 
-export const TRANSLATION_LOCALES = ["en", "es", "fr", "de"] as const;
+export const TRANSLATION_LOCALES = ["en"] as const;
 export type TranslationLocale = (typeof TRANSLATION_LOCALES)[number];
 
 /** Um elemento da ementa a traduzir, com o original do POS e a tradução atual (se houver). */
@@ -81,7 +81,7 @@ export const translationChangesSchema = z.object({
       z.object({
         kind: z.enum(["section", "category", "product", "group", "modifier"]),
         ref: z.string().min(1).max(200),
-        /** Vazio = apagar a tradução (volta ao inglês ou ao original). */
+        /** Vazio = apagar a tradução (volta ao original). */
         name: z.string().trim().max(200),
         description: z.string().trim().max(1000).optional(),
       }),

@@ -24,7 +24,7 @@ beforeEach(async () => {
 
 const product = (menu: Awaited<ReturnType<typeof getTableMenu>>, ref: string) => menu!.categories.flatMap((c) => c.products).find((p) => p.ref === ref)!;
 
-describe("ementa em várias línguas", () => {
+describe("ementa em português e inglês", () => {
   it("português: tudo como vem do POS", async () => {
     const menu = await getTableMenu(T1.publicToken, { db, locale: "pt" });
     expect(menu!.categories[0]).toMatchObject({ name: "Couvert", section: "Comida", sectionKey: "Comida" });
@@ -43,13 +43,6 @@ describe("ementa em várias línguas", () => {
     expect(burger.priceCents).toBe(1800);
   });
 
-  it("espanhol: categorias em espanhol; pratos sem tradução espanhola usam o inglês", async () => {
-    const menu = await getTableMenu(T1.publicToken, { db, locale: "es" });
-    expect(menu!.categories.find((c) => c.ref === "F-ENTRADAS")!.name).toBe("Entrantes");
-    expect(product(menu, "F111").name).toBe("Vegetable tempura");
-    expect(product(menu, "F111").allergens).toEqual(["gluten", "huevos", "leche"]);
-  });
-
   it("o pedido e a conta mostram os artigos na língua do cliente (o POS recebe o original)", async () => {
     const r = await placeOrder(
       { tableToken: T1.publicToken, idempotencyKey: randomUUID(), lines: [{ productRef: "F162", quantity: 1, modifierRefs: ["GRP-BATATA-2"] }] },
@@ -65,34 +58,35 @@ describe("ementa em várias línguas", () => {
     expect(en!.lines[0]).toMatchObject({ name: "Swara burger (180 g)", modifierNames: ["French fries"] });
     const pt = await getOrderForTable(db, T1.publicToken, orderId);
     expect(pt!.lines[0].name).toBe("Hambúrguer Swara (180 g)");
-    const bill = await getTableBillByToken(db, T1.publicToken, new Date(), "de");
-    expect(bill!.orders[0].lines[0].modifierNames).toEqual(["Pommes frites"]);
+    const bill = await getTableBillByToken(db, T1.publicToken, new Date(), "en");
+    expect(bill!.orders[0].lines[0]).toMatchObject({ name: "Swara burger (180 g)", modifierNames: ["French fries"] });
   });
 });
 
 describe("traduções no painel", () => {
   it("lista o que há para traduzir, com o original e a tradução atual", async () => {
-    const items = await listTranslatable(db, manager, "fr");
+    const items = await listTranslatable(db, manager, "en");
     const tempura = items.find((i) => i.kind === "product" && i.ref === "F111")!;
     expect(tempura.original.name).toBe("Tempura de Legumes");
-    expect(tempura.translated).toBeNull();
-    expect(items.find((i) => i.kind === "category" && i.ref === "F-ENTRADAS")!.translated?.name).toBe("Entrées");
+    expect(tempura.translated?.name).toBe("Vegetable tempura");
+    // Marcas não têm tradução na demo.
+    expect(items.find((i) => i.kind === "product" && i.ref === "D308")!.translated).toBeNull();
   });
 
   it("grava, apaga e ignora referências que não existem na ementa", async () => {
     const res = await saveTranslations(db, manager, {
-      locale: "fr",
+      locale: "en",
       changes: [
-        { kind: "product", ref: "F111", name: "Tempura de légumes", description: "Courgette, carotte, poivron rouge." },
+        { kind: "product", ref: "F111", name: "Crispy vegetable tempura", description: "Courgette, carrot, red pepper." },
         { kind: "category", ref: "F-ENTRADAS", name: "" },
         { kind: "product", ref: "NAO-EXISTE", name: "Fantasma" },
       ],
     });
     expect(res).toEqual({ saved: 1, removed: 1 });
-    const menu = await getTableMenu(T1.publicToken, { db, locale: "fr" });
-    expect(product(menu, "F111")).toMatchObject({ name: "Tempura de légumes", description: "Courgette, carotte, poivron rouge." });
-    // Sem tradução francesa, a categoria volta ao inglês.
-    expect(menu!.categories.find((c) => c.ref === "F-ENTRADAS")!.name).toBe("Starters");
+    const menu = await getTableMenu(T1.publicToken, { db, locale: "en" });
+    expect(product(menu, "F111")).toMatchObject({ name: "Crispy vegetable tempura", description: "Courgette, carrot, red pepper." });
+    // Sem tradução, a categoria volta ao original.
+    expect(menu!.categories.find((c) => c.ref === "F-ENTRADAS")!.name).toBe("Entradas");
   });
 
   it("as traduções de um restaurante não se veem a partir de outro (RLS)", async () => {

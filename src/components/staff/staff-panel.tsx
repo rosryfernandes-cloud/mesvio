@@ -202,7 +202,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", ementa: "Aparência", traducoes: "Traduções" }[t]}
+            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", ementa: "Aparência", traducoes: "Inglês" }[t]}
           </button>
         ))}
       </nav>
