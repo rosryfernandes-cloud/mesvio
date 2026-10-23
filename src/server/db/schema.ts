@@ -416,6 +416,28 @@ export const rateLimitBuckets = pgTable(
   (t) => [primaryKey({ columns: [t.key, t.windowStart] }), index("rate_limit_window_idx").on(t.windowStart)],
 );
 
+/**
+ * Pedidos de demonstração da landing page (potenciais clientes da MESVIO, não clientes de
+ * restaurantes). Dados pessoais mínimos (RGPD), só para os contactar; sem acesso pela API pública.
+ */
+export const demoRequests = pgTable(
+  "demo_requests",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    business: text("business").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    venueType: text("venue_type"),
+    message: text("message"),
+    ipHash: text("ip_hash"),
+    /** Quando o aviso por email foi enviado à equipa (null = ainda não / email não configurado). */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("demo_requests_created_idx").on(t.createdAt)],
+);
+
 // ───────────────────────── Reconciliação e comissões ─────────────────────────
 /** Documentos de venda reportados pelo POS e ligados a pedidos da plataforma. */
 export const posSales = pgTable(

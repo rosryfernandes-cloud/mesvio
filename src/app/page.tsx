@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
+import { DemoRequestForm } from "@/components/landing/demo-request-form";
 import {
   IconArrow,
   IconCheck,
@@ -21,14 +22,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-/**
- * Destino de "Pedir demonstração": email comercial se estiver configurado; senão, a demonstração
- * ao vivo (não há formulário de contactos nem endereço definido ainda).
- */
-const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
-const DEMO_HREF = CONTACT_EMAIL
-  ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Demonstração MESVIO")}`
-  : "/demo";
+/** Todos os botões "Pedir demonstração" levam ao formulário de contacto no fim da página. */
+const DEMO_HREF = "#contacto";
 
 const STEPS = [
   { icon: IconScan, title: "Aproxima ou lê", text: "O cliente aproxima o telemóvel do NFC ou lê o QR Code da mesa." },
@@ -297,18 +292,18 @@ function Pricing() {
 
 function FinalCta() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
+    <section id="contacto" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6 md:py-28">
       <div className="on-dark relative overflow-hidden rounded-[2rem] bg-forest px-6 py-14 text-center text-white sm:px-12">
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 left-1/2 size-96 -translate-x-1/2 rounded-full bg-mint/10 blur-3xl" />
-        <h2 className="relative mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">
-          Pronto para transformar o serviço do teu espaço?
-        </h2>
-        <a
-          href={DEMO_HREF}
-          className="relative mt-9 inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-mint px-8 font-semibold text-brand transition hover:bg-white"
-        >
-          Pedir demonstração <IconArrow className="size-5" />
-        </a>
+        <div className="relative">
+          <h2 className="mx-auto max-w-2xl text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">
+            Pronto para transformar o serviço do teu espaço?
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-white/80">Deixa o teu contacto e mostramos-te a MESVIO a funcionar no teu espaço.</p>
+          <div className="mt-10">
+            <DemoRequestForm />
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -329,9 +324,9 @@ function SiteFooter() {
           <a href="#precos" className="hover:text-ink">
             Preços
           </a>
-          <Link href="/demo" className="hover:text-ink">
-            Demonstração
-          </Link>
+          <a href="#contacto" className="hover:text-ink">
+            Pedir demonstração
+          </a>
           <Link href="/painel/entrar" className="hover:text-ink">
             Entrar no painel
           </Link>

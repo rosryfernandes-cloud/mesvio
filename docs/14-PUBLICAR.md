@@ -59,7 +59,9 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 | `POS_CREDENTIALS_KEY_ID` | `k1` |
 | `TRUSTED_PROXY` | `vercel` |
 | `DEFAULT_POS_PROVIDER` | `mock` |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | email comercial (opcional: botão "Pedir demonstração") |
+| `RESEND_API_KEY` | chave da Resend (opcional, ver secção 6) |
+| `DEMO_REQUESTS_TO` | o seu email (quem recebe os pedidos de demonstração) |
+| `DEMO_REQUESTS_FROM` | ex.: `MESVIO <ola@o-seu-dominio>` |
 
    Não defina `STRIPE_SECRET_KEY` enquanto a integração Stripe não estiver feita (a app recusa arrancar os pagamentos).
 3. **Deploy**.
@@ -72,6 +74,14 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 - `https://<o-seu-dominio>/painel/entrar` → entrar com o código enviado por email e ver o pedido.
 - `https://<o-seu-dominio>/api/health` → estado da app.
 - Vercel → **Settings → Cron Jobs**: `/api/cron/outbox` a correr a cada minuto.
+
+## 6. Pedidos de demonstração (formulário da landing)
+O botão "Pedir demonstração" abre um formulário no fim da página. Cada pedido fica guardado na tabela **demo_requests** (Supabase → *Table Editor*), sem acesso pela API pública.
+Para o receber também por email:
+1. Conta grátis em resend.com → **Domains** → adicione o seu domínio e copie os registos DNS indicados.
+2. **API Keys** → crie uma chave só com permissão de envio.
+3. Na Vercel, defina `RESEND_API_KEY`, `DEMO_REQUESTS_TO` e `DEMO_REQUESTS_FROM` e faça *Redeploy*.
+A resposta ao email vai diretamente para quem pediu a demonstração. Se o envio falhar, o pedido não se perde: fica na tabela com `notified_at` vazio.
 
 ## O que ainda não funciona online
 - **Pagamentos no telemóvel**: desligados (o simulado só existe em desenvolvimento; falta a Stripe). As mesas pagam ao balcão; as **espreguiçadeiras não aceitam pedidos** até haver Stripe.
