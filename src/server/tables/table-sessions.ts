@@ -1,4 +1,6 @@
 import "server-only";
+import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/server/menu/menu-translations";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { and, asc, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, payments, tableSessions } from "@/server/db/schema";
@@ -88,8 +90,8 @@ export interface TableBill {
   paymentsEnabled: boolean;
 }
 
-export async function loadBill(tx: Db, tableId: string, now: Date): Promise<TableBill | null> {
-  return (await loadBills(tx, [tableId], now)).get(tableId) ?? null;
+export async function loadBill(tx: Db, tableId: string, now: Date, tr?: MenuTranslator): Promise<TableBill | null> {
+  return (await loadBills(tx, [tableId], now, tr)).get(tableId) ?? null;
 }
 
 /**
@@ -97,7 +99,8 @@ export async function loadBill(tx: Db, tableId: string, now: Date): Promise<Tabl
  * pagamentos), seja qual for o número de mesas. Antes, o painel fazia ~4 consultas por mesa
  * a cada 5 s (teste de carga).
  */
-export async function loadBills(tx: Db, tableIds: string[], now: Date): Promise<Map<string, TableBill>> {
+/** `tr`: nomes dos artigos na língua do cliente (o painel usa os originais). */
+export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuTranslator = untranslated): Promise<Map<string, TableBill>> {
   const result = new Map<string, TableBill>();
   if (tableIds.length === 0) return result;
   const tables = await tx
@@ -171,7 +174,12 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date): Promise<
         awaitingPayment: r.status === "AWAITING_PAYMENT",
         lines: items
           .filter((i) => i.orderId === r.id)
-          .map((i) => ({ name: i.name, quantity: i.quantity, modifierNames: i.modifiers.map((m) => m.name), lineTotalCents: i.lineGrossCents })),
+          .map((i) => ({
+            name: tr("product", i.posProductRef, i.name).name,
+            quantity: i.quantity,
+            modifierNames: i.modifiers.map((m) => tr("modifier", m.posModifierRef, m.name).name),
+            lineTotalCents: i.lineGrossCents,
+          })),
       }));
     const totalCents = billOrders.filter((o) => !o.void && !o.awaitingPayment).reduce((acc, o) => acc + o.totalCents, 0);
     const cents = (status: string) => Number(sums.find((r) => r.sessionId === session.id && r.status === status)?.cents ?? 0);
@@ -192,11 +200,12 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date): Promise<
 }
 
 /** Conta atual da mesa, para o cliente (pelo token do QR/NFC). */
-export async function getTableBillByToken(db: Db, token: string, now = new Date()): Promise<TableBill | null> {
+export async function getTableBillByToken(db: Db, token: string, now = new Date(), locale: Locale = DEFAULT_LOCALE): Promise<TableBill | null> {
   if (!isWellFormedTableToken(token)) return null;
   const t = await resolveTableToken(db, token);
   if (!t) return null;
-  return withTenant(db, { organizationId: t.organizationId }, (tx) => loadBill(tx, t.tableId, now));
+  const tr = await loadMenuTranslations(db, t.organizationId, t.establishmentId, locale);
+  return withTenant(db, { organizationId: t.organizationId }, (tx) => loadBill(tx, t.tableId, now, tr));
 }
 
 // ─────────────────────────── Painel ───────────────────────────

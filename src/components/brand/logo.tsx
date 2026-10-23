@@ -51,14 +51,14 @@ export function LogoMark({ className = "size-9", variant = "dark" }: { className
 }
 
 /** Assinatura discreta da plataforma em páginas de restaurantes ("com mesvio."). */
-export function PoweredBy({ className = "" }: { className?: string }) {
+export function PoweredBy({ className = "", label = "Pedidos digitais com" }: { className?: string; label?: string }) {
   return (
     <a
       href="/"
       className={`inline-flex items-center gap-1.5 text-xs text-ink-soft hover:text-ink ${className}`}
-      aria-label="Pedidos digitais com mesvio"
+      aria-label={`${label} mesvio`}
     >
-      <span>Pedidos digitais com</span>
+      <span>{label}</span>
       <Logo className="h-3 w-auto" />
     </a>
   );

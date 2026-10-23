@@ -9,12 +9,13 @@ import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
 import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
+import { TranslationsView } from "./translations-view";
 import { usePolling } from "../use-polling";
 import { LogoMark } from "../brand/logo";
 
 const POLL_MS = 3000;
 
-type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "ementa";
+type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "ementa" | "traducoes";
 
 export interface PanelUser {
   displayName: string;
@@ -189,7 +190,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
             "mesas",
             "esgotados",
             ...(me.canViewTeam ? (["equipa"] as const) : []),
-            ...(me.canEditSettings ? (["ementa"] as const) : []),
+            ...(me.canEditSettings ? (["ementa", "traducoes"] as const) : []),
           ] as Tab[]
         ).map((t) => (
           <button
@@ -201,7 +202,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", ementa: "Aparência" }[t]}
+            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", ementa: "Aparência", traducoes: "Traduções" }[t]}
           </button>
         ))}
       </nav>
@@ -220,6 +221,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "esgotados" && <SoldOutView />}
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
       {tab === "ementa" && <BrandingView establishmentName={board.establishmentName} />}
+      {tab === "traducoes" && <TranslationsView />}
     </div>
   );
 }

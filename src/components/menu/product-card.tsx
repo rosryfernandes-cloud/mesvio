@@ -1,5 +1,8 @@
+"use client";
+
 import { formatEur } from "@/lib/money";
 import type { MenuProductView } from "@/server/menu/get-table-menu";
+import { useI18n } from "../i18n/i18n-provider";
 
 function initials(name: string) {
   return name
@@ -20,6 +23,7 @@ export function ProductCard({
   onSelect?: () => void;
   quantityInCart?: number;
 }) {
+  const { t } = useI18n();
   const hasOptions = product.modifierGroups.length > 0;
   const fromPrice = product.modifierGroups.some((g) => g.kind === "variant" && g.modifiers.some((m) => m.priceDeltaCents > 0));
 
@@ -35,13 +39,13 @@ export function ProductCard({
           type="button"
           onClick={onSelect}
           className="absolute inset-0 z-[1] rounded-2xl"
-          aria-label={`Adicionar ${product.name}`}
+          aria-label={t.product.add(product.name)}
         />
       )}
       {quantityInCart > 0 && (
         <span className="absolute -top-2 -right-2 z-[2] flex size-7 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white tabular-nums">
           {quantityInCart}
-          <span className="sr-only"> no pedido</span>
+          <span className="sr-only"> · {t.menu.inOrder(quantityInCart)}</span>
         </span>
       )}
       <div className="min-w-0 flex-1">
@@ -57,23 +61,23 @@ export function ProductCard({
             </span>
           ))}
           {hasOptions && (
-            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-soft">com opções</span>
+            <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-soft">{t.product.withOptions}</span>
           )}
         </div>
 
         {product.allergens.length > 0 && (
           <p className="mt-2 text-xs text-ink-soft">
-            <span className="font-medium">Alergénios:</span> {product.allergens.join(", ")}
+            <span className="font-medium">{t.product.allergens}</span> {product.allergens.join(", ")}
           </p>
         )}
 
         <p className="mt-3 flex items-baseline gap-2">
           <span className="text-base font-semibold tabular-nums">
-            {fromPrice && <span className="text-xs font-normal text-ink-soft">desde </span>}
+            {fromPrice && <span className="text-xs font-normal text-ink-soft">{t.product.from} </span>}
             {formatEur(product.priceCents)}
           </span>
           {!product.available && (
-            <span className="rounded-md bg-ink px-1.5 py-0.5 text-xs font-medium text-paper">Esgotado</span>
+            <span className="rounded-md bg-ink px-1.5 py-0.5 text-xs font-medium text-paper">{t.product.soldOut}</span>
           )}
         </p>
       </div>

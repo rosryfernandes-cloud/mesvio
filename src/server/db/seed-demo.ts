@@ -1,8 +1,9 @@
 import "server-only";
-import { DEMO_ESTABLISHMENT, DEMO_ORGANIZATION, DEMO_TABLES } from "@/server/pos/mock/demo-data";
+import { DEMO_ESTABLISHMENT, DEMO_ORGANIZATION, DEMO_PRODUCTS, DEMO_TABLES } from "@/server/pos/mock/demo-data";
+import { demoTranslationRows } from "@/server/pos/mock/demo-translations";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "./client";
-import { diningTables, establishments, memberships, organizations, posIntegrations, staffProfiles } from "./schema";
+import { diningTables, establishments, memberships, menuTranslations, organizations, posIntegrations, staffProfiles } from "./schema";
 
 /**
  * Utilizadores de demonstração (só dev/testes, sem Supabase): entram no painel pelo modo de
@@ -85,5 +86,11 @@ export async function seedDemo(db: Db, { users = true }: { users?: boolean } = {
       )
       // Bases locais antigas: acrescentar zona e modo às mesas que já existiam.
       .onConflictDoUpdate({ target: diningTables.id, set: { label: sql`excluded.label`, zone: sql`excluded.zone`, orderingMode: sql`excluded.ordering_mode` } });
+
+    // Traduções da ementa: só acrescenta as que faltam (as editadas no painel não são substituídas).
+    const modifiers = DEMO_PRODUCTS.flatMap((p) => p.modifierGroups.flatMap((g) => g.modifiers.map((m) => ({ ref: m.posModifierRef, name: m.name }))));
+    const unique = [...new Map(modifiers.map((m) => [m.ref, m])).values()];
+    const rows = demoTranslationRows(unique).map((r) => ({ ...r, organizationId: DEMO_ORGANIZATION.id, establishmentId: DEMO_ESTABLISHMENT.id }));
+    for (let i = 0; i < rows.length; i += 200) await tx.insert(menuTranslations).values(rows.slice(i, i + 200)).onConflictDoNothing();
   });
 }

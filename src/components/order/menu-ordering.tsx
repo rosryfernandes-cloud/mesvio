@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatEur } from "@/lib/money";
-import { ORDER_LIMITS, priceSelection } from "@/lib/order-pricing";
+import { ORDER_LIMITS, priceSelection, type SelectionResult } from "@/lib/order-pricing";
 import type { MenuProductView, TableMenuView } from "@/server/menu/get-table-menu";
 import { ProductCard } from "@/components/menu/product-card";
 import { useCart } from "./use-cart";
+import { useI18n } from "../i18n/i18n-provider";
+import { apiErrorText, issueText } from "@/lib/i18n/messages";
 
 type Props = { menu: TableMenuView; tableToken: string };
 
 export function MenuOrdering({ menu, tableToken }: Props) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const cart = useCart(tableToken);
   const [selected, setSelected] = useState<MenuProductView | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -22,7 +25,9 @@ export function MenuOrdering({ menu, tableToken }: Props) {
   // Cada linha é revalidada contra a ementa atual (pode ter esgotado desde que foi adicionada).
   const pricedLines = cart.lines.map((line) => {
     const product = products.get(line.productRef);
-    const priced = product ? priceSelection(product, line.modifierRefs) : ({ ok: false, reason: "Já não está na ementa." } as const);
+    const priced: SelectionResult = product
+      ? priceSelection(product, line.modifierRefs)
+      : { ok: false, reason: "Já não está na ementa.", issue: { kind: "notOnMenu" } };
     return { line, product, priced };
   });
   const totalCents = pricedLines.reduce((s, { line, priced }) => s + (priced.ok ? priced.unitPriceCents * line.quantity : 0), 0);
@@ -31,7 +36,12 @@ export function MenuOrdering({ menu, tableToken }: Props) {
   for (const l of cart.lines) qtyByProduct.set(l.productRef, (qtyByProduct.get(l.productRef) ?? 0) + l.quantity);
 
   // Secções da ementa (ex.: Comida / Bebidas / Bar & Cocktails) mostradas uma de cada vez, em separadores.
-  const sections = useMemo(() => [...new Set(menu.categories.flatMap((c) => (c.section ? [c.section] : [])))], [menu]);
+  // Chave estável (nome original da secção), para o separador escolhido sobreviver à mudança de língua.
+  const sections = useMemo(() => [...new Set(menu.categories.flatMap((c) => (c.sectionKey ? [c.sectionKey] : [])))], [menu]);
+  const sectionLabel = useMemo(
+    () => new Map(menu.categories.flatMap((c) => (c.sectionKey ? [[c.sectionKey, c.section ?? c.sectionKey] as const] : []))),
+    [menu],
+  );
   const [activeSection, setActiveSection] = useState(sections[0]);
   const navRef = useRef<HTMLElement>(null);
 
@@ -54,23 +64,23 @@ export function MenuOrdering({ menu, tableToken }: Props) {
     if (nav && window.scrollY > nav.offsetTop) window.scrollTo({ top: nav.offsetTop });
   }
 
-  const visible = sections.length > 0 ? menu.categories.filter((c) => c.section === activeSection) : menu.categories;
+  const visible = sections.length > 0 ? menu.categories.filter((c) => c.sectionKey === activeSection) : menu.categories;
   const cartCountBySection = new Map<string, number>();
   for (const c of menu.categories) {
-    if (!c.section) continue;
+    if (!c.sectionKey) continue;
     const n = c.products.reduce((s, p) => s + (qtyByProduct.get(p.ref) ?? 0), 0);
-    cartCountBySection.set(c.section, (cartCountBySection.get(c.section) ?? 0) + n);
+    cartCountBySection.set(c.sectionKey, (cartCountBySection.get(c.sectionKey) ?? 0) + n);
   }
 
   return (
     <>
       <nav
         ref={navRef}
-        aria-label="Ementa"
+        aria-label={t.menu.nav}
         className="sticky top-0 z-10 border-y border-line bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/80"
       >
         {sections.length > 0 && (
-          <div role="tablist" aria-label="Secções" className="flex gap-1 px-4 pt-3">
+          <div role="tablist" aria-label={t.menu.sections} className="flex gap-1 px-4 pt-3">
             {sections.map((sec) => {
               const active = sec === activeSection;
               const inCart = cartCountBySection.get(sec) ?? 0;
@@ -85,11 +95,11 @@ export function MenuOrdering({ menu, tableToken }: Props) {
                     active ? "bg-brand text-white" : "bg-card text-ink hover:text-brand"
                   }`}
                 >
-                  {sec}
+                  {sectionLabel.get(sec) ?? sec}
                   {inCart > 0 && (
                     <span
                       className={`ml-1.5 rounded-full px-1.5 text-xs tabular-nums ${active ? "bg-white/25" : "bg-brand-soft text-brand"}`}
-                      aria-label={`${inCart} no pedido`}
+                      aria-label={t.menu.inOrder(inCart)}
                     >
                       {inCart}
                     </span>
@@ -99,7 +109,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
             })}
           </div>
         )}
-        <ul aria-label="Categorias" className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none]">
+        <ul aria-label={t.menu.categories} className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none]">
           {visible.map((c) => (
             <li key={c.ref} className="shrink-0">
               <a
@@ -113,7 +123,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
         </ul>
       </nav>
 
-      <main className="px-4" role={sections.length > 0 ? "tabpanel" : undefined} aria-label={activeSection}>
+      <main className="px-4" role={sections.length > 0 ? "tabpanel" : undefined} aria-label={activeSection && sectionLabel.get(activeSection)}>
         {visible.map((c) => (
           <section key={c.ref} id={`cat-${c.ref}`} aria-labelledby={`h-${c.ref}`} className="scroll-mt-12 pt-8">
             <h2 id={`h-${c.ref}`} className="mb-3 font-[family-name:var(--font-display)] text-2xl">
@@ -144,7 +154,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
               <span className="flex size-7 items-center justify-center rounded-full bg-white/20 text-sm tabular-nums">
                 {itemCount}
               </span>
-              Ver pedido
+              {t.cart.viewOrder}
             </span>
             <span className="tabular-nums">{formatEur(totalCents)}</span>
           </button>
@@ -194,7 +204,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
               return null;
             }
             if (data.code === "PRICE_CHANGED" || data.code === "INVALID_ITEMS") router.refresh();
-            return data.message ?? "Não foi possível enviar o pedido. Tente de novo.";
+            return apiErrorText(t, locale, data, t.cart.sendFailed);
           }}
         />
       )}
@@ -225,10 +235,11 @@ function Sheet({ label, onClose, children }: { label: string; onClose: () => voi
 }
 
 function Stepper({ value, onChange, min, label }: { value: number; onChange: (v: number) => void; min: number; label: string }) {
+  const { t } = useI18n();
   const btn = "flex size-10 items-center justify-center rounded-full border border-line bg-card text-lg font-semibold disabled:opacity-40";
   return (
     <div className="flex items-center gap-3" role="group" aria-label={label}>
-      <button type="button" className={btn} onClick={() => onChange(value - 1)} disabled={value <= min} aria-label="Menos">
+      <button type="button" className={btn} onClick={() => onChange(value - 1)} disabled={value <= min} aria-label={t.product.less}>
         −
       </button>
       <span className="w-6 text-center font-semibold tabular-nums" aria-live="polite">
@@ -239,7 +250,7 @@ function Stepper({ value, onChange, min, label }: { value: number; onChange: (v:
         className={btn}
         onClick={() => onChange(value + 1)}
         disabled={value >= ORDER_LIMITS.maxQuantityPerLine}
-        aria-label="Mais"
+        aria-label={t.product.more}
       >
         +
       </button>
@@ -262,6 +273,7 @@ function ProductSheet({
       .filter((g) => g.kind === "variant" && g.minSelect === 1 && g.maxSelect === 1)
       .flatMap((g) => g.modifiers.find((m) => m.available)?.posModifierRef ?? []),
   );
+  const { t } = useI18n();
   const [qty, setQty] = useState(1);
   const [notes, setNotes] = useState("");
   const priced = priceSelection(product, mods);
@@ -282,14 +294,14 @@ function ProductSheet({
       <div className="overflow-y-auto px-5 pt-6 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-[family-name:var(--font-display)] text-2xl leading-tight">{product.name}</h2>
-          <button type="button" onClick={onClose} className="-mt-1 -mr-2 p-2 text-2xl leading-none text-ink-soft" aria-label="Fechar">
+          <button type="button" onClick={onClose} className="-mt-1 -mr-2 p-2 text-2xl leading-none text-ink-soft" aria-label={t.product.close}>
             ×
           </button>
         </div>
         {product.description && <p className="mt-2 text-sm text-ink-soft">{product.description}</p>}
         {product.allergens.length > 0 && (
           <p className="mt-2 text-xs text-ink-soft">
-            <span className="font-medium">Alergénios:</span> {product.allergens.join(", ")}
+            <span className="font-medium">{t.product.allergens}</span> {product.allergens.join(", ")}
           </p>
         )}
 
@@ -300,7 +312,7 @@ function ProductSheet({
               <legend className="flex w-full items-baseline justify-between text-sm font-semibold">
                 {g.name}
                 <span className="text-xs font-normal text-ink-soft">
-                  {g.minSelect > 0 ? "Obrigatório" : `Opcional · até ${g.maxSelect}`}
+                  {g.minSelect > 0 ? t.product.required : t.product.optionalUpTo(g.maxSelect)}
                 </span>
               </legend>
               <div className="mt-2 grid gap-2">
@@ -321,7 +333,7 @@ function ProductSheet({
                     />
                     <span className="flex-1">{m.name}</span>
                     <span className="text-sm text-ink-soft tabular-nums">
-                      {!m.available ? "Esgotado" : m.priceDeltaCents > 0 ? `+${formatEur(m.priceDeltaCents)}` : ""}
+                      {!m.available ? t.product.soldOut : m.priceDeltaCents > 0 ? `+${formatEur(m.priceDeltaCents)}` : ""}
                     </span>
                   </label>
                 ))}
@@ -331,7 +343,7 @@ function ProductSheet({
         })}
 
         <label className="mt-6 block text-sm font-semibold" htmlFor="obs-produto">
-          Observações <span className="font-normal text-ink-soft">(opcional)</span>
+          {t.product.notes} <span className="font-normal text-ink-soft">{t.product.optional}</span>
         </label>
         <textarea
           id="obs-produto"
@@ -339,24 +351,24 @@ function ProductSheet({
           onChange={(e) => setNotes(e.target.value)}
           maxLength={ORDER_LIMITS.maxNotesLength}
           rows={2}
-          placeholder="Ex.: sem cebola"
+          placeholder={t.product.notesPlaceholder}
           className="mt-2 w-full rounded-xl border border-line bg-card px-4 py-3 text-base"
         />
       </div>
 
       <div className="flex items-center gap-4 border-t border-line bg-paper px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <Stepper value={qty} onChange={setQty} min={1} label="Quantidade" />
+        <Stepper value={qty} onChange={setQty} min={1} label={t.product.quantity} />
         <button
           type="button"
           disabled={!priced.ok}
           onClick={() => onAdd(qty, mods, notes.trim() || undefined)}
           className="flex min-h-12 flex-1 items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
         >
-          <span>Adicionar</span>
+          <span>{t.product.addButton}</span>
           <span className="tabular-nums">{priced.ok ? formatEur(priced.unitPriceCents * qty) : ""}</span>
         </button>
       </div>
-      {!priced.ok && <p className="px-5 pb-4 text-sm text-brand">{priced.reason}</p>}
+      {!priced.ok && <p className="px-5 pb-4 text-sm text-brand">{issueText(t, priced.issue)}</p>}
     </Sheet>
   );
 }
@@ -382,6 +394,7 @@ function CartSheet({
   onClose: () => void;
   onSubmit: (notes: string) => Promise<string | null>;
 }) {
+  const { t } = useI18n();
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -397,21 +410,21 @@ function CartSheet({
     try {
       setError(await onSubmit(notes.trim()));
     } catch {
-      setError("Sem ligação. Verifique a rede e tente de novo — o pedido não será duplicado.");
+      setError(t.cart.offline);
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <Sheet label="O seu pedido" onClose={onClose}>
+    <Sheet label={t.cart.yourOrder} onClose={onClose}>
       <div className="overflow-y-auto px-5 pt-6 pb-4">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm font-medium text-brand">{tableLabel}</p>
-            <h2 className="font-[family-name:var(--font-display)] text-2xl">O seu pedido</h2>
+            <h2 className="font-[family-name:var(--font-display)] text-2xl">{t.cart.yourOrder}</h2>
           </div>
-          <button type="button" onClick={onClose} className="-mt-1 -mr-2 p-2 text-2xl leading-none text-ink-soft" aria-label="Fechar">
+          <button type="button" onClick={onClose} className="-mt-1 -mr-2 p-2 text-2xl leading-none text-ink-soft" aria-label={t.product.close}>
             ×
           </button>
         </div>
@@ -421,12 +434,12 @@ function CartSheet({
             <li key={line.key} className="py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold">{product?.name ?? "Artigo indisponível"}</p>
+                  <p className="font-semibold">{product?.name ?? t.cart.unavailableItem}</p>
                   {priced.ok && priced.modifierNames.length > 0 && (
                     <p className="text-sm text-ink-soft">{priced.modifierNames.join(" · ")}</p>
                   )}
                   {line.notes && <p className="text-sm text-ink-soft italic">“{line.notes}”</p>}
-                  {!priced.ok && <p className="mt-1 text-sm font-medium text-brand">{priced.reason}</p>}
+                  {!priced.ok && <p className="mt-1 text-sm font-medium text-brand">{issueText(t, priced.issue)}</p>}
                 </div>
                 <p className="shrink-0 font-semibold tabular-nums">
                   {priced.ok ? formatEur(priced.unitPriceCents * line.quantity) : "—"}
@@ -437,7 +450,7 @@ function CartSheet({
                   value={line.quantity}
                   onChange={(q) => onQuantity(line.key, q)}
                   min={0}
-                  label={`Quantidade de ${product?.name ?? "artigo"}`}
+                  label={t.cart.quantityOf(product?.name ?? t.cart.unavailableItem)}
                 />
               </div>
             </li>
@@ -445,7 +458,7 @@ function CartSheet({
         </ul>
 
         <label className="mt-2 block text-sm font-semibold" htmlFor="obs-pedido">
-          Nota para o restaurante <span className="font-normal text-ink-soft">(opcional)</span>
+          {t.cart.noteForRestaurant} <span className="font-normal text-ink-soft">{t.product.optional}</span>
         </label>
         <textarea
           id="obs-pedido"
@@ -453,7 +466,7 @@ function CartSheet({
           onChange={(e) => setNotes(e.target.value)}
           maxLength={ORDER_LIMITS.maxNotesLength}
           rows={2}
-          placeholder="Ex.: trazer as bebidas primeiro"
+          placeholder={t.cart.notePlaceholder}
           className="mt-2 w-full rounded-xl border border-line bg-card px-4 py-3 text-base"
         />
       </div>
@@ -465,7 +478,7 @@ function CartSheet({
           </p>
         )}
         {hasInvalid && !error && (
-          <p className="mb-3 text-sm text-brand">Retire os artigos indisponíveis para enviar o pedido.</p>
+          <p className="mb-3 text-sm text-brand">{t.cart.removeUnavailable}</p>
         )}
         <button
           type="button"
@@ -473,11 +486,11 @@ function CartSheet({
           disabled={sending || hasInvalid}
           className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
         >
-          <span>{sending ? "A enviar…" : payFirst ? "Pagar e pedir" : "Enviar pedido para a cozinha"}</span>
+          <span>{sending ? t.cart.sending : payFirst ? t.cart.payAndOrder : t.cart.sendToKitchen}</span>
           <span className="tabular-nums">{formatEur(totalCents)}</span>
         </button>
         <p className="mt-2 text-center text-xs text-ink-soft">
-          {payFirst ? "Paga com Apple Pay, MB WAY ou cartão antes de o pedido seguir para a cozinha." : "O pagamento é feito no restaurante, no fim da refeição."}
+          {payFirst ? t.cart.payFirstNote : t.cart.payLaterNote}
         </p>
       </div>
     </Sheet>

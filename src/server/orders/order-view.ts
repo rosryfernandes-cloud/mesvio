@@ -5,6 +5,8 @@ import type { Db } from "@/server/db/client";
 import { diningTables, orderItems, orders, orderStatus } from "@/server/db/schema";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
+import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/server/menu/menu-translations";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 
 export type OrderStatus = (typeof orderStatus.enumValues)[number];
 
@@ -22,7 +24,7 @@ export interface OrderView {
   createdAt: string;
 }
 
-export async function loadOrderView(db: Db, orderId: string): Promise<OrderView | null> {
+export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator = untranslated): Promise<OrderView | null> {
   const [o] = await db
     .select({
       id: orders.id,
@@ -45,9 +47,9 @@ export async function loadOrderView(db: Db, orderId: string): Promise<OrderView 
     notes: o.notes ?? undefined,
     createdAt: o.createdAt.toISOString(),
     lines: items.map((i) => ({
-      name: i.name,
+      name: tr("product", i.posProductRef, i.name).name,
       quantity: i.quantity,
-      modifierNames: i.modifiers.map((m) => m.name),
+      modifierNames: i.modifiers.map((m) => tr("modifier", m.posModifierRef, m.name).name),
       notes: i.notes ?? undefined,
       lineTotalCents: i.lineGrossCents,
     })),
@@ -55,16 +57,22 @@ export async function loadOrderView(db: Db, orderId: string): Promise<OrderView 
 }
 
 /** Só devolve o pedido a quem tem o token da mesa onde foi feito. */
-export async function getOrderForTable(db: Db, tableToken: string, orderId: string): Promise<OrderView | null> {
+export async function getOrderForTable(
+  db: Db,
+  tableToken: string,
+  orderId: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<OrderView | null> {
   if (!isWellFormedTableToken(tableToken) || !z.uuid().safeParse(orderId).success) return null;
   const table = await resolveTableToken(db, tableToken);
   if (!table) return null;
+  const tr = await loadMenuTranslations(db, table.organizationId, table.establishmentId, locale);
   return withTenant(db, { organizationId: table.organizationId }, async (tx) => {
     const [match] = await tx
       .select({ id: orders.id })
       .from(orders)
       .where(and(eq(orders.id, orderId), eq(orders.tableId, table.tableId)))
       .limit(1);
-    return match ? loadOrderView(tx, match.id) : null;
+    return match ? loadOrderView(tx, match.id, tr) : null;
   });
 }

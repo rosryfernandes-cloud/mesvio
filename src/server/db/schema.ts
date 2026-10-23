@@ -354,6 +354,31 @@ export const productAvailabilityOverrides = pgTable(
   (t) => [primaryKey({ columns: [t.establishmentId, t.posProductRef] })],
 );
 
+/** O que se pode traduzir na ementa: secção (ref = nome original), categoria, artigo, grupo de opções, opção. */
+export const menuTranslationKind = pgEnum("menu_translation_kind", ["section", "category", "product", "group", "modifier"]);
+
+/**
+ * Traduções da ementa feitas pelo restaurante (o POS só tem português). Chave: referência do POS;
+ * o que não estiver traduzido aparece em inglês, se existir, ou no original.
+ */
+export const menuTranslations = pgTable(
+  "menu_translations",
+  {
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    locale: text("locale").notNull(),
+    kind: menuTranslationKind("kind").notNull(),
+    ref: text("ref").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.establishmentId, t.locale, t.kind, t.ref] }),
+    check("menu_translations_locale", sql`${t.locale} in ('en', 'es', 'fr', 'de')`),
+  ],
+);
+
 /** Transactional outbox: gravado na mesma transação do pedido. */
 export const outbox = pgTable(
   "outbox",
