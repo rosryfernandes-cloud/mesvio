@@ -44,7 +44,7 @@ const BENEFITS = [
 const SOLUTIONS = [
   { title: "Restaurantes", text: "Esplanada e sala, com conta da mesa partilhada." },
   { title: "Bares de praia", text: "Picos de verão sem filas no balcão." },
-  { title: "Espreguiçadeiras", text: "Pedir e pagar ao pedir, entregue na cama." },
+  { title: "Espreguiçadeiras", text: "Pedir e pagar, entregue na cama." },
   { title: "Hotéis", text: "Bar, lounge e serviço nos espaços comuns." },
   { title: "Piscinas", text: "Pedidos sem sair da água por muito tempo." },
   { title: "Outros espaços", text: "Rooftops, clubes, eventos e hotelaria." },
@@ -329,6 +329,12 @@ function SiteFooter() {
           </a>
           <Link href="/painel/entrar" className="hover:text-ink">
             Entrar no painel
+          </Link>
+          <Link href="/privacidade" className="hover:text-ink">
+            Privacidade
+          </Link>
+          <Link href="/termos" className="hover:text-ink">
+            Termos
           </Link>
         </nav>
       </div>

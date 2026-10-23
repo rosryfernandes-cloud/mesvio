@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db/client";
 import { runOutboxOnce } from "@/server/orders/outbox-worker";
 import { pruneRateLimits } from "@/server/security/rate-limit";
+import { pruneDemoRequests } from "@/server/contact/demo-requests";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
 
@@ -26,5 +27,6 @@ export async function GET(request: Request) {
   const provider = activePaymentProvider();
   const payments = provider ? await reconcilePendingPayments(db, provider) : null;
   await pruneRateLimits(db);
+  await pruneDemoRequests(db);
   return NextResponse.json({ processed, payments }, { headers: { "Cache-Control": "no-store" } });
 }

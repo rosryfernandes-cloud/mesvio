@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
-import { createDemoRequest, DEMO_REQUEST_LIMIT, sendDemoRequestEmail } from "./demo-requests";
+import { createDemoRequest, DEMO_REQUEST_LIMIT, pruneDemoRequests, sendDemoRequestEmail } from "./demo-requests";
 
 let db: Db;
 beforeEach(async () => {
@@ -55,5 +55,17 @@ describe("pedidos de demonstração da landing", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("conservação dos pedidos de demonstração", () => {
+  it("apaga os pedidos com mais de 12 meses e mantém os recentes", async () => {
+    const now = new Date("2027-10-23T12:00:00Z");
+    await db.insert(demoRequests).values([
+      { name: "Antigo", business: "A", email: "a@a.pt", createdAt: new Date("2026-10-01T00:00:00Z") },
+      { name: "Recente", business: "B", email: "b@b.pt", createdAt: new Date("2027-06-01T00:00:00Z") },
+    ]);
+    await pruneDemoRequests(db, now);
+    expect((await db.select().from(demoRequests)).map((r) => r.name)).toEqual(["Recente"]);
   });
 });

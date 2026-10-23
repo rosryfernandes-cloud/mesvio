@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
@@ -8,6 +8,14 @@ import { hitRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
 /** Pedidos de demonstração da landing page (potenciais clientes da MESVIO). */
 
 export const DEMO_REQUEST_LIMIT: RateLimitRule = { limit: 5, windowSeconds: 60 * 60 };
+
+/** Conservação dos pedidos de demonstração (política de privacidade, ponto 2). */
+export const DEMO_REQUEST_RETENTION_DAYS = 365;
+
+/** Apaga pedidos de demonstração mais antigos do que o prazo de conservação. Chamado pelo worker/cron. */
+export async function pruneDemoRequests(db: Db, now = new Date()): Promise<void> {
+  await db.delete(demoRequests).where(lt(demoRequests.createdAt, new Date(now.getTime() - DEMO_REQUEST_RETENTION_DAYS * 86_400_000)));
+}
 
 export const VENUE_TYPES = ["Restaurante", "Bar de praia", "Hotel", "Piscina", "Outro"] as const;
 

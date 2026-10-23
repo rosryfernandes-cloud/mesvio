@@ -5,6 +5,7 @@ import { diningTables, orderEvents, orderItems, orders, outbox, posIntegrations 
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 import type { PosOrderResult } from "@/server/pos/types";
 import { pruneRateLimits } from "@/server/security/rate-limit";
+import { pruneDemoRequests } from "@/server/contact/demo-requests";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
 import type { OrderStatus } from "./order-view";
@@ -263,7 +264,11 @@ export function startOutboxPoller(getDb: () => Promise<Db>, intervalMs = 2_000):
         const provider = activePaymentProvider();
         if (provider) await reconcilePendingPayments(db, provider);
       }
-      if (ticks % 1800 === 0) await pruneRateLimits(db); // ~1 h
+      if (ticks % 1800 === 0) {
+        // ~1 h
+        await pruneRateLimits(db);
+        await pruneDemoRequests(db);
+      }
     } catch (err) {
       // BD em baixo: continuar a tentar a cada ciclo, mas registar no máximo uma vez por minuto.
       if (Date.now() - lastErrorLog > 60_000) {

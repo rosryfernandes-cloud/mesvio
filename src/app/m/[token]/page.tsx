@@ -75,8 +75,14 @@ export default async function TableMenuPage({ params }: Props) {
         Preços com IVA incluído à taxa legal em vigor. Pagamento no restaurante.
         <br />
         Em caso de alergia ou intolerância, informe um funcionário.
-        <span className="mt-6 flex justify-center">
+        <span className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
           <PoweredBy />
+          <Link href="/privacidade" className="underline hover:text-ink">
+            Privacidade
+          </Link>
+          <Link href="/termos" className="underline hover:text-ink">
+            Termos
+          </Link>
         </span>
       </footer>
     </div>

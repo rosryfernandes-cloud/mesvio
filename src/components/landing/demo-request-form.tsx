@@ -100,7 +100,12 @@ export function DemoRequestForm() {
       >
         {state === "sending" ? "A enviar…" : "Pedir demonstração"} <IconArrow className="size-5" />
       </button>
-      <p className="text-center text-xs text-white/70">Usamos estes dados só para te contactar sobre a demonstração.</p>
+      <p className="text-center text-xs text-white/70">
+        Usamos estes dados só para te contactar sobre a demonstração.{" "}
+        <a href="/privacidade" className="underline hover:text-white">
+          Política de Privacidade
+        </a>
+      </p>
     </form>
   );
 }
