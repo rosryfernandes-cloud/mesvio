@@ -146,8 +146,8 @@ export async function refreshTablePayment(
   if (!result) return null;
   // Pedido pré-pago acabado de pagar: enviar já ao POS (o worker faria o mesmo em ~2 s).
   if (result.activatedOrderId) {
-    const { dispatchOrderNow } = await import("@/server/orders/outbox-worker");
-    await dispatchOrderNow(db, result.activatedOrderId).catch((err) => console.error("[pagamentos] envio imediato falhou", err));
+    const { dispatchWithinDeadline } = await import("@/server/orders/outbox-worker");
+    await dispatchWithinDeadline(db, result.activatedOrderId, { label: "pagamentos" });
   }
   return { status: result.status, bill: result.bill };
 }

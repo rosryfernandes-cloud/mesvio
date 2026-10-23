@@ -5,6 +5,7 @@ import { diningTables, orderEvents, orderItems, orders, outbox, posIntegrations 
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 import type { PosOrderResult } from "@/server/pos/types";
 import { pruneRateLimits } from "@/server/security/rate-limit";
+import { keepAlive } from "@/server/runtime/keep-alive";
 import { pruneDemoRequests } from "@/server/contact/demo-requests";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
@@ -225,6 +226,34 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
 export async function dispatchOrderNow(db: Db, orderId: string, deps: WorkerDeps = {}): Promise<void> {
   const d = defaults(deps);
   for (const job of await claimJobs(db, d.now(), 1, orderId)) await processJob(db, job, d);
+}
+
+/** Quanto tempo uma resposta ao cliente espera pela 1.ª tentativa de envio ao POS. */
+export const INLINE_POS_WAIT_MS = 4_000;
+
+/**
+ * Tenta enviar já ao POS, mas a resposta HTTP só espera até `inlineWaitMs`. O envio NÃO é cortado
+ * (cortá-lo tornava o resultado ambíguo e o pedido iria para "precisa de atenção"): continua em
+ * fundo, mantido vivo por `waitUntil`, e se falhar o worker reenvia. Antes, a resposta podia
+ * esperar os 20 s do prazo do POS e a função serverless morrer a meio (revisão 24/10).
+ * Devolve true se o envio terminou dentro do prazo.
+ */
+export async function dispatchWithinDeadline(
+  db: Db,
+  orderId: string,
+  deps: WorkerDeps & { inlineWaitMs?: number; waitUntil?: (work: Promise<unknown>) => void; label?: string } = {},
+): Promise<boolean> {
+  const dispatch = dispatchOrderNow(db, orderId, deps).catch((err) => {
+    console.error(`[${deps.label ?? "orders"}] envio imediato falhou; fica para o worker`, err);
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const inTime = await Promise.race([
+    dispatch.then(() => true),
+    new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), deps.inlineWaitMs ?? INLINE_POS_WAIT_MS))),
+  ]);
+  clearTimeout(timer);
+  if (!inTime) (deps.waitUntil ?? keepAlive)(dispatch);
+  return inTime;
 }
 
 /** Processa um lote de tarefas prontas. Devolve quantas processou. */

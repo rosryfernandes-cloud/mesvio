@@ -5,6 +5,8 @@ import { activePaymentProvider } from "@/server/payments/provider";
 import { refreshTablePayment } from "@/server/payments/table-payments";
 
 export const dynamic = "force-dynamic";
+// Na Vercel: a resposta sai em poucos segundos; o envio ao POS que ainda decorre acaba em fundo.
+export const maxDuration = 30;
 
 /** Estado de um pagamento (confirmado junto do fornecedor) e a conta atualizada. */
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string; id: string }> }) {

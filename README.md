@@ -19,7 +19,7 @@ Abra `http://localhost:3000` (página comercial da MESVIO) ou `http://localhost:
 
 ### Painel central (equipa MESVIO)
 `/central`: todos os restaurantes, pedidos e comissões do mês (estimativa sobre o valor sem IVA dos pedidos confirmados), alertas (pedidos que não chegaram ao POS, POS com falhas ou por configurar, restaurantes sem dono ou sem mesas) e **Novo restaurante** (empresa, espaço, POS, comissão, mesas e espreguiçadeiras com QR Code, e convite ao dono). Cada restaurante tem a sua ficha, com mais lugares, outros donos e a folha de QR Codes para imprimir.
-- **Acesso:** só administradores da plataforma (`platform_admins`), com **2FA obrigatório** (TOTP: Google Authenticator, 1Password…). Segredos cifrados com `PLATFORM_SECRET_KEY`; cada código só serve uma vez; 5 tentativas a cada 5 min; sessão verificada de 8 h. Quem não é administrador vê "não encontrado".
+- **Acesso:** só administradores da plataforma (`platform_admins`), com **2FA obrigatório** (TOTP: Google Authenticator, 1Password…), configurado com um código de ativação de uso único dado pelo script (fora do email). Segredos cifrados com `PLATFORM_SECRET_KEY`; cada código só serve uma vez; 5 tentativas a cada 5 min; sessão verificada de 8 h. Quem não é administrador vê "não encontrado".
 - **Criar/repor administradores:** `npm run admin:criar`, `admin:repor-2fa`, `admin:remover` (ver docs/14-PUBLICAR.md). Em desenvolvimento entra-se como "Paula (plataforma, demo)".
 
 ### Línguas da ementa
@@ -41,6 +41,7 @@ Identidade, cores, logótipos e regras de uso em [docs/13-MARCA.md](docs/13-MARC
 - **Aparência** (dono/gerente): cor principal e logótipo (URL https) do restaurante na ementa, no estado do pedido e na conta, com pré-visualização. Só aceita cores com contraste WCAG AA; a MESVIO fica só no rodapé.
 - **Inglês** (dono/gerente): nomes e descrições da ementa em inglês, com contagem do que falta. O que não estiver traduzido aparece em português.
 - **Esgotados**: tira artigos da ementa do cliente na hora (não consegue repor o que o POS dá como esgotado).
+- **QR Codes** (dono/gerente, `/painel/qr`): imprimir e gerar um QR novo se um for fotografado e usado de fora (o antigo deixa logo de funcionar).
 - **Mesas**: mesas livres e ocupadas, com a conta de cada uma; **Fechar mesa** quando os clientes pagam (avisa se houver pedidos por resolver). A mesa fica limpa para os clientes seguintes; uma conta esquecida fecha sozinha 6 h após o último pedido.
 
 ### Espreguiçadeiras (pagar ao pedir)

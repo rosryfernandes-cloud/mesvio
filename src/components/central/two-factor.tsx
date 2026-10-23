@@ -60,59 +60,109 @@ function CodeForm({ action, label, onDone }: { action: string; label: string; on
   );
 }
 
-/** Primeira entrada: ligar uma app de autenticação e confirmar com o primeiro código. */
-export function TwoFactorSetup() {
+/**
+ * Primeira entrada: (em produção) código de ativação recebido da equipa MESVIO, depois ligar uma
+ * app de autenticação e confirmar com o primeiro código.
+ */
+export function TwoFactorSetup({ needsActivationCode }: { needsActivationCode: boolean }) {
   const router = useRouter();
   const [setup, setSetup] = useState<{ secret: string; qrSvg: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activation, setActivation] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function begin(codigoAtivacao?: string) {
+    setBusy(true);
+    setError(null);
+    const r = await post("/api/central/2fa/iniciar", codigoAtivacao ? { codigoAtivacao } : {});
+    setBusy(false);
+    if (r.ok) setSetup(r.data);
+    else setError(r.data.message ?? "Não foi possível começar a configuração.");
+  }
 
   useEffect(() => {
-    void (async () => {
-      const r = await post("/api/central/2fa/iniciar");
-      if (r.ok) setSetup(r.data);
-      else setError(r.data.message ?? "Não foi possível começar a configuração.");
-    })();
-  }, []);
+    if (!needsActivationCode) void begin();
+  }, [needsActivationCode]);
 
   return (
     <section className="mt-8">
       <h1 className="text-3xl">Ativar verificação em dois passos</h1>
-      <p className="mt-2 text-sm text-ink-soft">
-        Obrigatória para o painel central. Abra uma app de autenticação (Google Authenticator, Microsoft Authenticator, 1Password,
-        Authy…), escolha <strong>adicionar conta</strong> e leia este QR Code.
-      </p>
-      {error && (
-        <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      {setup ? (
-        <>
-          <div
-            className="mx-auto mt-6 w-52 rounded-2xl border border-line bg-white p-3 [&_svg]:h-auto [&_svg]:w-full"
-            role="img"
-            aria-label="QR Code para a app de autenticação"
-            dangerouslySetInnerHTML={{ __html: setup.qrSvg }}
-          />
-          <details className="mt-4 text-sm">
-            <summary className="cursor-pointer text-ink-soft underline">Não consigo ler o QR Code</summary>
-            <p className="mt-2">Introduza esta chave na app (tipo: baseado no tempo):</p>
-            <code className="mt-1 block rounded-xl bg-card px-3 py-2 font-mono text-sm break-all select-all">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
-          </details>
-          <CodeForm
-            action="/api/central/2fa/confirmar"
-            label="Código de 6 dígitos que a app mostra"
-            onDone={() => {
-              router.replace("/central");
-              router.refresh();
-            }}
-          />
-          <p className="mt-4 text-xs text-ink-soft">
-            Guarde o acesso à app com cuidado. Se perder o telemóvel, outro administrador pode repor o 2FA (npm run admin:repor-2fa).
+      {!setup && needsActivationCode ? (
+        <form
+          className="mt-4 grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void begin(activation);
+          }}
+        >
+          <p className="text-sm text-ink-soft">
+            Introduza o <strong>código de ativação</strong> que recebeu da equipa MESVIO (não vem por email). Serve uma vez e
+            expira em 48 horas.
           </p>
-        </>
+          <label className="text-sm font-semibold">
+            Código de ativação
+            <input
+              className="mt-1 block w-full rounded-xl border border-line bg-card px-4 py-3 text-center font-mono text-xl tracking-widest uppercase"
+              value={activation}
+              onChange={(e) => setActivation(e.target.value)}
+              placeholder="XXXX-XXXX-XXXX"
+              autoComplete="off"
+              autoFocus
+              required
+            />
+          </label>
+          {error && (
+            <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={busy || activation.replace(/[^a-z0-9]/gi, "").length !== 12} className={primary}>
+            {busy ? "A verificar…" : "Continuar"}
+          </button>
+        </form>
       ) : (
-        !error && <p className="mt-6 text-ink-soft">A preparar…</p>
+        <>
+          <p className="mt-2 text-sm text-ink-soft">
+            Obrigatória para o painel central. Abra uma app de autenticação (Google Authenticator, Microsoft Authenticator,
+            1Password, Authy…), escolha <strong>adicionar conta</strong> e leia este QR Code.
+          </p>
+          {error && (
+            <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          {setup ? (
+            <>
+              <div
+                className="mx-auto mt-6 w-52 rounded-2xl border border-line bg-white p-3 [&_svg]:h-auto [&_svg]:w-full"
+                role="img"
+                aria-label="QR Code para a app de autenticação"
+                dangerouslySetInnerHTML={{ __html: setup.qrSvg }}
+              />
+              <details className="mt-4 text-sm">
+                <summary className="cursor-pointer text-ink-soft underline">Não consigo ler o QR Code</summary>
+                <p className="mt-2">Introduza esta chave na app (tipo: baseado no tempo):</p>
+                <code className="mt-1 block rounded-xl bg-card px-3 py-2 font-mono text-sm break-all select-all">
+                  {setup.secret.match(/.{1,4}/g)?.join(" ")}
+                </code>
+              </details>
+              <CodeForm
+                action="/api/central/2fa/confirmar"
+                label="Código de 6 dígitos que a app mostra"
+                onDone={() => {
+                  router.replace("/central");
+                  router.refresh();
+                }}
+              />
+              <p className="mt-4 text-xs text-ink-soft">
+                Guarde o acesso à app com cuidado. Se perder o telemóvel, outro administrador pode repor o 2FA (npm run
+                admin:repor-2fa).
+              </p>
+            </>
+          ) : (
+            !error && <p className="mt-6 text-ink-soft">A preparar…</p>
+          )}
+        </>
       )}
     </section>
   );

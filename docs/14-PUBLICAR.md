@@ -34,7 +34,7 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
    ```bash
    npm run admin:criar -- --email=<o-seu-email> --nome="O seu nome" --confirmar
    ```
-   Na primeira entrada em `/central/entrar` configura o 2FA com uma app de autenticação. Telemóvel perdido: `npm run admin:repor-2fa -- --email=… --confirmar`.
+   O comando mostra um **código de ativação** (uso único, 48 h). Na primeira entrada em `/central/entrar`: código por email → código de ativação → app de autenticação (2FA). Para outra pessoa da equipa, entregue-lhe o código por telefone ou pessoalmente, **nunca por email**. Telemóvel perdido: `npm run admin:repor-2fa -- --email=… --confirmar` (gera um código novo).
 
 ## 3. GitHub
 1. github.com → **New repository** → nome `mesvio`, **Private**, sem README.

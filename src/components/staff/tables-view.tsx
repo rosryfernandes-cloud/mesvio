@@ -112,6 +112,15 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span className="block text-sm text-ink-soft">Apple Pay, MB WAY e cartão. As mesas pagas aparecem a verde; depois é só fechar a mesa.</span>
         </span>
       </label>
+      {canEditSettings && (
+        <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
+          <span>
+            <span className="block font-semibold">QR Codes dos lugares</span>
+            <span className="block text-sm text-ink-soft">Imprimir, ou gerar um QR novo se um for fotografado e usado de fora.</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      )}
       <p className="text-sm text-ink-soft">
         {occupied.length === 0 ? "Todas as mesas estão livres." : `${occupied.length} de ${tables.length} mesas com conta aberta.`} Quando os clientes
         pagarem, feche a mesa para a limpar para os próximos.

@@ -88,8 +88,19 @@ export async function seedDemo(db: Db, { users = true }: { users?: boolean } = {
           orderingMode: t.orderingMode,
         })),
       )
-      // Bases locais antigas: acrescentar zona e modo às mesas que já existiam.
-      .onConflictDoUpdate({ target: diningTables.id, set: { label: sql`excluded.label`, zone: sql`excluded.zone`, orderingMode: sql`excluded.ordering_mode` } });
+      // Bases locais antigas: acrescentar zona e modo às mesas que já existiam. O token e o estado
+      // voltam aos da demo: os links fixos de /demo têm de funcionar mesmo depois de testar
+      // "Novo QR Code" ou "Desativar" num lugar de demonstração.
+      .onConflictDoUpdate({
+        target: diningTables.id,
+        set: {
+          label: sql`excluded.label`,
+          zone: sql`excluded.zone`,
+          orderingMode: sql`excluded.ordering_mode`,
+          publicToken: sql`excluded.public_token`,
+          active: sql`excluded.active`,
+        },
+      });
 
     // Traduções da ementa: só acrescenta as que faltam (as editadas no painel não são substituídas).
     const modifiers = DEMO_PRODUCTS.flatMap((p) => p.modifierGroups.flatMap((g) => g.modifiers.map((m) => ({ ref: m.posModifierRef, name: m.name }))));

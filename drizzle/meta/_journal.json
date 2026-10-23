@@ -99,6 +99,13 @@
       "when": 1792788511949,
       "tag": "0013_platform_admin_2fa",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792797683768,
+      "tag": "0014_platform_admin_activation",
+      "breakpoints": true
     }
   ]
 }

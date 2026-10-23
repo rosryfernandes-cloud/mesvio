@@ -224,6 +224,41 @@ describe("rate limit", () => {
   });
 });
 
+describe("limites reais em hora de ponta (revisão 24/10)", () => {
+  it("40 pedidos do mesmo Wi-Fi em 10 mesas passam (o limite por mesa está testado acima)", async () => {
+    const { deps } = setup();
+    const sameWifi = { clientIpHash: "wifi-do-bar" };
+    for (const t of DEMO_TABLES.slice(0, 10))
+      for (let i = 0; i < 4; i++) expect((await placeOrder(input({ tableToken: t.publicToken }), sameWifi, deps)).ok).toBe(true);
+  }, 60_000);
+});
+
+describe("POS lento", () => {
+  it("a resposta não espera pelo POS: sai como Enviado e o envio acaba em fundo, sem duplicar", async () => {
+    const { deps } = setup({ latencyMs: 400 });
+    const background: Promise<unknown>[] = [];
+    const t0 = Date.now();
+    const r = await placeOrder(input(), CTX, { ...deps, inlineWaitMs: 50, waitUntil: (w) => background.push(w) });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.order.status).not.toBe("ACCEPTED");
+    expect(background).toHaveLength(1);
+    await Promise.all(background);
+    const [o] = await db.select().from(orders).where(eq(orders.id, r.order.id));
+    expect(o.status).toBe("ACCEPTED");
+    expect(await db.$count(outbox, eq(outbox.status, "DONE"))).toBe(1);
+    expect(Date.now() - t0).toBeGreaterThan(300);
+  });
+
+  it("com o POS rápido, responde já Confirmado e não deixa nada em fundo", async () => {
+    const { deps } = setup();
+    const background: Promise<unknown>[] = [];
+    const r = await placeOrder(input(), CTX, { ...deps, waitUntil: (w) => background.push(w) });
+    expect(r.ok && r.order.status).toBe("ACCEPTED");
+    expect(background).toHaveLength(0);
+  });
+});
+
 describe("startOfLocalDay", () => {
   it("usa a meia-noite de Lisboa (verão e inverno)", () => {
     // 23:30 UTC no verão já é 00:30 do dia seguinte em Lisboa.

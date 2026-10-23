@@ -2,19 +2,30 @@ import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
 import { closeTable } from "@/server/tables/table-sessions";
+import { staffTableAction } from "@/server/tables/table-admin";
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ action: z.literal("close"), force: z.boolean().optional() });
+const schema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("close"), force: z.boolean().optional() }),
+  z.object({ action: z.literal("rotate_qr") }),
+]);
 
-/** Fechar a conta de uma mesa (cliente pagou e saiu). */
+/** Fechar a conta de uma mesa (staff) ou gerar um QR Code novo para o lugar (dono/gerente). */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await guardStaff(request, { mutating: true, permission: "orders.act" });
-  if (ctx instanceof Response) return ctx;
   const { id } = await params;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || !z.uuid().safeParse(id).success) return json({ message: "Pedido inválido." }, 400);
 
+  if (parsed.data.action === "rotate_qr") {
+    const ctx = await guardStaff(request, { mutating: true, permission: "settings.edit" });
+    if (ctx instanceof Response) return ctx;
+    const ok = await staffTableAction(await getDb(), ctx, id, "rotate_qr");
+    return ok ? json({ ok: true }) : json({ message: "Lugar não encontrado." }, 404);
+  }
+
+  const ctx = await guardStaff(request, { mutating: true, permission: "orders.act" });
+  if (ctx instanceof Response) return ctx;
   const r = await closeTable(await getDb(), ctx, id, { force: parsed.data.force });
   if (r.ok) return json({ ok: true });
   return json(r, r.code === "NOT_FOUND" ? 404 : 409);

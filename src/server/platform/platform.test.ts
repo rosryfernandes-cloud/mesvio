@@ -9,7 +9,8 @@ import type { UserDirectory } from "@/server/auth/user-directory";
 import { resolveStaffContext } from "@/server/staff/context";
 import { getBoard } from "@/server/staff/staff-service";
 import { open } from "@/server/security/secret-box";
-import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment, verifyMfa, type PlatformAdmin } from "./admin-auth";
+import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment as start, verifyMfa, type PlatformAdmin } from "./admin-auth";
+import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "./activation";
 import { totpCode, stepAt } from "./totp";
 import { addTables, createRestaurant, getPlatformOverview, inviteOwner } from "./platform-service";
 
@@ -31,16 +32,23 @@ beforeEach(async () => {
 
 const NOW = Date.UTC(2026, 9, 23, 12, 0, 0);
 
+/** Início da configuração no modo de desenvolvimento (sem código de ativação). */
+async function startEnrollment(a: PlatformAdmin) {
+  const r = await start(db, a, { requireActivation: false });
+  if (!r.ok) throw new Error(r.message);
+  return r;
+}
+
 async function enrol(): Promise<string> {
-  const { secret } = await startEnrollment(db, admin);
+  const { secret } = await startEnrollment(admin);
   expect(await confirmEnrollment(db, admin, totpCode(secret, stepAt(NOW)), NOW)).toEqual({ ok: true });
   return secret;
 }
 
 describe("2FA dos administradores", () => {
   it("abrir a configuração duas vezes mostra o mesmo segredo (e fica cifrado na BD)", async () => {
-    const a = await startEnrollment(db, admin);
-    const b = await startEnrollment(db, admin);
+    const a = await startEnrollment(admin);
+    const b = await startEnrollment(admin);
     expect(b.secret).toBe(a.secret);
     const [row] = await db.select().from(t.platformAdmins).where(eq(t.platformAdmins.userId, admin.userId));
     expect(row.totpPendingCiphertext).not.toContain(a.secret);
@@ -48,7 +56,7 @@ describe("2FA dos administradores", () => {
   });
 
   it("o primeiro código certo ativa o 2FA; um código errado não", async () => {
-    const { secret } = await startEnrollment(db, admin);
+    const { secret } = await startEnrollment(admin);
     expect((await confirmEnrollment(db, admin, "000000", NOW)).ok).toBe(false);
     expect(await confirmEnrollment(db, admin, totpCode(secret, stepAt(NOW)), NOW)).toEqual({ ok: true });
     const fresh = (await findPlatformAdmin(db, admin.userId))!;
@@ -86,6 +94,44 @@ const input = {
   ],
   owner: { email: "Dono@PraiaAzul.pt", displayName: "João" },
 };
+
+describe("código de ativação do 2FA (produção)", () => {
+  async function issue(expiresInMs = ACTIVATION_TTL_MS) {
+    const code = generateActivationCode();
+    await db
+      .update(t.platformAdmins)
+      .set({ enrollmentCodeHash: hashActivationCode(code), enrollmentCodeExpiresAt: new Date(NOW + expiresInMs) })
+      .where(eq(t.platformAdmins.userId, admin.userId));
+    return code;
+  }
+
+  it("sem o código, quem só tem o email não consegue configurar o 2FA", async () => {
+    await issue();
+    expect(await start(db, admin, { requireActivation: true, now: NOW })).toMatchObject({ ok: false, code: "ACTIVATION_INVALID" });
+    expect(await start(db, admin, { requireActivation: true, activationCode: "AAAA-BBBB-CCCC", now: NOW })).toMatchObject({
+      ok: false,
+      code: "ACTIVATION_INVALID",
+    });
+    const [row] = await db.select().from(t.platformAdmins).where(eq(t.platformAdmins.userId, admin.userId));
+    expect(row.totpPendingCiphertext).toBeNull();
+  });
+
+  it("aceita o código (com ou sem hífenes, minúsculas) e deixa de o aceitar depois de configurado", async () => {
+    const code = await issue();
+    const r = await start(db, admin, { requireActivation: true, activationCode: code.toLowerCase().replace(/-/g, ""), now: NOW });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(await confirmEnrollment(db, admin, totpCode(r.secret, stepAt(NOW)), NOW)).toEqual({ ok: true });
+    const [row] = await db.select().from(t.platformAdmins).where(eq(t.platformAdmins.userId, admin.userId));
+    expect(row.enrollmentCodeHash).toBeNull();
+    expect(await start(db, admin, { requireActivation: true, activationCode: code, now: NOW })).toMatchObject({ ok: false, code: "ALREADY_ENROLLED" });
+  });
+
+  it("recusa códigos expirados", async () => {
+    const code = await issue(-1000);
+    expect(await start(db, admin, { requireActivation: true, activationCode: code, now: NOW })).toMatchObject({ ok: false, code: "ACTIVATION_INVALID" });
+  });
+});
 
 describe("criar restaurantes no painel central", () => {
   it("cria organização, restaurante, POS, comissão, lugares e convida o dono", async () => {

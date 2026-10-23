@@ -5,6 +5,8 @@ import { activePaymentProvider, type MockPaymentProvider } from "@/server/paymen
 import { paymentProviderRef, refreshTablePayment } from "@/server/payments/table-payments";
 
 export const dynamic = "force-dynamic";
+// Na Vercel: a resposta sai em poucos segundos; o envio ao POS que ainda decorre acaba em fundo.
+export const maxDuration = 30;
 
 const schema = z.object({ token: z.string(), method: z.enum(["apple_pay", "mb_way"]), approved: z.boolean() });
 

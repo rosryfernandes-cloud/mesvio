@@ -2,15 +2,17 @@
 //
 //   npm run admin:criar -- --email=voce@mesvio.pt --nome="O seu nome" --confirmar
 //     Dá acesso ao painel central a um utilizador que JÁ existe na Supabase Auth
-//     (convide-o antes em Authentication → Users → Invite). Na primeira entrada configura o 2FA.
+//     (convide-o antes em Authentication → Users → Invite). Mostra um CÓDIGO DE ATIVAÇÃO (48 h, uso
+//     único) que é pedido para configurar o 2FA: entregue-o por outro canal que não o email.
 //
 //   npm run admin:repor-2fa -- --email=voce@mesvio.pt --confirmar
-//     Telemóvel perdido: apaga o 2FA dessa pessoa; na próxima entrada configura-o de novo.
+//     Telemóvel perdido: apaga o 2FA dessa pessoa e gera um código de ativação novo.
 //
 //   npm run admin:remover -- --email=voce@mesvio.pt --confirmar
 //
 // Lê DIRECT_DATABASE_URL (ou DATABASE_URL) de .env.production.local ou do ambiente.
 import postgres from "postgres";
+import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "../../src/server/platform/activation";
 
 try {
   process.loadEnvFile(".env.production.local");
@@ -37,21 +39,41 @@ if (!args.includes("--confirmar")) {
   process.exit(0);
 }
 
+function printActivation(code: string, expires: Date) {
+  console.log(`\n  Código de ativação do 2FA: ${code}`);
+  console.log(`  Válido até ${expires.toLocaleString("pt-PT")}, uso único. Entregue-o por telefone ou pessoalmente,`);
+  console.log("  NUNCA por email. Entrada: /central/entrar → código por email → este código → app de autenticação.\n");
+}
+
 const sql = postgres(url, { prepare: false, max: 1 });
 try {
   if (action === "criar") {
     const [user] = await sql<{ id: string }[]>`select id from auth.users where lower(email) = ${email} limit 1`;
     if (!user) throw new Error(`Não existe ${email} na Supabase Auth. Convide-o primeiro (Authentication → Users → Invite).`);
-    await sql`insert into platform_admins (user_id, email, display_name) values (${user.id}, ${email}, ${name ?? null})
-              on conflict (user_id) do update set email = excluded.email, display_name = coalesce(excluded.display_name, platform_admins.display_name)`;
+    const activation = generateActivationCode();
+    const expires = new Date(Date.now() + ACTIVATION_TTL_MS);
+    const [row] = await sql<{ enrolled: boolean }[]>`insert into platform_admins (user_id, email, display_name, enrollment_code_hash, enrollment_code_expires_at)
+              values (${user.id}, ${email}, ${name ?? null}, ${hashActivationCode(activation)}, ${expires})
+              on conflict (user_id) do update set email = excluded.email,
+                display_name = coalesce(excluded.display_name, platform_admins.display_name),
+                enrollment_code_hash = case when platform_admins.totp_secret_ciphertext is null then excluded.enrollment_code_hash else null end,
+                enrollment_code_expires_at = case when platform_admins.totp_secret_ciphertext is null then excluded.enrollment_code_expires_at else null end
+              returning totp_secret_ciphertext is not null as enrolled`;
     await sql`insert into audit_logs (actor_type, actor_id, action, entity_type, entity_id) values ('system', 'script', 'platform.admin_created', 'platform_admin', ${user.id})`;
-    console.log(`✓ ${email} é administrador do painel central. Entre em /central/entrar e configure o 2FA.`);
+    console.log(`✓ ${email} é administrador do painel central.`);
+    if (row.enrolled) console.log("  O 2FA já estava configurado; nada mais a fazer.");
+    else printActivation(activation, expires);
   } else {
     const rows = await sql<{ user_id: string }[]>`select user_id from platform_admins where lower(email) = ${email}`;
     if (rows.length === 0) throw new Error(`${email} não é administrador.`);
     if (action === "repor-2fa") {
-      await sql`update platform_admins set totp_secret_ciphertext = null, totp_pending_ciphertext = null, totp_enabled_at = null, totp_last_step = null where lower(email) = ${email}`;
-      console.log(`✓ 2FA de ${email} reposto: na próxima entrada configura-o de novo.`);
+      const activation = generateActivationCode();
+      const expires = new Date(Date.now() + ACTIVATION_TTL_MS);
+      await sql`update platform_admins set totp_secret_ciphertext = null, totp_pending_ciphertext = null, totp_enabled_at = null, totp_last_step = null,
+                  enrollment_code_hash = ${hashActivationCode(activation)}, enrollment_code_expires_at = ${expires}
+                where lower(email) = ${email}`;
+      console.log(`✓ 2FA de ${email} reposto.`);
+      printActivation(activation, expires);
     } else {
       await sql`delete from platform_admins where lower(email) = ${email}`;
       console.log(`✓ ${email} deixou de ter acesso ao painel central.`);

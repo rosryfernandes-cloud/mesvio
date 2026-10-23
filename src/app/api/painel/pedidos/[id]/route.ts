@@ -4,6 +4,8 @@ import { guardStaff, json } from "@/server/staff/http";
 import { applyStaffAction, STAFF_ACTIONS, type StaffAction } from "@/server/staff/staff-service";
 
 export const dynamic = "force-dynamic";
+// Na Vercel: a resposta sai em poucos segundos; o envio ao POS que ainda decorre acaba em fundo.
+export const maxDuration = 30;
 
 const schema = z.object({ action: z.enum(STAFF_ACTIONS as [StaffAction, ...StaffAction[]]) });
 

@@ -12,13 +12,30 @@ export interface RateLimitRule {
 /**
  * Limites dos pedidos. Pensados para uma mesa real (vários pedidos por refeição, várias
  * pessoas) e para travar quem fotografa o QR e faz pedidos de fora ou em massa.
+ *
+ * O limite que protege cada mesa é o `perTable`. O `perIp` só trava ataques em massa: num
+ * bar, todos os clientes no Wi-Fi do espaço (ou atrás do mesmo operador móvel) aparecem com o
+ * MESMO IP, por isso um limite baixo bloqueava clientes reais em hora de ponta (revisão 24/10).
  */
 export const ORDER_RATE_LIMITS = {
-  /** Por telemóvel/rede: ~1 pedido a cada 30 s em média. */
-  perIp: { limit: 10, windowSeconds: 5 * 60 },
+  /** Por IP (uma rede inteira): ~24 pedidos/min, folga para um beach club cheio no mesmo Wi-Fi. */
+  perIp: { limit: 120, windowSeconds: 5 * 60 },
   /** Por mesa, somando todos os telemóveis dessa mesa. */
   perTable: { limit: 30, windowSeconds: 15 * 60 },
 } satisfies Record<string, RateLimitRule>;
+
+/** Início de pagamentos: o que protege é o limite por mesa; o de IP só trava ataques em massa. */
+export const PAYMENT_RATE_LIMITS = {
+  perIp: { limit: 300, windowSeconds: 15 * 60 },
+  perTable: { limit: 20, windowSeconds: 15 * 60 },
+} satisfies Record<string, RateLimitRule>;
+
+/** Aplica os dois limites de pagamento (IP e mesa). */
+export async function hitPaymentLimits(db: Db, ipHash: string, tableToken: string): Promise<RateLimitResult> {
+  const ip = await hitRateLimit(db, `pay:ip:${ipHash}`, PAYMENT_RATE_LIMITS.perIp);
+  if (!ip.allowed) return ip;
+  return hitRateLimit(db, `pay:table:${createHash("sha256").update(tableToken).digest("base64url").slice(0, 22)}`, PAYMENT_RATE_LIMITS.perTable);
+}
 
 export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
 

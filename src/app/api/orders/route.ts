@@ -4,6 +4,8 @@ import { placeOrder } from "@/server/orders/place-order";
 import { clientIpFromHeaders, hashClientIp } from "@/server/security/rate-limit";
 
 export const dynamic = "force-dynamic";
+// Tempo de vida da função na Vercel: a resposta sai em ≤ 4 s e o envio ao POS (até 20 s) acaba em fundo.
+export const maxDuration = 30;
 
 const STATUS_BY_CODE = {
   INVALID_INPUT: 400,

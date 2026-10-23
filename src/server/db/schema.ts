@@ -149,6 +149,13 @@ export const platformAdmins = pgTable("platform_admins", {
   totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
   /** Último intervalo de 30 s aceite: impede reutilizar o mesmo código. */
   totpLastStep: bigint("totp_last_step", { mode: "number" }),
+  /**
+   * Código de ativação de uso único (só o resumo SHA-256), gerado pelo script admin:criar /
+   * admin:repor-2fa e entregue por outro canal. Sem ele não se configura o 2FA: quem roubar só o
+   * email de um administrador ainda sem 2FA não consegue ligá-lo à app dele (revisão 24/10).
+   */
+  enrollmentCodeHash: text("enrollment_code_hash"),
+  enrollmentCodeExpiresAt: timestamp("enrollment_code_expires_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 

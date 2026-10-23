@@ -13,7 +13,7 @@ import { withTenant } from "@/server/db/tenant";
 import { getOrOpenSession } from "@/server/tables/table-sessions";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { loadOrderView, type OrderView } from "./order-view";
-import { dispatchOrderNow, type WorkerDeps } from "./outbox-worker";
+import { dispatchWithinDeadline, type WorkerDeps } from "./outbox-worker";
 import { enqueueSubmit } from "./outbox";
 
 /** O cliente envia só referências, quantidades e escolhas. Preços nunca. */
@@ -52,6 +52,10 @@ export interface PlaceOrderDeps extends WorkerDeps {
   paymentsAvailable?: boolean;
   directory?: TableDirectory;
   rateLimits?: { perIp: RateLimitRule; perTable: RateLimitRule };
+  /** Quanto tempo a resposta ao cliente espera pela 1.ª tentativa de envio ao POS (por omissão 4 s). */
+  inlineWaitMs?: number;
+  /** Mantém vivo o envio que continua depois da resposta (por omissão, `after()` do Next). */
+  waitUntil?: (work: Promise<unknown>) => void;
 }
 
 export interface RequestContext {
@@ -185,12 +189,9 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
   });
   if (needsApproval || payFirst) return { ok: true, order: await view(orderId) };
 
-  // Primeira tentativa já, para o cliente ver "Confirmado" em segundos. Se falhar, o worker reenvia.
-  try {
-    await dispatchOrderNow(db, orderId, deps);
-  } catch (err) {
-    console.error("[orders] envio imediato falhou; fica para o worker", err);
-  }
+  // Primeira tentativa já, para o cliente ver "Confirmado" em segundos; com um POS lento, a
+  // resposta sai com "Enviado" ao fim de poucos segundos e o envio acaba em fundo.
+  await dispatchWithinDeadline(db, orderId, deps);
   return { ok: true, order: await view(orderId) };
 }
 

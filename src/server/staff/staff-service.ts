@@ -4,7 +4,7 @@ import type { Db } from "@/server/db/client";
 import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, posIntegrations, tableSessions } from "@/server/db/schema";
 import { listLocallyUnavailable, setLocallyUnavailable } from "@/server/catalog/availability";
 import { enqueueSubmit, startOfLocalDay } from "@/server/orders/place-order";
-import { dispatchOrderNow, SUBMIT_ORDER_TOPIC, type WorkerDeps } from "@/server/orders/outbox-worker";
+import { dispatchWithinDeadline, SUBMIT_ORDER_TOPIC, type WorkerDeps } from "@/server/orders/outbox-worker";
 import type { OrderStatus } from "@/server/orders/order-view";
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 import { withTenant } from "@/server/db/tenant";
@@ -222,11 +222,7 @@ export async function applyStaffAction(
   });
 
   if (result.ok && (action === "approve" || action === "retry")) {
-    try {
-      await dispatchOrderNow(db, orderId, deps);
-    } catch (err) {
-      console.error("[painel] envio imediato falhou; fica para o worker", err);
-    }
+    await dispatchWithinDeadline(db, orderId, { ...deps, label: "painel" });
   }
   return result;
 }

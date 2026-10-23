@@ -9,6 +9,8 @@ import { hitRateLimit } from "@/server/security/rate-limit";
 import { open, seal } from "@/server/security/secret-box";
 import { decodeSigned, encodeSigned, isSameOrigin } from "@/server/staff/session";
 import { generateTotpSecret, totpUri, verifyTotp } from "./totp";
+import { activationCodeMatches } from "./activation";
+import { authMode } from "@/server/auth/config";
 
 /**
  * Acesso ao painel central da MESVIO: sessão normal (email + código, como o painel) e, por cima,
@@ -61,12 +63,38 @@ async function audit(db: Db, admin: PlatformAdmin, action: string, after?: unkno
   await db.insert(auditLogs).values({ actorType: "admin", actorId: admin.userId, action, entityType: "platform_admin", entityId: admin.userId, after });
 }
 
-/** Passo 1 da configuração: segredo novo (pendente até confirmar), para mostrar em QR. */
-export async function startEnrollment(db: Db, admin: PlatformAdmin): Promise<{ secret: string; uri: string }> {
-  if (admin.totpSecretCiphertext) throw new Error("2FA já configurado");
-  // Reutiliza o segredo pendente: abrir a página duas vezes não pode mostrar um QR diferente do guardado.
+/**
+ * Em produção, configurar o 2FA exige o código de ativação do script (ver activation.ts). No modo
+ * de desenvolvimento (sem Supabase, sem emails) não há email para roubar e o código dispensa-se.
+ */
+export const activationRequired = () => authMode() !== "dev";
+
+export type EnrollmentStart =
+  | { ok: true; secret: string; uri: string }
+  | { ok: false; code: "ACTIVATION_INVALID" | "RATE_LIMITED" | "ALREADY_ENROLLED"; message: string };
+
+/**
+ * Passo 1 da configuração: valida o código de ativação e devolve o segredo (pendente até
+ * confirmar), para mostrar em QR. O código é pedido em cada chamada, mesmo com segredo pendente.
+ */
+export async function startEnrollment(
+  db: Db,
+  admin: PlatformAdmin,
+  { activationCode, requireActivation = activationRequired(), now = Date.now() }: { activationCode?: string; requireActivation?: boolean; now?: number } = {},
+): Promise<EnrollmentStart> {
   const [fresh] = await db.select().from(platformAdmins).where(eq(platformAdmins.userId, admin.userId));
-  let secret = fresh?.totpPendingCiphertext ? open(fresh.totpPendingCiphertext) : null;
+  if (!fresh || fresh.totpSecretCiphertext) return { ok: false, code: "ALREADY_ENROLLED", message: "O 2FA já está configurado." };
+  if (requireActivation) {
+    if (!(await hitRateLimit(db, `mfa:${admin.userId}`, MFA_ATTEMPTS)).allowed) {
+      return { ok: false, code: "RATE_LIMITED", message: "Demasiadas tentativas. Aguarde 5 minutos." };
+    }
+    if (!activationCodeMatches(activationCode ?? "", fresh.enrollmentCodeHash, fresh.enrollmentCodeExpiresAt, now)) {
+      await audit(db, admin, "platform.activation_failed");
+      return { ok: false, code: "ACTIVATION_INVALID", message: "Código de ativação errado ou expirado. Peça um novo (npm run admin:repor-2fa)." };
+    }
+  }
+  // Reutiliza o segredo pendente: abrir a página duas vezes não pode mostrar um QR diferente do guardado.
+  let secret = fresh.totpPendingCiphertext ? open(fresh.totpPendingCiphertext) : null;
   if (!secret) {
     secret = generateTotpSecret();
     const claimed = await db
@@ -80,7 +108,7 @@ export async function startEnrollment(db: Db, admin: PlatformAdmin): Promise<{ s
       secret = open(again!.totpPendingCiphertext!);
     }
   }
-  return { secret, uri: totpUri(secret, admin.email ?? "admin") };
+  return { ok: true, secret, uri: totpUri(secret, admin.email ?? "admin") };
 }
 
 export type MfaResult = { ok: true } | { ok: false; code: "INVALID" | "RATE_LIMITED" | "NOT_STARTED"; message: string };
@@ -99,7 +127,15 @@ export async function confirmEnrollment(db: Db, admin: PlatformAdmin, code: stri
   if (step === null) return invalid;
   await db
     .update(platformAdmins)
-    .set({ totpSecretCiphertext: fresh.totpPendingCiphertext, totpPendingCiphertext: null, totpEnabledAt: new Date(now), totpLastStep: step })
+    // O código de ativação deixa de servir a partir daqui.
+    .set({
+      totpSecretCiphertext: fresh.totpPendingCiphertext,
+      totpPendingCiphertext: null,
+      totpEnabledAt: new Date(now),
+      totpLastStep: step,
+      enrollmentCodeHash: null,
+      enrollmentCodeExpiresAt: null,
+    })
     .where(eq(platformAdmins.userId, admin.userId));
   await audit(db, admin, "platform.mfa_enrolled");
   return { ok: true };
