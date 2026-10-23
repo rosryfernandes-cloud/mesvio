@@ -92,6 +92,13 @@
       "when": 1792785667099,
       "tag": "0012_translations_english_only",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792788511949,
+      "tag": "0013_platform_admin_2fa",
+      "breakpoints": true
     }
   ]
 }

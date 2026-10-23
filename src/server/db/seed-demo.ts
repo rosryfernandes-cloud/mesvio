@@ -3,7 +3,7 @@ import { DEMO_ESTABLISHMENT, DEMO_ORGANIZATION, DEMO_PRODUCTS, DEMO_TABLES } fro
 import { demoTranslationRows } from "@/server/pos/mock/demo-translations";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "./client";
-import { diningTables, establishments, memberships, menuTranslations, organizations, posIntegrations, staffProfiles } from "./schema";
+import { diningTables, establishments, memberships, menuTranslations, organizations, platformAdmins, posIntegrations, staffProfiles } from "./schema";
 
 /**
  * Utilizadores de demonstração (só dev/testes, sem Supabase): entram no painel pelo modo de
@@ -14,6 +14,9 @@ export const DEMO_USERS = [
   { userId: "00000000-0000-4000-8000-0000000002a2", email: "gerente@example.com", displayName: "Bruno (gerente, demo)", role: "manager", wholeOrganization: false },
   { userId: "00000000-0000-4000-8000-0000000002a3", email: "sala@example.com", displayName: "Carla (sala, demo)", role: "staff", wholeOrganization: false },
 ] as const;
+
+/** Administradora da plataforma de demonstração (painel central). Configura o 2FA na primeira entrada. */
+export const DEMO_PLATFORM_ADMIN = { userId: "00000000-0000-4000-8000-0000000002f1", email: "plataforma@example.com", displayName: "Paula (plataforma, demo)" } as const;
 
 /**
  * Organização, estabelecimento, mesas e integração MockPOS da demonstração. Idempotente.
@@ -54,6 +57,7 @@ export async function seedDemo(db: Db, { users = true }: { users?: boolean } = {
         .values(DEMO_USERS.map(({ userId, email, displayName }) => ({ userId, email, displayName })))
         .onConflictDoNothing();
     }
+    if (users) await tx.insert(platformAdmins).values(DEMO_PLATFORM_ADMIN).onConflictDoNothing();
     for (const u of users ? DEMO_USERS : []) {
       const exists = await tx.$count(memberships, eq(memberships.userId, u.userId));
       if (exists === 0) {

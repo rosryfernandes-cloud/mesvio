@@ -59,8 +59,8 @@ export default function DemoPage() {
           <span className="mt-1 block text-sm text-ink-soft">Folha para imprimir e URLs para gravar nas etiquetas.</span>
         </Link>
         <Link href="/central" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand sm:col-span-2">
-          <span className="block font-bold">Painel central MESVIO (design) →</span>
-          <span className="mt-1 block text-sm text-ink-soft">Proposta de ecrã para a gestão da plataforma, com dados fictícios.</span>
+          <span className="block font-bold">Painel central MESVIO →</span>
+          <span className="mt-1 block text-sm text-ink-soft">Gestão da plataforma: restaurantes, mesas, QR Codes, pedidos e comissões. Com 2FA.</span>
         </Link>
       </div>
 

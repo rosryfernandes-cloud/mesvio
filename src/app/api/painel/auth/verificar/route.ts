@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/server/auth/supabase";
 import { clientIpFromHeaders, hashClientIp } from "@/server/security/rate-limit";
 import { resolveStaffContext } from "@/server/staff/context";
 import { isSameOrigin } from "@/server/staff/session";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,9 @@ export async function POST(request: Request) {
   const { data, error } = await supabase.auth.verifyOtp({ email, token: parsed.data.codigo, type: "email" });
   if (error || !data.user) return NextResponse.json({ message: "Código inválido ou expirado." }, { status: 401 });
 
-  // Conta válida mas sem nenhum restaurante (ex.: foi removida da equipa): não fica com sessão.
-  if (!(await resolveStaffContext(db, data.user.id))) {
+  // Conta válida mas sem nenhum restaurante (ex.: foi removida da equipa) nem acesso ao painel
+  // central: não fica com sessão.
+  if (!(await resolveStaffContext(db, data.user.id)) && !(await findPlatformAdmin(db, data.user.id))) {
     await supabase.auth.signOut();
     return NextResponse.json({ message: "Esta conta não tem acesso a nenhum restaurante." }, { status: 403 });
   }

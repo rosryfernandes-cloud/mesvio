@@ -25,4 +25,4 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/painel/:path*", "/api/painel/:path*"] };
+export const config = { matcher: ["/painel/:path*", "/api/painel/:path*", "/central/:path*", "/central", "/api/central/:path*"] };

@@ -18,7 +18,10 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:producao": "node --env-file=.env.production.local node_modules/drizzle-kit/bin.cjs migrate",
     "demo:urls": "node scripts/print-demo-urls.mjs",
-    "demo:supabase": "tsx --conditions=react-server scripts/demo/criar-demo-supabase.ts"
+    "demo:supabase": "tsx --conditions=react-server scripts/demo/criar-demo-supabase.ts",
+    "admin:criar": "tsx scripts/admin/administradores.ts criar",
+    "admin:repor-2fa": "tsx scripts/admin/administradores.ts repor-2fa",
+    "admin:remover": "tsx scripts/admin/administradores.ts remover"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

@@ -17,6 +17,11 @@ npm run demo:urls  # URLs das 10 mesas de demonstração
 
 Abra `http://localhost:3000` (página comercial da MESVIO) ou `http://localhost:3000/demo` para escolher uma mesa de demonstração, ou vá diretamente a um URL de mesa (ex.: `/m/jG6WQHgwr4fQ5qQEOKtZJw`).
 
+### Painel central (equipa MESVIO)
+`/central`: todos os restaurantes, pedidos e comissões do mês (estimativa sobre o valor sem IVA dos pedidos confirmados), alertas (pedidos que não chegaram ao POS, POS com falhas ou por configurar, restaurantes sem dono ou sem mesas) e **Novo restaurante** (empresa, espaço, POS, comissão, mesas e espreguiçadeiras com QR Code, e convite ao dono). Cada restaurante tem a sua ficha, com mais lugares, outros donos e a folha de QR Codes para imprimir.
+- **Acesso:** só administradores da plataforma (`platform_admins`), com **2FA obrigatório** (TOTP: Google Authenticator, 1Password…). Segredos cifrados com `PLATFORM_SECRET_KEY`; cada código só serve uma vez; 5 tentativas a cada 5 min; sessão verificada de 8 h. Quem não é administrador vê "não encontrado".
+- **Criar/repor administradores:** `npm run admin:criar`, `admin:repor-2fa`, `admin:remover` (ver docs/14-PUBLICAR.md). Em desenvolvimento entra-se como "Paula (plataforma, demo)".
+
 ### Línguas da ementa
 O cliente vê a ementa, o pedido e a conta em português ou inglês: telemóveis em português abrem em português, todos os outros em inglês, e há um seletor na ementa (a escolha fica num cookie). Botões, avisos, alergénios e etiquetas estão em `src/lib/i18n/`; pratos e categorias vêm da tabela `menu_translations` (por restaurante, com RLS). A demo tem inglês completo. O POS e o painel continuam em português.
 

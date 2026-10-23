@@ -17,7 +17,7 @@ async function post(url: string, body: unknown): Promise<{ ok: boolean; message?
 }
 
 /** Entrada com código de 6 dígitos enviado por email (Supabase Auth). Funciona num tablet partilhado. */
-export function EmailCodeLogin() {
+export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pessoas convidadas pelo dono ou gerente do restaurante." }: { redirectTo?: string; hint?: string }) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
@@ -44,7 +44,7 @@ export function EmailCodeLogin() {
     const r = await post("/api/painel/auth/verificar", { email, codigo });
     setBusy(false);
     if (!r.ok) return setError(r.message ?? "Código inválido.");
-    router.replace("/painel");
+    router.replace(redirectTo);
     router.refresh();
   }
 
@@ -56,7 +56,7 @@ export function EmailCodeLogin() {
       </label>
       {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
       <button type="submit" disabled={busy} className={primary}>{busy ? "A enviar…" : "Enviar código"}</button>
-      <p className="text-xs text-ink-soft">Só entram pessoas convidadas pelo dono ou gerente do restaurante.</p>
+      <p className="text-xs text-ink-soft">{hint}</p>
     </form>
   ) : (
     <form onSubmit={verify} className="mt-8 grid gap-4">
@@ -81,13 +81,15 @@ export function EmailCodeLogin() {
   );
 }
 
-const ROLE = { owner: "Dono", manager: "Gerente", staff: "Staff" } as const;
+const ROLE = { owner: "Dono", manager: "Gerente", staff: "Staff", admin: "Plataforma" } as const;
 
 /** Modo de desenvolvimento (sem Supabase): escolher um utilizador de demonstração. */
 export function DevLogin({
   users,
+  redirectTo = "/painel",
 }: {
-  users: { userId: string; email: string; displayName: string | null; role: keyof typeof ROLE; establishmentName: string | null }[];
+  users: { userId: string; email: string | null; displayName: string | null; role: keyof typeof ROLE; establishmentName?: string | null }[];
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function DevLogin({
     const r = await post("/api/painel/auth/dev", { userId });
     setBusy(null);
     if (!r.ok) return setError(r.message ?? "Não foi possível entrar.");
-    router.replace("/painel");
+    router.replace(redirectTo);
     router.refresh();
   }
 

@@ -30,6 +30,11 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
    ```bash
    npm run demo:supabase -- --confirmar --dono=<o-seu-email>
    ```
+9. Dê-se acesso ao **painel central** (gestão de todos os restaurantes):
+   ```bash
+   npm run admin:criar -- --email=<o-seu-email> --nome="O seu nome" --confirmar
+   ```
+   Na primeira entrada em `/central/entrar` configura o 2FA com uma app de autenticação. Telemóvel perdido: `npm run admin:repor-2fa -- --email=… --confirmar`.
 
 ## 3. GitHub
 1. github.com → **New repository** → nome `mesvio`, **Private**, sem README.
@@ -57,6 +62,7 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 | `IP_HASH_SALT` | gerar: `openssl rand -base64 32` |
 | `POS_CREDENTIALS_KEY` | gerar: `openssl rand -base64 32` |
 | `POS_CREDENTIALS_KEY_ID` | `k1` |
+| `PLATFORM_SECRET_KEY` | gerar: `openssl rand -base64 32` (cifra o 2FA do painel central; não mudar depois) |
 | `TRUSTED_PROXY` | `vercel` |
 | `DEFAULT_POS_PROVIDER` | `mock` |
 | `RESEND_API_KEY` | chave da Resend (opcional, ver secção 6) |
@@ -72,6 +78,7 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 - `https://<o-seu-dominio>` → landing MESVIO.
 - `https://<o-seu-dominio>/demo` → escolher a Mesa 1, fazer um pedido.
 - `https://<o-seu-dominio>/painel/entrar` → entrar com o código enviado por email e ver o pedido.
+- `https://<o-seu-dominio>/central/entrar` → entrar, configurar o 2FA e ver a visão geral.
 - `https://<o-seu-dominio>/api/health` → estado da app.
 - Vercel → **Settings → Cron Jobs**: `/api/cron/outbox` a correr a cada minuto.
 

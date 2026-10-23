@@ -134,8 +134,21 @@ export const staffProfiles = pgTable("staff_profiles", {
   createdAt: createdAt(),
 });
 
+/**
+ * Equipa da MESVIO com acesso ao painel central (todos os restaurantes). Sem políticas RLS: só o
+ * servidor lê esta tabela. O 2FA (TOTP) é obrigatório; os segredos ficam cifrados (AES-256-GCM).
+ */
 export const platformAdmins = pgTable("platform_admins", {
   userId: uuid("user_id").primaryKey(),
+  email: text("email"),
+  displayName: text("display_name"),
+  /** Segredo TOTP ativo (cifrado). null = 2FA ainda por configurar. */
+  totpSecretCiphertext: text("totp_secret_ciphertext"),
+  /** Segredo a meio da configuração (cifrado), até o primeiro código ser confirmado. */
+  totpPendingCiphertext: text("totp_pending_ciphertext"),
+  totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+  /** Último intervalo de 30 s aceite: impede reutilizar o mesmo código. */
+  totpLastStep: bigint("totp_last_step", { mode: "number" }),
   createdAt: createdAt(),
 });
 
