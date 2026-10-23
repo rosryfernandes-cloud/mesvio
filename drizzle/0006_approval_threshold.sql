@@ -1,0 +1,1 @@
+ALTER TABLE "establishments" ADD COLUMN "approval_threshold_cents" integer DEFAULT 15000;

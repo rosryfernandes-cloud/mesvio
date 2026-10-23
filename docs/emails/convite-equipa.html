@@ -1,0 +1,13 @@
+<!-- Supabase → Authentication → Emails → Templates → Invite user. Assunto: "Convite para a equipa na MESVIO" -->
+<div style="background:#F7F5F0;padding:32px 16px;font-family:Manrope,'Segoe UI',Arial,sans-serif;color:#10211D">
+  <div style="max-width:480px;margin:0 auto;background:#FFFFFF;border-radius:20px;overflow:hidden">
+    <div style="background:#062D25;padding:22px 28px;font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#FFFFFF">mesvio<span style="color:#91E9C3">.</span></div>
+    <div style="padding:28px">
+      <p style="margin:0 0 12px;font-size:16px">Olá,</p>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.5">Foste convidado para a equipa de um restaurante na MESVIO. Aceita o convite para entrares no painel de pedidos.</p>
+      <a href="{{ .SiteURL }}/painel/auth/confirmar?token_hash={{ .TokenHash }}&type=invite" style="display:inline-block;background:#062D25;color:#FFFFFF;text-decoration:none;font-weight:700;padding:14px 24px;border-radius:999px">Aceitar convite</a>
+      <p style="margin:24px 0 0;font-size:14px;line-height:1.5;color:#4B5B56">Se não esperavas este convite, ignora este email.</p>
+    </div>
+  </div>
+  <p style="max-width:480px;margin:16px auto 0;font-size:12px;color:#4B5B56;text-align:center">MESVIO · Menos espera. Mais serviço.</p>
+</div>

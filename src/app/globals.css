@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/*
+ * Identidade MESVIO. Os nomes dos tokens (ink, brand…) ficam iguais aos de antes para não mexer
+ * nos componentes; só mudam os valores. Contrastes verificados para WCAG AA:
+ * ink/paper 15.3:1, ink-soft/paper 6.6:1, branco/brand 14.9:1, brand/brand-soft 11.4:1, menta/brand 10.4:1.
+ * O verde-menta (mint) é só decorativo sobre fundos claros (1.3:1, ilegível como texto); sobre
+ * forest/brand serve para texto.
+ */
+@theme {
+  --color-ink: #10211d;
+  --color-ink-soft: #4b5b56;
+  --color-paper: #f7f5f0;
+  --color-card: #ffffff;
+  --color-line: #dfe5df;
+  --color-brand: #062d25;
+  --color-brand-soft: #c8e9da;
+  --color-forest: #102c2b;
+  --color-mint: #91e9c3;
+  --color-ok: #166534;
+  --color-danger: #b42318;
+  --color-danger-soft: #fef3f2;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 4.5rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Títulos: Manrope compacta e firme em vez da serifa antiga (em base, para as classes poderem mudar). */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  h1 {
+    font-weight: 800;
+  }
+  h2 {
+    font-weight: 700;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Em fundos escuros o contorno escuro não se vê. */
+.on-dark :focus-visible {
+  outline-color: var(--color-mint);
+}
