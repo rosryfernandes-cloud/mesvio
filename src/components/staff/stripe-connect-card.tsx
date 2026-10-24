@@ -22,9 +22,12 @@ const RETURN_MESSAGE: Record<string, { text: string; error: boolean }> = {
 export function StripeConnectCard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [returned, setReturned] = useState<string | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
 
   useEffect(() => {
-    setReturned(new URLSearchParams(window.location.search).get("stripe"));
+    const params = new URLSearchParams(window.location.search);
+    setReturned(params.get("stripe"));
+    setReason(params.get("motivo"));
     void (async () => {
       const res = await fetch("/api/painel/stripe", { cache: "no-store" }).catch(() => null);
       if (res?.ok) setStatus(await res.json());
@@ -47,6 +50,7 @@ export function StripeConnectCard() {
       {msg && (
         <p role={msg.error ? "alert" : "status"} className={`mb-2 text-sm font-semibold ${msg.error ? "text-danger" : "text-ok"}`}>
           {msg.text}
+          {reason && <span className="mt-1 block font-normal">Motivo da Stripe: {reason}</span>}
         </p>
       )}
       {ready ? (

@@ -32,6 +32,10 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
   const router = useRouter();
   const [board, setBoard] = useState(initialBoard);
   const [tab, setTab] = useState<Tab>("pedidos");
+  // De volta da Stripe (?stripe=…): abrir as Mesas, onde está o estado da conta e a mensagem.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("stripe")) setTab("mesas");
+  }, []);
   const [offline, setOffline] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const sound = useAlertSound();

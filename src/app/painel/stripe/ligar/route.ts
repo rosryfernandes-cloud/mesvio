@@ -19,6 +19,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(await startOnboarding(await getDb(), ctx, base));
   } catch (err) {
     console.error("[stripe] onboarding falhou", err);
-    return NextResponse.redirect(`${base}/painel?stripe=erro`);
+    // O motivo da Stripe (sem dados sensíveis) aparece ao dono, para saber o que falta configurar.
+    const reason = err instanceof Error ? err.message.slice(0, 300) : "";
+    return NextResponse.redirect(`${base}/painel?stripe=erro${reason ? `&motivo=${encodeURIComponent(reason)}` : ""}`);
   }
 }
