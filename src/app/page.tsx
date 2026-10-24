@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { DemoRequestForm } from "@/components/landing/demo-request-form";
+import { AcaiBowl, Burger, MintLemonade } from "@/components/landing/food-illustrations";
 import {
   IconArrow,
   IconCheck,
@@ -136,9 +137,9 @@ function Hero() {
 /** Ilustração de uma ementa (desenho, não um ecrã real nem dados de um restaurante). */
 function PhonePreview() {
   const items = [
-    { name: "Bowl de açaí", price: "9,50 €", tag: "Vegetariano" },
-    { name: "Hambúrguer da casa", price: "14,00 €", tag: "Mais pedido" },
-    { name: "Limonada de hortelã", price: "4,50 €", tag: null },
+    { name: "Bowl de açaí", price: "9,50 €", tag: "Vegetariano", Img: AcaiBowl },
+    { name: "Hambúrguer da casa", price: "14,00 €", tag: "Mais pedido", Img: Burger },
+    { name: "Limonada de hortelã", price: "4,50 €", tag: null, Img: MintLemonade },
   ];
   return (
     <div aria-hidden="true" className="mx-auto w-full max-w-[19rem]">
@@ -157,7 +158,9 @@ function PhonePreview() {
           <ul className="mt-4 grid gap-2.5 px-4 pb-4">
             {items.map((i) => (
               <li key={i.name} className="flex items-center gap-3 rounded-2xl bg-card p-2.5">
-                <span className="size-12 shrink-0 rounded-xl bg-brand-soft" />
+                <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand-soft">
+                  <i.Img className="size-10" />
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-bold">{i.name}</span>
                   <span className="text-[11px] text-ink-soft">{i.tag ?? "Sem glúten"}</span>
