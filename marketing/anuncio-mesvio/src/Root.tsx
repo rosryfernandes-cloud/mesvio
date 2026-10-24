@@ -9,6 +9,9 @@ export function Root() {
       <Composition id="Mesvio16x9" component={Ad} durationInFrames={TOTAL_FRAMES} fps={FPS} width={1920} height={1080} />
       {/* TikTok / Reels / Stories (9:16) */}
       <Composition id="Mesvio9x16" component={Ad} durationInFrames={TOTAL_FRAMES} fps={FPS} width={1080} height={1920} />
+      {/* Com som PROVISÓRIO (voz sintética + efeitos), para avaliar o ritmo */}
+      <Composition id="Mesvio16x9ComSom" component={Ad} defaultProps={{ sound: true }} durationInFrames={TOTAL_FRAMES} fps={FPS} width={1920} height={1080} />
+      <Composition id="Mesvio9x16ComSom" component={Ad} defaultProps={{ sound: true }} durationInFrames={TOTAL_FRAMES} fps={FPS} width={1080} height={1920} />
     </>
   );
 }

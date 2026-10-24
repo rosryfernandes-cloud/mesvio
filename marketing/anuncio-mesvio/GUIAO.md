@@ -67,3 +67,10 @@ Pasta `marketing/anuncio-mesvio/` — React + Remotion, editável:
 - `npm run render:16x9` e `npm run render:9x16` → `out/mesvio-16x9.mp4` e `out/mesvio-9x16.mp4`.
 - Textos e tempos em `src/script.ts` (um só sítio para mudar legendas e durações).
 - Sem locução nem música no ficheiro (as legendas contam a história); a locução deve ser gravada por um locutor e juntada na edição, com a música licenciada.
+
+## 8. Versão com som provisório
+Para avaliar o ritmo: `Mesvio16x9ComSom` e `Mesvio9x16ComSom` (`npm run render:som` → `out/*-som-provisorio.mp4`).
+- **Voz:** sintética, voz "Joana" (PT-PT) do macOS (`npm run voz` → `public/audio/voz/`). Não é para publicar.
+- **Efeitos e fundo musical:** sintetizados em código, sem direitos de terceiros (`npm run sons` → `public/audio/sfx/`): ondas do mar, tique-taque a acelerar no caos, impacto e brilho na viragem, "ping" NFC, toques no ecrã, "whoosh" do pedido, campainha do "Confirmado", acordes calmos da viragem ao fim.
+- **Versão final:** substituir os ficheiros de `public/audio/voz/` pela locução gravada (mesmos nomes, um por cena) e `public/audio/sfx/fundo.wav` por música licenciada; os tempos já estão sincronizados em `src/Soundtrack.tsx`.
+- A fala final ficou "O empregado que não sabias que precisavas." (sem "MESVIO", que já está no ecrã) para caber nos 3 s.

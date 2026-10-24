@@ -4,9 +4,10 @@ import { Caption } from "./components/Caption";
 import { Beach } from "./scenes/Beach";
 import { EndCard, Order, Send, Tap, Turn } from "./scenes/Brand";
 import { timeline, type SceneId } from "./script";
+import { Soundtrack } from "./Soundtrack";
 
-/** O anúncio completo: as cenas em sequência, cada uma com a sua legenda. */
-export function Ad() {
+/** O anúncio completo: as cenas em sequência, cada uma com a sua legenda; com som provisório se `sound`. */
+export function Ad({ sound = false }: { sound?: boolean }) {
   const scenes = timeline();
   const durationOf = (id: SceneId) => scenes.find((s) => s.id === id)!.duration;
   const view = (id: SceneId, duration: number) => {
@@ -31,6 +32,7 @@ export function Ad() {
   };
   return (
     <AbsoluteFill style={{ background: C.forest }}>
+      {sound && <Soundtrack />}
       {scenes.map((s) => (
         <Sequence key={s.id} from={s.from} durationInFrames={s.duration} name={s.id}>
           {view(s.id, s.duration)}
