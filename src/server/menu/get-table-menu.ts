@@ -8,6 +8,7 @@ import type { PosModifierGroup } from "@/server/pos/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { translateAllergen, translateTag } from "@/lib/i18n/food-terms";
 import { loadMenuTranslations, type MenuTranslator } from "./menu-translations";
+import { productImageUrls } from "./menu-images";
 
 /** Forma da ementa enviada ao cliente: só o necessário, sem dados internos. */
 export interface MenuProductView {
@@ -43,7 +44,10 @@ export async function getTableMenu(
   const catalog = withLocalAvailability(await cachedPosCatalog(found.pos, found.establishmentId), found.locallyUnavailable);
   const locale = deps.locale ?? DEFAULT_LOCALE;
   // Só fora do português há traduções a ler (uma consulta, no tenant do restaurante).
-  const tr: MenuTranslator = await loadMenuTranslations(db, found.organizationId, found.establishmentId, locale);
+  const [tr, photos]: [MenuTranslator, Map<string, string>] = await Promise.all([
+    loadMenuTranslations(db, found.organizationId, found.establishmentId, locale),
+    productImageUrls(db, found.organizationId, found.establishmentId),
+  ]);
   const categories = [...catalog.categories]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((c) => ({
@@ -59,7 +63,8 @@ export async function getTableMenu(
             ref: p.posProductRef,
             name: t.name,
             description: t.description,
-            imageUrl: p.imageUrl,
+            // A foto enviada pelo restaurante no painel tem prioridade sobre a do POS.
+            imageUrl: photos.get(p.posProductRef) ?? p.imageUrl,
             priceCents: p.priceCents,
             available: p.available,
             allergens: p.allergens.map((a) => translateAllergen(a, locale)),

@@ -21,6 +21,7 @@ import {
   primaryKey,
   bigint,
   check,
+  customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -396,6 +397,37 @@ export const menuTranslations = pgTable(
   (t) => [
     primaryKey({ columns: [t.establishmentId, t.locale, t.kind, t.ref] }),
     check("menu_translations_locale", sql`${t.locale} = 'en'`),
+  ],
+);
+
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => (Buffer.isBuffer(v) ? v : Buffer.from(v)),
+});
+
+/**
+ * Fotografias dos pratos enviadas pelo restaurante no painel (uma por artigo do POS). Ficam na
+ * própria BD: sem serviço de ficheiros extra, isoladas por RLS. Reduzidas no telemóvel antes do
+ * envio (~150 KB) e servidas com cache permanente (o URL muda quando a foto muda).
+ */
+export const menuImages = pgTable(
+  "menu_images",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    posProductRef: text("pos_product_ref").notNull(),
+    contentType: text("content_type").notNull(),
+    bytes: bytea("bytes").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    /** SHA-256 (hex) do conteúdo: versão no URL, para a cache nunca servir uma foto antiga. */
+    sha256: text("sha256").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("menu_images_est_product_uq").on(t.establishmentId, t.posProductRef),
+    check("menu_images_type", sql`${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')`),
+    check("menu_images_size", sql`${t.sizeBytes} <= 1048576`),
   ],
 );
 

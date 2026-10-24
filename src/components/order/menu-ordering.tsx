@@ -292,6 +292,10 @@ function ProductSheet({
   return (
     <Sheet label={product.name} onClose={onClose}>
       <div className="overflow-y-auto px-5 pt-6 pb-4">
+        {product.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.imageUrl} alt="" className="-mx-5 -mt-6 mb-5 aspect-[4/3] w-[calc(100%+2.5rem)] max-w-none object-cover" />
+        )}
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-[family-name:var(--font-display)] text-2xl leading-tight">{product.name}</h2>
           <button type="button" onClick={onClose} className="-mt-1 -mr-2 p-2 text-2xl leading-none text-ink-soft" aria-label={t.product.close}>

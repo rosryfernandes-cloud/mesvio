@@ -38,6 +38,7 @@ Identidade, cores, logótipos e regras de uso em [docs/13-MARCA.md](docs/13-MARC
 - **Pedidos** atualizados a cada 3 s, com alerta (faixa vermelha, som opcional, contador no título) para pedidos que precisam de atenção ou de aprovação.
 - **Aprovar cada pedido antes de seguir para a cozinha** (opcional): os pedidos ficam à espera até o staff aprovar ou recusar.
 - **Precisa de atenção** (o POS não recebeu): tentar de novo, "já lancei no POS" ou cancelar.
+- **Fotos** (dono/gerente): foto de cada prato, tirada no telemóvel ou da galeria; reduzida no telemóvel (≤ 1200 px, sem metadados/GPS), guardada na BD (`menu_images`, RLS) e servida com cache permanente em `/api/imagens/<id>`. Tem prioridade sobre a foto do POS.
 - **Aparência** (dono/gerente): cor principal e logótipo (URL https) do restaurante na ementa, no estado do pedido e na conta, com pré-visualização. Só aceita cores com contraste WCAG AA; a MESVIO fica só no rodapé.
 - **Inglês** (dono/gerente): nomes e descrições da ementa em inglês, com contagem do que falta. O que não estiver traduzido aparece em português.
 - **Esgotados**: tira artigos da ementa do cliente na hora (não consegue repor o que o POS dá como esgotado).
