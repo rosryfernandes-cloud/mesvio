@@ -6,13 +6,13 @@ import { auditLogs, diningTables, establishments, orders, payments, tableSession
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { currentSession, isOpen, loadBill, PENDING_STATUSES, type TableBill } from "@/server/tables/table-sessions";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
-import type { PaymentProvider } from "./provider";
-import { ABANDONED_PAYMENT_MS, applicationFee, cancelUnpaidOrder, syncPayment, type PaymentRow } from "./payment-records";
+import { canCharge, type PaymentProvider } from "./provider";
+import { ABANDONED_PAYMENT_MS, applicationFee, cancelUnpaidOrder, commissionBpsFor, syncPayment, type PaymentRow } from "./payment-records";
 
 export { ABANDONED_PAYMENT_MS, applicationFee, PLATFORM_FEE_BPS } from "./payment-records";
 
 export type StartPaymentResult =
-  | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string }
+  | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string; accountId?: string }
   | {
       ok: false;
       code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID";
@@ -43,8 +43,8 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
       .select({ paymentsEnabled: establishments.paymentsEnabled, stripeAccountId: establishments.stripeAccountId })
       .from(establishments)
       .where(eq(establishments.id, t.establishmentId));
-    if (!est.paymentsEnabled) return { ok: false, code: "PAYMENTS_DISABLED", message: MESSAGES.PAYMENTS_DISABLED };
     const accountId = est.stripeAccountId;
+    if (!est.paymentsEnabled || !canCharge(provider, accountId)) return { ok: false, code: "PAYMENTS_DISABLED", message: MESSAGES.PAYMENTS_DISABLED };
 
     const session = await currentSession(tx, t.tableId, { lock: true });
     if (!session || !isOpen(session, now)) return { ok: false, code: "NOTHING_TO_PAY", message: MESSAGES.NOTHING_TO_PAY };
@@ -77,7 +77,8 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
       .where(and(eq(orders.tableSessionId, session.id), inArray(orders.status, ["SUBMITTED", "ACCEPTED", "IN_PREPARATION", "SERVED"])));
     const gross = sessionOrders.reduce((s, o) => s + o.gross, 0);
     const net = sessionOrders.reduce((s, o) => s + o.net, 0);
-    const fee = applicationFee(gross > 0 ? roundHalfUpDiv(net * bill.dueCents, gross) : 0);
+    const bps = await commissionBpsFor(tx, t.organizationId, t.establishmentId, now);
+    const fee = applicationFee(gross > 0 ? roundHalfUpDiv(net * bill.dueCents, gross) : 0, bps);
 
     // 4) Criar (ou reaproveitar, com a mesma chave idempotente) o pagamento no fornecedor.
     const finished = await tx.$count(payments, and(eq(payments.tableSessionId, session.id), ne(payments.status, "PENDING")));
@@ -112,7 +113,7 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
           })
           .returning({ id: payments.id })
       )[0].id;
-    return { ok: true, paymentId, provider: provider.id, amountCents: bill.dueCents, clientSecret: created.clientSecret };
+    return { ok: true, paymentId, provider: provider.id, amountCents: bill.dueCents, clientSecret: created.clientSecret, accountId: accountId ?? undefined };
   });
 }
 
@@ -215,7 +216,7 @@ async function expireUnpaidOrders(systemDb: Db, now: Date): Promise<number> {
 }
 
 /** Pago a mais numa conta (não devia acontecer): fica registado para reembolso. */
-async function flagOverpayment(systemDb: Db, tableSessionId: string, organizationId: string, now: Date) {
+export async function flagOverpayment(systemDb: Db, tableSessionId: string, organizationId: string, now: Date) {
   const [session] = await systemDb.select({ tableId: tableSessions.tableId }).from(tableSessions).where(eq(tableSessions.id, tableSessionId));
   const bill = session ? await loadBill(systemDb, session.tableId, now) : null;
   if (bill && bill.overpaidCents > 0) {

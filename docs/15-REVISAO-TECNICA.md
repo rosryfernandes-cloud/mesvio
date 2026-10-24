@@ -4,7 +4,7 @@ Revisão feita sobre o código real (sem elogios genéricos). As 10 prioridades 
 
 | # | Prioridade | Estado |
 |---|---|---|
-| 1 | Stripe Connect real (webhooks, reembolsos) | ❌ por fazer — bloqueia espreguiçadeiras e a cobrança da comissão |
+| 1 | Stripe Connect real (webhooks, reembolsos) | ✅ implementado e testado com cliente Stripe simulado; **falta testar com chaves de teste reais** (docs/08) |
 | 2 | Limite por IP bloqueava clientes no mesmo Wi-Fi | ✅ corrigido |
 | 3 | Pedido HTTP esperava até 20 s pelo POS | ✅ corrigido |
 | 4 | Catálogo só em memória (ementa cai com POS em baixo + instância nova) | ❌ por fazer |
@@ -37,3 +37,12 @@ Por fazer:
 - CSP com nonces (tirar `'unsafe-inline'` dos scripts) — obriga a render dinâmico de todas as páginas.
 - Ligação à BD separada para operações de sistema, com um utilizador da BD sem BYPASSRLS para os pedidos dos restaurantes (precisa de um 2.º utilizador na Supabase: fazer no staging, prioridade 6).
 - Logótipos alojados pela MESVIO em vez de URL externo (precisa de armazenamento de ficheiros).
+
+## 1. Stripe Connect (implementado, por validar com chaves reais)
+- `src/server/payments/stripe-provider.ts`: PaymentIntents na conta do restaurante (`stripeAccount`), EUR, `application_fee_amount`, chave idempotente, só métodos imediatos (cartão/Apple Pay/Google Pay/MB WAY). Recusa cobrar sem conta ligada. Uma tentativa recusada fica pendente (o cliente tenta de novo no mesmo formulário), para nunca haver dois PaymentIntents cobrados.
+- **Comissão por cliente**: os pagamentos usam a taxa da regra do cliente (`commissionBpsFor`); antes era sempre 1%.
+- `stripe-webhook.ts` + `/api/pagamentos/stripe/webhook`: assinatura verificada; volta a perguntar o estado à Stripe (eventos repetidos ou fora de ordem não estragam); só aceita eventos da conta do restaurante do pagamento; `charge.refunded` atualiza o devolvido.
+- `stripe-connect.ts` + `/painel/stripe/ligar` e `/retorno`: o dono liga a conta (dashboard Stripe completo, KYC pela Stripe) e o domínio fica registado para o Apple Pay.
+- Reembolso do pago a mais no painel (`refunds.ts`); os restantes no dashboard da Stripe.
+- `stripe-pay-sheet.tsx`: Payment Element da Stripe; CSP com os domínios da Stripe.
+- Testes: `src/server/payments/stripe.test.ts` (10).

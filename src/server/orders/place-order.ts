@@ -11,7 +11,7 @@ import { hitRateLimit, ORDER_RATE_LIMITS, type RateLimitRule } from "@/server/se
 import { cachedPosCatalog, withLocalAvailability } from "@/server/catalog/availability";
 import { withTenant } from "@/server/db/tenant";
 import { getOrOpenSession } from "@/server/tables/table-sessions";
-import { activePaymentProvider } from "@/server/payments/provider";
+import { activePaymentProvider, canCharge } from "@/server/payments/provider";
 import { loadOrderView, type OrderView } from "./order-view";
 import { dispatchWithinDeadline, type WorkerDeps } from "./outbox-worker";
 import { enqueueSubmit } from "./outbox";
@@ -87,7 +87,7 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
     return { ok: false, code: "ORDERING_DISABLED", message: "Este restaurante ainda não recebe pedidos pela app." };
   }
   const payFirst = table.orderingMode === "pay_first";
-  if (payFirst && !(deps.paymentsAvailable ?? activePaymentProvider() !== null)) {
+  if (payFirst && !(deps.paymentsAvailable ?? canCharge(activePaymentProvider(), table.stripeAccountId))) {
     return { ok: false, code: "ORDERING_DISABLED", message: "Aqui paga-se ao pedir e os pagamentos estão indisponíveis. Chame um funcionário." };
   }
 

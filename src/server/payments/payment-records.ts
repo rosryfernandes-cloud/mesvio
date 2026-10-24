@@ -1,14 +1,37 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { Db } from "@/server/db/client";
-import { establishments, orderEvents, orders, payments } from "@/server/db/schema";
+import { commissionRules, establishments, orderEvents, orders, payments } from "@/server/db/schema";
 import { enqueueSubmit } from "@/server/orders/outbox";
 import type { PaymentProvider, ProviderPaymentStatus } from "./provider";
 
-/** Comissão da plataforma: 1% do valor sem IVA (docs/07 D6–D7), arredondada ao cêntimo. */
+/** Comissão por omissão: 1% do valor sem IVA (docs/07 D6–D7), se o cliente não tiver regra própria. */
 export const PLATFORM_FEE_BPS = 100;
-export const applicationFee = (netCents: number) => roundHalfUpDiv(netCents * PLATFORM_FEE_BPS, 10_000);
+/** Comissão sobre o valor sem IVA, arredondada ao cêntimo (half-up). */
+export const applicationFee = (netCents: number, bps = PLATFORM_FEE_BPS) => roundHalfUpDiv(netCents * bps, 10_000);
+
+/**
+ * Taxa em vigor para o restaurante: a regra mais recente (do restaurante, senão da organização)
+ * com início ≤ hoje e sem fim ou fim ≥ hoje. É a mesma que o painel central mostra e que se
+ * define ao criar o cliente; antes, os pagamentos usavam sempre 1% (revisão 24/10).
+ */
+export async function commissionBpsFor(db: Db, organizationId: string, establishmentId: string, now: Date): Promise<number> {
+  const today = now.toISOString().slice(0, 10);
+  const rules = await db
+    .select({ est: commissionRules.establishmentId, bps: commissionRules.rateBps })
+    .from(commissionRules)
+    .where(
+      and(
+        eq(commissionRules.organizationId, organizationId),
+        or(isNull(commissionRules.establishmentId), eq(commissionRules.establishmentId, establishmentId)),
+        lte(commissionRules.effectiveFrom, today),
+        or(isNull(commissionRules.effectiveTo), gte(commissionRules.effectiveTo, today)),
+      ),
+    )
+    .orderBy(desc(commissionRules.effectiveFrom), desc(commissionRules.createdAt));
+  return (rules.find((r) => r.est === establishmentId) ?? rules.find((r) => r.est === null))?.bps ?? PLATFORM_FEE_BPS;
+}
 
 /** Pagamento iniciado e não concluído há mais do que isto é cancelado no fornecedor (MB WAY expira em ~4 min). */
 export const ABANDONED_PAYMENT_MS = 15 * 60_000;

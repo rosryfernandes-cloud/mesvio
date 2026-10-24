@@ -23,6 +23,8 @@ export interface ResolvedTable {
   /** "pay_first": cada pedido é pago ao pedir (espreguiçadeiras) e só depois segue para o POS. */
   orderingMode: "pay_later" | "pay_first";
   zone: string | null;
+  /** Conta Stripe Connect do restaurante (acct_…), ou null se ainda não ligou pagamentos. */
+  stripeAccountId: string | null;
   /** Artigos marcados como esgotados no painel (lidos na mesma transação, sem ida extra à BD). */
   locallyUnavailable: Set<string>;
   pos: PosAdapter;
@@ -53,6 +55,7 @@ export function createDbTableDirectory(db: Db, resolvePos: PosResolver = resolve
             approvalThresholdCents: establishments.approvalThresholdCents,
             orderingMode: diningTables.orderingMode,
             zone: diningTables.zone,
+            stripeAccountId: establishments.stripeAccountId,
             provider: posIntegrations.provider,
           })
           .from(diningTables)

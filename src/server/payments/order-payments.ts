@@ -5,12 +5,12 @@ import type { Db } from "@/server/db/client";
 import { diningTables, establishments, orders, payments } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
-import type { PaymentProvider } from "./provider";
-import { applicationFee, syncPayment } from "./payment-records";
+import { canCharge, type PaymentProvider } from "./provider";
+import { applicationFee, commissionBpsFor, syncPayment } from "./payment-records";
 
 export type StartOrderPaymentResult =
-  | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string }
-  | { ok: false; code: "NOT_FOUND" | "ALREADY_PAID" | "EXPIRED"; message: string };
+  | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string; accountId?: string }
+  | { ok: false; code: "NOT_FOUND" | "ALREADY_PAID" | "EXPIRED" | "PAYMENTS_DISABLED"; message: string };
 
 /**
  * Lugares "pagar ao pedir" (espreguiçadeiras): inicia o pagamento de UM pedido. O pedido só segue
@@ -41,6 +41,9 @@ export async function startOrderPayment(
     const paid = { ok: false as const, code: "ALREADY_PAID" as const, message: "Este pedido já está pago." };
     if (o.order.status === "CANCELLED") return { ok: false, code: "EXPIRED", message: "Este pedido expirou sem ser pago. Faça um pedido novo." };
     if (o.order.status !== "AWAITING_PAYMENT") return paid;
+    if (!canCharge(provider, o.accountId)) {
+      return { ok: false, code: "PAYMENTS_DISABLED", message: "Este restaurante ainda não aceita pagamentos pela app. Chame um funcionário." };
+    }
 
     // Pagamento em curso deste pedido: pôr em dia (pode ter sido pago entretanto).
     const pending = await tx.select().from(payments).where(and(eq(payments.orderId, orderId), eq(payments.status, "PENDING")));
@@ -50,10 +53,11 @@ export async function startOrderPayment(
     }
 
     // Toques repetidos → mesma chave → mesmo pagamento; depois de uma recusa, tentativa nova.
+    const fee = applicationFee(o.order.totalNetCents, await commissionBpsFor(tx, t.organizationId, t.establishmentId, now));
     const finished = await tx.$count(payments, and(eq(payments.orderId, orderId), ne(payments.status, "PENDING")));
     const created = await provider.create({
       amountCents: o.order.totalGrossCents,
-      applicationFeeCents: applicationFee(o.order.totalNetCents),
+      applicationFeeCents: fee,
       accountId: o.accountId,
       idempotencyKey: `order:${orderId}:${finished}`,
       description: `${o.label} — pedido ${o.order.shortCode}`,
@@ -76,12 +80,19 @@ export async function startOrderPayment(
             provider: provider.id,
             providerRef: created.providerRef,
             amountCents: o.order.totalGrossCents,
-            applicationFeeCents: applicationFee(o.order.totalNetCents),
+            applicationFeeCents: fee,
             createdAt: now,
             updatedAt: now,
           })
           .returning({ id: payments.id })
       )[0].id;
-    return { ok: true, paymentId, provider: provider.id, amountCents: o.order.totalGrossCents, clientSecret: created.clientSecret };
+    return {
+      ok: true,
+      paymentId,
+      provider: provider.id,
+      amountCents: o.order.totalGrossCents,
+      clientSecret: created.clientSecret,
+      accountId: o.accountId ?? undefined,
+    };
   });
 }

@@ -55,11 +55,39 @@ Para testar contra um Postgres real: defina `DATABASE_URL` e corra `npm run db:m
 6. Configurar um SMTP próprio (o da Supabase tem limites baixos de envio).
 7. Criar o primeiro dono: convidar o email em *Authentication → Users → Invite*, e inserir a associação (`memberships`, role `owner`, `establishment_id` nulo) e o perfil (`staff_profiles`). A partir daí, o dono convida o resto da equipa no painel.
 
-## Configurar a Stripe Connect (pagamentos na mesa)
-1. Criar conta em dashboard.stripe.com (país: Portugal) e trabalhar em **modo de teste / Sandbox**.
-2. **Developers → API keys**: copiar a *Publishable key* (`pk_test_…`) para `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` e a *Secret key* (`sk_test_…`) para `STRIPE_SECRET_KEY`.
-3. **Connect**: ativar a Connect na conta (modelo de plataforma/marketplace). Em teste, criar uma conta ligada para o restaurante de demonstração e copiar o id (`acct_…`) para `STRIPE_DEMO_CONNECTED_ACCOUNT`.
-4. **Settings → Payment methods**: ativar **Apple Pay**, **Google Pay**, **MB WAY** e cartões (para a plataforma e para as contas ligadas).
-5. **Apple Pay** só aparece em HTTPS e num domínio registado (**Settings → Payment method domains**): não aparece em `localhost`. O MB WAY testa-se em local com os números de teste da Stripe.
-6. **Webhooks** (produção): endpoint `https://<domínio>/api/pagamentos/stripe/webhook` com os eventos `payment_intent.succeeded` e `payment_intent.payment_failed`; copiar o *signing secret* para `STRIPE_WEBHOOK_SECRET`.
-7. Comissão: cada pagamento leva uma *application fee* de 1% do valor sem IVA, retida automaticamente pela Stripe para a plataforma.
+## Configurar a Stripe Connect (pagamentos no telemóvel)
+
+**Modelo:** cobranças diretas (*direct charges*) na conta Stripe de cada restaurante. O restaurante é o comerciante (aparece no extrato do cliente, emite a fatura, responde a disputas e paga as comissões da Stripe); a comissão MESVIO sai automaticamente como *application fee* (taxa do cliente no painel central; 1% por omissão). A MESVIO nunca guarda dinheiro nem vê dados de cartão.
+
+### 1. Conta e Connect (modo de teste)
+1. Criar a conta em **dashboard.stripe.com/register** com os dados da empresa MESVIO (país: **Portugal**). Trabalhar sempre em **modo de teste / Sandbox** até ao piloto.
+2. **Connect → Começar**: escolher **plataforma**, em que *as contas ligadas recebem os pagamentos diretamente* (cobranças diretas) e têm o **dashboard Stripe completo**. Preencher o perfil da plataforma (é pedido antes de criar contas ligadas).
+3. **Settings → Payment methods → (configuração para contas ligadas)**: ativar **Cartões**, **Apple Pay**, **Google Pay** e **MB WAY**. Multibanco e débito direto ficam excluídos pela app (não são imediatos).
+
+### 2. Chaves (no `.env.local`, nunca no chat nem no código)
+| Variável | Onde a encontrar |
+|---|---|
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Developers → API keys → *Publishable key* (`pk_test_…`) |
+| `STRIPE_SECRET_KEY` | Developers → API keys → *Secret key* (`sk_test_…`) — **secreta** |
+| `STRIPE_WEBHOOK_SECRET` | em local: o `whsec_…` que o `stripe listen` mostra (passo 3); em produção: o *signing secret* do endpoint |
+
+`STRIPE_DEMO_CONNECTED_ACCOUNT` já não é preciso: o dono liga a conta no painel. Com `STRIPE_SECRET_KEY` definida, o pagamento simulado desaparece e um restaurante sem conta ligada não cobra (as espreguiçadeiras não aceitam pedidos).
+
+### 3. Webhook
+- **Em local** (Stripe CLI: `brew install stripe/stripe-cli/stripe`, depois `stripe login`):
+  ```bash
+  stripe listen --forward-connect-to localhost:3000/api/pagamentos/stripe/webhook --events payment_intent.succeeded,payment_intent.processing,payment_intent.payment_failed,payment_intent.canceled,charge.refunded
+  ```
+  Copiar o `whsec_…` que aparece para `STRIPE_WEBHOOK_SECRET` e reiniciar o `npm run dev`.
+- **Em produção**: Developers → Webhooks → *Add endpoint* → **"Eventos em contas ligadas"** (Connect) → `https://<domínio>/api/pagamentos/stripe/webhook` com os mesmos 5 eventos.
+- Sem webhook os pagamentos confirmam-se na mesma (o telemóvel e a reconciliação a cada ~30 s perguntam à Stripe); o webhook torna-o imediato e apanha os reembolsos feitos no dashboard.
+
+### 4. Ligar o restaurante e testar
+1. Entrar no painel como **dono** → **Mesas** → **Ligar conta Stripe** → formulário da Stripe (em teste, usar os dados de teste que a própria Stripe propõe) → regresso ao painel.
+2. Ligar **"Clientes podem pagar a conta no telemóvel"** (só fica disponível com a conta verificada).
+3. Pagar uma mesa ou uma espreguiçadeira com o cartão de teste **4242 4242 4242 4242** (data futura, qualquer CVC). Recusas e 3-D Secure: cartões de teste em docs.stripe.com/testing. MB WAY em teste: ver docs.stripe.com/payments/mb-way.
+4. **Apple Pay** só aparece em HTTPS, num domínio registado na conta do restaurante (a app regista-o sozinha no regresso do formulário). Não aparece em `localhost`; testar no staging ou com um túnel https.
+
+### 5. Reembolsos
+- **Pago a mais** (dois telemóveis pagaram a mesma conta): botão **Devolver ao cliente** na mesa (dono/gerente).
+- Qualquer outro reembolso: no dashboard Stripe do restaurante; o webhook `charge.refunded` atualiza a conta na MESVIO. A comissão MESVIO é devolvida na mesma proporção.

@@ -139,7 +139,8 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
     : [];
   const sums = sessionIds.length
     ? await tx
-        .select({ sessionId: payments.tableSessionId, status: payments.status, cents: sum(payments.amountCents) })
+        // Pago = cobrado menos o que já foi devolvido ao cliente.
+        .select({ sessionId: payments.tableSessionId, status: payments.status, cents: sum(sql<number>`${payments.amountCents} - ${payments.refundedCents}`) })
         .from(payments)
         .where(and(inArray(payments.tableSessionId, sessionIds), inArray(payments.status, ["SUCCEEDED", "PENDING"])))
         .groupBy(payments.tableSessionId, payments.status)

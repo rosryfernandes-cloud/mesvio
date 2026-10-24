@@ -69,7 +69,7 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 | `DEMO_REQUESTS_TO` | o seu email (quem recebe os pedidos de demonstração) |
 | `DEMO_REQUESTS_FROM` | ex.: `MESVIO <ola@o-seu-dominio>` |
 
-   Não defina `STRIPE_SECRET_KEY` enquanto a integração Stripe não estiver feita (a app recusa arrancar os pagamentos).
+   **Pagamentos (Stripe):** `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY` e `STRIPE_WEBHOOK_SECRET` (endpoint de produção em "eventos em contas ligadas"). Passo a passo em [08-DEPLOYMENT.md](08-DEPLOYMENT.md#configurar-a-stripe-connect-pagamentos-no-telemóvel). Use chaves de **teste** até o piloto estar validado.
 3. **Deploy**.
 4. **Settings → Domains** → adicione o domínio e copie os registos DNS indicados para o sítio onde o comprou.
 5. Na Supabase, **Authentication → URL Configuration**: *Site URL* = `https://<o-seu-dominio>`; *Redirect URLs* inclui `https://<o-seu-dominio>/painel/auth/confirmar`.
@@ -91,7 +91,7 @@ Para o receber também por email:
 A resposta ao email vai diretamente para quem pediu a demonstração. Se o envio falhar, o pedido não se perde: fica na tabela com `notified_at` vazio.
 
 ## O que ainda não funciona online
-- **Pagamentos no telemóvel**: desligados (o simulado só existe em desenvolvimento; falta a Stripe). As mesas pagam ao balcão; as **espreguiçadeiras não aceitam pedidos** até haver Stripe.
+- **Pagamentos no telemóvel**: só depois de configurar a Stripe e de cada dono ligar a conta dele. Até lá as mesas pagam ao balcão e as **espreguiçadeiras não aceitam pedidos**.
 - **POS real**: a demo usa o MockPOS; a ZoneSoft aguarda documentação.
 - **Logótipo por ficheiro**: só por endereço https.
 - Antes de restaurantes reais: pontos em aberto da auditoria (reembolsos, conciliação de comissões, monitorização, RGPD).

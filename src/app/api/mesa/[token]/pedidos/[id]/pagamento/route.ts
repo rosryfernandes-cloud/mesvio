@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // Na Vercel: a resposta sai em poucos segundos; o envio ao POS que ainda decorre acaba em fundo.
 export const maxDuration = 30;
 
-const STATUS = { NOT_FOUND: 404, ALREADY_PAID: 409, EXPIRED: 410 } as const;
+const STATUS = { NOT_FOUND: 404, ALREADY_PAID: 409, EXPIRED: 410, PAYMENTS_DISABLED: 403 } as const;
 
 /** Lugares "pagar ao pedir": iniciar o pagamento de um pedido (valor do servidor). */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string; id: string }> }) {

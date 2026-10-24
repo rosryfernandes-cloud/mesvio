@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatEur } from "@/lib/money";
 import type { OrderView } from "@/server/orders/order-view";
 import { MockPaySheet } from "./mock-pay-sheet";
+import { StripePaySheet, waitForPayment } from "./stripe-pay-sheet";
 import { backoffSchedule, usePolling } from "../use-polling";
 import { useI18n } from "../i18n/i18n-provider";
 import { apiErrorText, type Messages } from "@/lib/i18n/messages";
@@ -46,7 +47,8 @@ const TONE: Record<OrderView["status"], "ok" | "wait" | "bad"> = {
 export function OrderStatus({ initial, tableToken, autoPay = false }: { initial: OrderView; tableToken: string; autoPay?: boolean }) {
   const { locale, t } = useI18n();
   const [order, setOrder] = useState(initial);
-  const [paying, setPaying] = useState<{ paymentId: string; amountCents: number } | null>(null);
+  const [paying, setPaying] = useState<{ paymentId: string; amountCents: number; clientSecret?: string; accountId?: string } | null>(null);
+  const [waiting, setWaiting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -64,6 +66,9 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
     if (!res?.ok) {
       await reload(); // pode já estar pago ou ter expirado
       return setPayError(res ? apiErrorText(t, locale, data, t.apiError.generic) : t.pay.offline);
+    }
+    if (data.provider === "stripe" && data.clientSecret && data.accountId) {
+      return setPaying({ paymentId: data.paymentId, amountCents: data.amountCents, clientSecret: data.clientSecret, accountId: data.accountId });
     }
     if (data.provider !== "mock") return setPayError(t.pay.notConfigured);
     setPaying({ paymentId: data.paymentId, amountCents: data.amountCents });
@@ -139,7 +144,30 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
           {payError}
         </p>
       )}
-      {paying && <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />}
+      {waiting && (
+        <p role="status" className="mt-3 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand">
+          {t.pay.waiting}
+        </p>
+      )}
+      {paying?.clientSecret && paying.accountId ? (
+        <StripePaySheet
+          clientSecret={paying.clientSecret}
+          accountId={paying.accountId}
+          amountCents={paying.amountCents}
+          onClose={() => setPaying(null)}
+          onSubmitted={async () => {
+            const id = paying.paymentId;
+            setPaying(null);
+            setWaiting(true);
+            const r = await waitForPayment(tableToken, id);
+            setWaiting(false);
+            if (r && r.status !== "PENDING" && r.status !== "SUCCEEDED") setPayError(t.pay.declined);
+            await reload();
+          }}
+        />
+      ) : (
+        paying && <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />
+      )}
 
       <h2 className="mt-8 text-sm font-semibold tracking-wide text-ink-soft uppercase">{t.order.summary}</h2>
       <ul className="mt-2 divide-y divide-line rounded-2xl border border-line bg-card px-4">

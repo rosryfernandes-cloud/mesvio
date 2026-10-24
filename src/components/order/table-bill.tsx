@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MockPaySheet } from "./mock-pay-sheet";
+import { StripePaySheet, waitForPayment } from "./stripe-pay-sheet";
 import { backoffSchedule, usePolling } from "../use-polling";
 import Link from "next/link";
 import { formatEur } from "@/lib/money";
@@ -23,7 +24,8 @@ function orderLabel(o: BillOrder, t: Messages): { text: string; className: strin
 export function TableBillView({ initial, tableToken }: { initial: TableBill; tableToken: string }) {
   const { locale, t } = useI18n();
   const [bill, setBill] = useState(initial);
-  const [paying, setPaying] = useState<{ paymentId: string; amountCents: number; provider: string } | null>(null);
+  const [paying, setPaying] = useState<{ paymentId: string; amountCents: number; provider: string; clientSecret?: string; accountId?: string } | null>(null);
+  const [waiting, setWaiting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -35,6 +37,9 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
     const data = res ? await res.json().catch(() => ({})) : {};
     setStarting(false);
     if (!res?.ok) return setPayError(res ? apiErrorText(t, locale, data, t.apiError.generic) : t.pay.offline);
+    if (data.provider === "stripe" && data.clientSecret && data.accountId) {
+      return setPaying({ paymentId: data.paymentId, amountCents: data.amountCents, provider: "stripe", clientSecret: data.clientSecret, accountId: data.accountId });
+    }
     if (data.provider !== "mock") return setPayError(t.pay.notConfigured);
     setPaying({ paymentId: data.paymentId, amountCents: data.amountCents, provider: data.provider });
   }
@@ -182,8 +187,30 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
         {t.order.backToMenu}
       </Link>
 
-      {paying && (
-        <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />
+      {waiting && (
+        <p role="status" className="fixed inset-x-4 bottom-4 z-30 mx-auto max-w-md rounded-2xl bg-ink px-5 py-4 text-sm text-paper shadow-lg">
+          {t.pay.waiting}
+        </p>
+      )}
+      {paying?.provider === "stripe" && paying.clientSecret && paying.accountId ? (
+        <StripePaySheet
+          clientSecret={paying.clientSecret}
+          accountId={paying.accountId}
+          amountCents={paying.amountCents}
+          onClose={() => setPaying(null)}
+          onSubmitted={async () => {
+            const id = paying.paymentId;
+            setPaying(null);
+            setWaiting(true);
+            const r = await waitForPayment(tableToken, id);
+            setWaiting(false);
+            if (r?.bill) setBill(r.bill as TableBill);
+            if (r?.status === "SUCCEEDED") setJustPaid(true);
+            else if (r && r.status !== "PENDING") setPayError(t.pay.declined);
+          }}
+        />
+      ) : (
+        paying && <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />
       )}
     </main>
   );

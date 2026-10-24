@@ -123,6 +123,7 @@ const pt = {
     testBody: "Nenhum dinheiro é movimentado. Com a Stripe ligada, aqui aparece o Apple Pay e o MB WAY verdadeiros.",
     simulated: "(simulado)",
     simulateDecline: "Simular pagamento recusado",
+    waiting: "A confirmar o pagamento… Se pagou com MB WAY, aprove na app.",
   },
   bill: {
     title: "Conta da mesa",
@@ -268,6 +269,7 @@ const en: Messages = {
     testBody: "No money is moved. With Stripe connected, the real Apple Pay and MB WAY appear here.",
     simulated: "(simulated)",
     simulateDecline: "Simulate a declined payment",
+    waiting: "Confirming the payment… If you paid with MB WAY, approve it in the app.",
   },
   bill: {
     title: "Table bill",

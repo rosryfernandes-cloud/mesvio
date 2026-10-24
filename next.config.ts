@@ -6,19 +6,24 @@ const isDev = process.env.NODE_ENV !== "production";
 const httpsSite = (process.env.NEXT_PUBLIC_APP_URL ?? "").startsWith("https://");
 
 /**
- * Content-Security-Policy: o browser só executa e liga ao próprio site. Imagens podem vir de
+ * Content-Security-Policy: o browser só executa e liga ao próprio site (e à Stripe, para o
+ * formulário de pagamento). Imagens podem vir de
  * qualquer endereço https (fotografias do POS, logótipos dos restaurantes). Sem iframes de
  * terceiros a embeber o site (clickjacking), sem <object>, sem formulários para fora.
  * 'unsafe-inline' nos scripts é exigido pelo Next sem nonces; passar a nonces obriga a render
  * dinâmico de todas as páginas (fica como melhoria: docs/15).
  */
+// Stripe (formulário de pagamento): script, iframes do Payment Element / 3-D Secure e a API.
+const STRIPE = { script: "https://js.stripe.com https://*.js.stripe.com", frame: "https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com", connect: "https://api.stripe.com" };
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' ${STRIPE.script}${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self'",
-  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${STRIPE.connect}${isDev ? " ws: wss:" : ""}`,
+  `frame-src ${STRIPE.frame}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

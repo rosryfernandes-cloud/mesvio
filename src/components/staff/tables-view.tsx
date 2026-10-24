@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatEur } from "@/lib/money";
 import { ConfirmInline } from "./confirm-inline";
 import { usePolling } from "../use-polling";
+import { StripeConnectCard } from "./stripe-connect-card";
 import type { TableOverview } from "@/server/tables/table-sessions";
 
 const POLL_MS = 5000;
@@ -83,13 +84,29 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
     await load();
   }
 
+  async function refund(t: TableOverview) {
+    setBusy(t.tableId);
+    setMessage(null);
+    const res = await fetch(`/api/painel/mesas/${t.tableId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "refund_overpaid" }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(null);
+    if (res?.ok) setMessage(`${t.label}: devolvidos ${formatEur(data.refundedCents)} ao cliente.`);
+    else setMessage(data.message ?? "Não foi possível devolver. Tente de novo.", true);
+    await load();
+  }
+
   async function togglePayments(enabled: boolean) {
     setPaymentsEnabled(enabled);
-    await fetch("/api/painel/definicoes", {
+    const res = await fetch("/api/painel/definicoes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paymentsEnabled: enabled }),
     }).catch(() => null);
+    if (res && !res.ok) setMessage((await res.json().catch(() => ({}))).message ?? "Não foi possível mudar.", true);
     await load();
   }
 
@@ -112,6 +129,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span className="block text-sm text-ink-soft">Apple Pay, MB WAY e cartão. As mesas pagas aparecem a verde; depois é só fechar a mesa.</span>
         </span>
       </label>
+      {canEditSettings && <StripeConnectCard />}
       {canEditSettings && (
         <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
           <span>
@@ -222,7 +240,19 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                             </span>
                           )}
                           {t.bill.overpaidCents > 0 && (
-                            <span className="block text-sm font-normal text-red-700">Pago a mais: {formatEur(t.bill.overpaidCents)} — reembolsar</span>
+                            <span className="block text-sm font-normal text-red-700">
+                              Pago a mais: {formatEur(t.bill.overpaidCents)}
+                              {canEditSettings && (
+                                <button
+                                  type="button"
+                                  disabled={busy === t.tableId}
+                                  onClick={() => refund(t)}
+                                  className="ml-2 rounded-lg border border-red-700 px-2 py-0.5 text-xs font-semibold"
+                                >
+                                  Devolver ao cliente
+                                </button>
+                              )}
+                            </span>
                           )}
                         </span>
                         {confirming?.tableId !== t.tableId && (

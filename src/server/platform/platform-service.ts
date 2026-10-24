@@ -216,6 +216,8 @@ export interface EstablishmentSummary {
   commissionCentsThisMonth: number;
   needsAttention: number;
   lastOrderAt: string | null;
+  /** Conta Stripe do restaurante ligada (pagamentos no telemóvel). */
+  stripeConnected: boolean;
 }
 
 export interface PlatformAlert {
@@ -259,6 +261,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
         status: organizations.status,
         posProvider: posIntegrations.provider,
         posStatus: posIntegrations.status,
+        stripeAccountId: establishments.stripeAccountId,
       })
       .from(establishments)
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
@@ -319,6 +322,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       commissionCentsThisMonth: roundHalfUpDiv(net * bps, 10_000),
       needsAttention: attentionM.get(e.id)?.n ?? 0,
       lastOrderAt: last ? new Date(last).toISOString() : null,
+      stripeConnected: !!e.stripeAccountId,
     };
   });
 
@@ -332,6 +336,8 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       alerts.push({ level: "info", establishmentId: e.id, text: `${e.name}: POS por configurar (a ementa ainda não recebe pedidos).` });
     if (e.owners === 0) alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: sem dono com acesso ao painel.` });
     if (e.tables === 0) alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: ainda sem mesas nem QR Codes.` });
+    if (!e.stripeConnected && process.env.STRIPE_SECRET_KEY)
+      alerts.push({ level: "info", establishmentId: e.id, text: `${e.name}: pagamentos no telemóvel por ligar (o dono liga a conta Stripe no painel, separador Mesas).` });
   }
   for (const [org, n] of deadM) {
     const e = establishmentsOut.find((x) => x.organizationId === org);

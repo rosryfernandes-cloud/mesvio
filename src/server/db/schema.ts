@@ -438,6 +438,8 @@ export const payments = pgTable(
     status: paymentStatus("status").notNull().default("PENDING"),
     /** Método usado (apple_pay, mb_way, card…), quando o fornecedor o indica. */
     method: text("method"),
+    /** Já devolvido ao cliente (reembolsos no painel ou no dashboard da Stripe). */
+    refundedCents: integer("refunded_cents").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
