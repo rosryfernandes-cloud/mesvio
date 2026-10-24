@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "render:som": "remotion render Mesvio16x9ComSom out/mesvio-16x9-som-provisorio.mp4 && remotion render Mesvio9x16ComSom out/mesvio-9x16-som-provisorio.mp4",
     "sons": "node scripts/gerar-sons.mjs",
-    "voz": "sh scripts/gerar-voz.sh"
+    "voz": "sh scripts/gerar-voz.sh",
+    "voz:listar": "node scripts/voz-elevenlabs.mjs --listar",
+    "voz:ia": "node scripts/voz-elevenlabs.mjs"
   },
   "dependencies": {
     "@remotion/cli": "4.0.538",
