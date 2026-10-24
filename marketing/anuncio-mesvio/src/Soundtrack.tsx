@@ -7,14 +7,15 @@ import { timeline, type SceneId } from "./script";
  * ficheiros em public/audio pela locução gravada e por música licenciada, com os mesmos nomes.
  */
 const sfx = (name: string) => staticFile(`audio/sfx/${name}.wav`);
-const voice = (id: SceneId) => staticFile(`audio/voz/${id}.wav`);
+const voiceFile = (dir: string, id: SceneId) => staticFile(`audio/${dir}/${id}.wav`);
 
 /** Atraso da fala dentro de cada cena (fotogramas), para não pisar as transições. */
 // A pergunta da viragem entra logo no congelamento (a voz da ElevenLabs precisa de ~3,2 s) e acaba
 // antes de a fala do toque começar (tap +10).
 const VOICE_OFFSET: Record<SceneId, number> = { full: 6, chaos: 0, turn: 3, tap: 10, order: 20, send: 6, calm: 4, end: 6 };
 
-export function Soundtrack() {
+/** `voiceDir`: pasta da locução em public/audio (por omissão "voz"; outras servem para comparar vozes). */
+export function Soundtrack({ voiceDir = "voz" }: { voiceDir?: string }) {
   const scenes = timeline();
   const at = (id: SceneId) => scenes.find((s) => s.id === id)!.from;
   const len = (id: SceneId) => scenes.find((s) => s.id === id)!.duration;
@@ -24,7 +25,7 @@ export function Soundtrack() {
       {/* Voz */}
       {scenes.map((s) => (
         <Sequence key={`v-${s.id}`} from={s.from + VOICE_OFFSET[s.id]} name={`voz ${s.id}`}>
-          <Audio src={voice(s.id)} volume={1} />
+          <Audio src={voiceFile(voiceDir, s.id)} volume={1} />
         </Sequence>
       ))}
 

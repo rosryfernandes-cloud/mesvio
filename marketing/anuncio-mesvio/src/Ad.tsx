@@ -7,7 +7,7 @@ import { timeline, type SceneId } from "./script";
 import { Soundtrack } from "./Soundtrack";
 
 /** O anúncio completo: as cenas em sequência, cada uma com a sua legenda; com som provisório se `sound`. */
-export function Ad({ sound = false }: { sound?: boolean }) {
+export function Ad({ sound = false, voiceDir = "voz" }: { sound?: boolean; voiceDir?: string }) {
   const scenes = timeline();
   const durationOf = (id: SceneId) => scenes.find((s) => s.id === id)!.duration;
   const view = (id: SceneId, duration: number) => {
@@ -32,7 +32,7 @@ export function Ad({ sound = false }: { sound?: boolean }) {
   };
   return (
     <AbsoluteFill style={{ background: C.forest }}>
-      {sound && <Soundtrack />}
+      {sound && <Soundtrack voiceDir={voiceDir} />}
       {scenes.map((s) => (
         <Sequence key={s.id} from={s.from} durationInFrames={s.duration} name={s.id}>
           {view(s.id, s.duration)}

@@ -14,7 +14,10 @@ try {
   process.exit(1);
 }
 const KEY = process.env.ELEVENLABS_API_KEY;
-const VOICE = process.env.ELEVENLABS_VOICE_ID;
+// --voz=<id> e --pasta=<nome> geram com outra voz para outra pasta (comparar vozes sem mexer na atual).
+const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+const VOICE = arg("voz") ?? process.env.ELEVENLABS_VOICE_ID;
+const DIR = `public/audio/${arg("pasta") ?? "voz"}`;
 if (!KEY) {
   console.error("✗ Falta ELEVENLABS_API_KEY no .env.");
   process.exit(1);
@@ -53,8 +56,8 @@ const LINES = [
   ["end", "O empregado que não sabias que precisavas.", 2.7],
 ];
 
-mkdirSync("public/audio/voz", { recursive: true });
-const tmp = "public/audio/voz/_tmp.mp3";
+mkdirSync(DIR, { recursive: true });
+const tmp = `${DIR}/_tmp.mp3`;
 let tooLong = 0;
 for (let i = 0; i < LINES.length; i++) {
   const [id, text, max] = LINES[i];
@@ -75,8 +78,8 @@ for (let i = 0; i < LINES.length; i++) {
   }
   writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
   // MP3 → WAV (mesmo formato e nome que o Remotion já usa).
-  execFileSync("afconvert", ["-f", "WAVE", "-d", "LEI16@44100", tmp, `public/audio/voz/${id}.wav`]);
-  const info = execFileSync("afinfo", [`public/audio/voz/${id}.wav`]).toString();
+  execFileSync("afconvert", ["-f", "WAVE", "-d", "LEI16@44100", tmp, `${DIR}/${id}.wav`]);
+  const info = execFileSync("afinfo", [`${DIR}/${id}.wav`]).toString();
   const secs = Number(info.match(/estimated duration: ([\d.]+)/)?.[1] ?? 0);
   const ok = secs <= max;
   if (!ok) tooLong++;
