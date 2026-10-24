@@ -1,0 +1,1844 @@
+{
+ "praia": {
+  "carlos": {
+   "hook": {
+    "duration": 3.37,
+    "words": [
+     {
+      "w": "Tens",
+      "start": 0,
+      "end": 0.255
+     },
+     {
+      "w": "um",
+      "start": 0.313,
+      "end": 0.36
+     },
+     {
+      "w": "bar",
+      "start": 0.395,
+      "end": 0.511
+     },
+     {
+      "w": "de",
+      "start": 0.546,
+      "end": 0.592
+     },
+     {
+      "w": "praia",
+      "start": 0.627,
+      "end": 1.01
+     },
+     {
+      "w": "e",
+      "start": 1.091,
+      "end": 1.207
+     },
+     {
+      "w": "a",
+      "start": 1.231,
+      "end": 1.254
+     },
+     {
+      "w": "equipa",
+      "start": 1.312,
+      "end": 1.672
+     },
+     {
+      "w": "não",
+      "start": 1.707,
+      "end": 1.811
+     },
+     {
+      "w": "chega",
+      "start": 1.858,
+      "end": 2.09
+     },
+     {
+      "w": "a",
+      "start": 2.113,
+      "end": 2.136
+     },
+     {
+      "w": "todos",
+      "start": 2.171,
+      "end": 2.392
+     },
+     {
+      "w": "os",
+      "start": 2.415,
+      "end": 2.485
+     },
+     {
+      "w": "clientes?",
+      "start": 2.519,
+      "end": 3.344
+     }
+    ]
+   },
+   "problem": {
+    "duration": 4.258,
+    "words": [
+     {
+      "w": "Camas",
+      "start": 0,
+      "end": 0.406
+     },
+     {
+      "w": "longe",
+      "start": 0.464,
+      "end": 0.673
+     },
+     {
+      "w": "do",
+      "start": 0.697,
+      "end": 0.766
+     },
+     {
+      "w": "bar,",
+      "start": 0.824,
+      "end": 1.184
+     },
+     {
+      "w": "areia,",
+      "start": 1.242,
+      "end": 1.683
+     },
+     {
+      "w": "calor…",
+      "start": 1.718,
+      "end": 2.403
+     },
+     {
+      "w": "cada",
+      "start": 2.543,
+      "end": 2.786
+     },
+     {
+      "w": "pedido",
+      "start": 2.833,
+      "end": 3.17
+     },
+     {
+      "w": "é",
+      "start": 3.193,
+      "end": 3.216
+     },
+     {
+      "w": "uma",
+      "start": 3.251,
+      "end": 3.39
+     },
+     {
+      "w": "ida",
+      "start": 3.437,
+      "end": 3.576
+     },
+     {
+      "w": "e",
+      "start": 3.611,
+      "end": 3.634
+     },
+     {
+      "w": "volta.",
+      "start": 3.68,
+      "end": 4.226
+     }
+    ]
+   },
+   "turn": {
+    "duration": 2.586,
+    "words": [
+     {
+      "w": "Com",
+      "start": 0,
+      "end": 0.186
+     },
+     {
+      "w": "a",
+      "start": 0.244,
+      "end": 0.267
+     },
+     {
+      "w": "MESVIO,",
+      "start": 0.302,
+      "end": 0.824
+     },
+     {
+      "w": "o",
+      "start": 0.964,
+      "end": 1.033
+     },
+     {
+      "w": "pedido",
+      "start": 1.068,
+      "end": 1.405
+     },
+     {
+      "w": "vem",
+      "start": 1.451,
+      "end": 1.614
+     },
+     {
+      "w": "até",
+      "start": 1.649,
+      "end": 1.8
+     },
+     {
+      "w": "ti.",
+      "start": 1.881,
+      "end": 2.554
+     }
+    ]
+   },
+   "tap": {
+    "duration": 3.37,
+    "words": [
+     {
+      "w": "Aproxima",
+      "start": 0,
+      "end": 0.557
+     },
+     {
+      "w": "o",
+      "start": 0.58,
+      "end": 0.604
+     },
+     {
+      "w": "telemóvel",
+      "start": 0.65,
+      "end": 1.149
+     },
+     {
+      "w": "do",
+      "start": 1.196,
+      "end": 1.254
+     },
+     {
+      "w": "NFC,",
+      "start": 1.335,
+      "end": 1.869
+     },
+     {
+      "w": "ou",
+      "start": 1.985,
+      "end": 2.078
+     },
+     {
+      "w": "lê",
+      "start": 2.136,
+      "end": 2.229
+     },
+     {
+      "w": "o",
+      "start": 2.276,
+      "end": 2.299
+     },
+     {
+      "w": "QR",
+      "start": 2.334,
+      "end": 2.554
+     },
+     {
+      "w": "Code.",
+      "start": 2.67,
+      "end": 3.344
+     }
+    ]
+   },
+   "order": {
+    "duration": 2.403,
+    "words": [
+     {
+      "w": "Escolhe",
+      "start": 0,
+      "end": 0.441
+     },
+     {
+      "w": "uma",
+      "start": 0.464,
+      "end": 0.569
+     },
+     {
+      "w": "bebida",
+      "start": 0.615,
+      "end": 0.964
+     },
+     {
+      "w": "e",
+      "start": 0.998,
+      "end": 1.022
+     },
+     {
+      "w": "confirma",
+      "start": 1.057,
+      "end": 1.474
+     },
+     {
+      "w": "o",
+      "start": 1.498,
+      "end": 1.521
+     },
+     {
+      "w": "pedido.",
+      "start": 1.556,
+      "end": 2.368
+     }
+    ]
+   },
+   "panel": {
+    "duration": 2.403,
+    "words": [
+     {
+      "w": "O",
+      "start": 0,
+      "end": 0.081
+     },
+     {
+      "w": "pedido",
+      "start": 0.151,
+      "end": 0.476
+     },
+     {
+      "w": "aparece",
+      "start": 0.499,
+      "end": 0.859
+     },
+     {
+      "w": "logo",
+      "start": 0.906,
+      "end": 1.149
+     },
+     {
+      "w": "no",
+      "start": 1.173,
+      "end": 1.254
+     },
+     {
+      "w": "painel",
+      "start": 1.3,
+      "end": 1.567
+     },
+     {
+      "w": "do",
+      "start": 1.602,
+      "end": 1.66
+     },
+     {
+      "w": "bar.",
+      "start": 1.707,
+      "end": 2.368
+     }
+    ]
+   },
+   "deliver": {
+    "duration": 3.944,
+    "words": [
+     {
+      "w": "E",
+      "start": 0,
+      "end": 0.151
+     },
+     {
+      "w": "a",
+      "start": 0.197,
+      "end": 0.232
+     },
+     {
+      "w": "equipa",
+      "start": 0.267,
+      "end": 0.65
+     },
+     {
+      "w": "deixa",
+      "start": 0.697,
+      "end": 0.917
+     },
+     {
+      "w": "de",
+      "start": 0.952,
+      "end": 0.998
+     },
+     {
+      "w": "recolher",
+      "start": 1.045,
+      "end": 1.428
+     },
+     {
+      "w": "pedidos,",
+      "start": 1.498,
+      "end": 1.881
+     },
+     {
+      "w": "para",
+      "start": 1.927,
+      "end": 2.067
+     },
+     {
+      "w": "se",
+      "start": 2.113,
+      "end": 2.171
+     },
+     {
+      "w": "concentrar",
+      "start": 2.206,
+      "end": 2.717
+     },
+     {
+      "w": "nas",
+      "start": 2.752,
+      "end": 2.868
+     },
+     {
+      "w": "entregas.",
+      "start": 2.937,
+      "end": 3.901
+     }
+    ]
+   },
+   "end": {
+    "duration": 4.598,
+    "words": [
+     {
+      "w": "MESVIO.",
+      "start": 0,
+      "end": 0.662
+     },
+     {
+      "w": "O",
+      "start": 0.859,
+      "end": 0.94
+     },
+     {
+      "w": "empregado",
+      "start": 0.987,
+      "end": 1.358
+     },
+     {
+      "w": "que",
+      "start": 1.382,
+      "end": 1.451
+     },
+     {
+      "w": "não",
+      "start": 1.486,
+      "end": 1.591
+     },
+     {
+      "w": "sabias",
+      "start": 1.649,
+      "end": 2.009
+     },
+     {
+      "w": "que",
+      "start": 2.067,
+      "end": 2.136
+     },
+     {
+      "w": "precisavas.",
+      "start": 2.171,
+      "end": 2.856
+     },
+     {
+      "w": "Solicita",
+      "start": 2.914,
+      "end": 3.483
+     },
+     {
+      "w": "uma",
+      "start": 3.518,
+      "end": 3.622
+     },
+     {
+      "w": "demonstração.",
+      "start": 3.657,
+      "end": 4.551
+     }
+    ]
+   }
+  },
+  "maria": {
+   "hook": {
+    "duration": 3.657,
+    "words": [
+     {
+      "w": "Tens",
+      "start": 0,
+      "end": 0.186
+     },
+     {
+      "w": "um",
+      "start": 0.244,
+      "end": 0.29
+     },
+     {
+      "w": "bar",
+      "start": 0.325,
+      "end": 0.441
+     },
+     {
+      "w": "de",
+      "start": 0.488,
+      "end": 0.534
+     },
+     {
+      "w": "praia",
+      "start": 0.569,
+      "end": 0.952
+     },
+     {
+      "w": "e",
+      "start": 0.998,
+      "end": 1.103
+     },
+     {
+      "w": "a",
+      "start": 1.126,
+      "end": 1.149
+     },
+     {
+      "w": "equipa",
+      "start": 1.184,
+      "end": 1.474
+     },
+     {
+      "w": "não",
+      "start": 1.509,
+      "end": 1.602
+     },
+     {
+      "w": "chega",
+      "start": 1.637,
+      "end": 1.823
+     },
+     {
+      "w": "a",
+      "start": 1.846,
+      "end": 1.869
+     },
+     {
+      "w": "todos",
+      "start": 1.916,
+      "end": 2.113
+     },
+     {
+      "w": "os",
+      "start": 2.148,
+      "end": 2.229
+     },
+     {
+      "w": "clientes?",
+      "start": 2.276,
+      "end": 3.622
+     }
+    ]
+   },
+   "problem": {
+    "duration": 4.31,
+    "words": [
+     {
+      "w": "Camas",
+      "start": 0,
+      "end": 0.279
+     },
+     {
+      "w": "longe",
+      "start": 0.325,
+      "end": 0.534
+     },
+     {
+      "w": "do",
+      "start": 0.557,
+      "end": 0.639
+     },
+     {
+      "w": "bar,",
+      "start": 0.685,
+      "end": 1.068
+     },
+     {
+      "w": "areia,",
+      "start": 1.115,
+      "end": 1.637
+     },
+     {
+      "w": "calor…",
+      "start": 1.683,
+      "end": 2.357
+     },
+     {
+      "w": "cada",
+      "start": 2.577,
+      "end": 2.786
+     },
+     {
+      "w": "pedido",
+      "start": 2.833,
+      "end": 3.123
+     },
+     {
+      "w": "é",
+      "start": 3.146,
+      "end": 3.17
+     },
+     {
+      "w": "uma",
+      "start": 3.204,
+      "end": 3.32
+     },
+     {
+      "w": "ida",
+      "start": 3.355,
+      "end": 3.483
+     },
+     {
+      "w": "e",
+      "start": 3.506,
+      "end": 3.529
+     },
+     {
+      "w": "volta.",
+      "start": 3.576,
+      "end": 4.272
+     }
+    ]
+   },
+   "turn": {
+    "duration": 2.351,
+    "words": [
+     {
+      "w": "Com",
+      "start": 0,
+      "end": 0.186
+     },
+     {
+      "w": "a",
+      "start": 0.209,
+      "end": 0.244
+     },
+     {
+      "w": "MESVIO,",
+      "start": 0.267,
+      "end": 0.813
+     },
+     {
+      "w": "o",
+      "start": 0.859,
+      "end": 0.906
+     },
+     {
+      "w": "pedido",
+      "start": 0.952,
+      "end": 1.207
+     },
+     {
+      "w": "vem",
+      "start": 1.231,
+      "end": 1.347
+     },
+     {
+      "w": "até",
+      "start": 1.382,
+      "end": 1.521
+     },
+     {
+      "w": "ti.",
+      "start": 1.567,
+      "end": 2.322
+     }
+    ]
+   },
+   "tap": {
+    "duration": 3.37,
+    "words": [
+     {
+      "w": "Aproxima",
+      "start": 0,
+      "end": 0.476
+     },
+     {
+      "w": "o",
+      "start": 0.499,
+      "end": 0.522
+     },
+     {
+      "w": "telemóvel",
+      "start": 0.569,
+      "end": 1.115
+     },
+     {
+      "w": "do",
+      "start": 1.161,
+      "end": 1.242
+     },
+     {
+      "w": "NFC,",
+      "start": 1.312,
+      "end": 1.858
+     },
+     {
+      "w": "ou",
+      "start": 1.927,
+      "end": 2.032
+     },
+     {
+      "w": "lê",
+      "start": 2.101,
+      "end": 2.206
+     },
+     {
+      "w": "o",
+      "start": 2.241,
+      "end": 2.287
+     },
+     {
+      "w": "QR",
+      "start": 2.334,
+      "end": 2.531
+     },
+     {
+      "w": "Code.",
+      "start": 2.612,
+      "end": 3.344
+     }
+    ]
+   },
+   "order": {
+    "duration": 2.168,
+    "words": [
+     {
+      "w": "Escolhe",
+      "start": 0,
+      "end": 0.348
+     },
+     {
+      "w": "uma",
+      "start": 0.372,
+      "end": 0.464
+     },
+     {
+      "w": "bebida",
+      "start": 0.511,
+      "end": 0.906
+     },
+     {
+      "w": "e",
+      "start": 0.952,
+      "end": 0.998
+     },
+     {
+      "w": "confirma",
+      "start": 1.045,
+      "end": 1.37
+     },
+     {
+      "w": "o",
+      "start": 1.393,
+      "end": 1.416
+     },
+     {
+      "w": "pedido.",
+      "start": 1.463,
+      "end": 2.136
+     }
+    ]
+   },
+   "panel": {
+    "duration": 2.038,
+    "words": [
+     {
+      "w": "O",
+      "start": 0,
+      "end": 0.07
+     },
+     {
+      "w": "pedido",
+      "start": 0.151,
+      "end": 0.406
+     },
+     {
+      "w": "aparece",
+      "start": 0.43,
+      "end": 0.731
+     },
+     {
+      "w": "logo",
+      "start": 0.766,
+      "end": 0.917
+     },
+     {
+      "w": "no",
+      "start": 0.952,
+      "end": 1.01
+     },
+     {
+      "w": "painel",
+      "start": 1.057,
+      "end": 1.289
+     },
+     {
+      "w": "do",
+      "start": 1.335,
+      "end": 1.405
+     },
+     {
+      "w": "bar.",
+      "start": 1.44,
+      "end": 1.997
+     }
+    ]
+   },
+   "deliver": {
+    "duration": 4.441,
+    "words": [
+     {
+      "w": "E",
+      "start": 0,
+      "end": 0.151
+     },
+     {
+      "w": "a",
+      "start": 0.186,
+      "end": 0.209
+     },
+     {
+      "w": "equipa",
+      "start": 0.232,
+      "end": 0.569
+     },
+     {
+      "w": "deixa",
+      "start": 0.627,
+      "end": 0.848
+     },
+     {
+      "w": "de",
+      "start": 0.882,
+      "end": 0.94
+     },
+     {
+      "w": "recolher",
+      "start": 0.987,
+      "end": 1.289
+     },
+     {
+      "w": "pedidos,",
+      "start": 1.335,
+      "end": 1.73
+     },
+     {
+      "w": "para",
+      "start": 1.834,
+      "end": 1.985
+     },
+     {
+      "w": "se",
+      "start": 2.02,
+      "end": 2.067
+     },
+     {
+      "w": "concentrar",
+      "start": 2.09,
+      "end": 2.508
+     },
+     {
+      "w": "nas",
+      "start": 2.554,
+      "end": 2.659
+     },
+     {
+      "w": "entregas.",
+      "start": 2.705,
+      "end": 4.412
+     }
+    ]
+   },
+   "end": {
+    "duration": 4.833,
+    "words": [
+     {
+      "w": "MESVIO.",
+      "start": 0,
+      "end": 0.546
+     },
+     {
+      "w": "O",
+      "start": 1.08,
+      "end": 1.149
+     },
+     {
+      "w": "empregado",
+      "start": 1.207,
+      "end": 1.625
+     },
+     {
+      "w": "que",
+      "start": 1.66,
+      "end": 1.73
+     },
+     {
+      "w": "não",
+      "start": 1.765,
+      "end": 1.858
+     },
+     {
+      "w": "sabias",
+      "start": 1.904,
+      "end": 2.194
+     },
+     {
+      "w": "que",
+      "start": 2.252,
+      "end": 2.322
+     },
+     {
+      "w": "precisavas.",
+      "start": 2.357,
+      "end": 3.111
+     },
+     {
+      "w": "Solicita",
+      "start": 3.262,
+      "end": 3.727
+     },
+     {
+      "w": "uma",
+      "start": 3.75,
+      "end": 3.866
+     },
+     {
+      "w": "demonstração.",
+      "start": 3.889,
+      "end": 4.783
+     }
+    ]
+   }
+  }
+ },
+ "restaurante": {
+  "carlos": {
+   "hook": {
+    "duration": 3.605,
+    "words": [
+     {
+      "w": "Tens",
+      "start": 0,
+      "end": 0.255
+     },
+     {
+      "w": "um",
+      "start": 0.313,
+      "end": 0.36
+     },
+     {
+      "w": "restaurante",
+      "start": 0.383,
+      "end": 0.801
+     },
+     {
+      "w": "e",
+      "start": 0.824,
+      "end": 0.848
+     },
+     {
+      "w": "a",
+      "start": 0.871,
+      "end": 0.906
+     },
+     {
+      "w": "equipa",
+      "start": 0.998,
+      "end": 1.254
+     },
+     {
+      "w": "não",
+      "start": 1.289,
+      "end": 1.358
+     },
+     {
+      "w": "consegue",
+      "start": 1.393,
+      "end": 1.718
+     },
+     {
+      "w": "atender",
+      "start": 1.741,
+      "end": 2.078
+     },
+     {
+      "w": "todas",
+      "start": 2.136,
+      "end": 2.368
+     },
+     {
+      "w": "as",
+      "start": 2.426,
+      "end": 2.473
+     },
+     {
+      "w": "mesas",
+      "start": 2.531,
+      "end": 2.786
+     },
+     {
+      "w": "a",
+      "start": 2.844,
+      "end": 2.868
+     },
+     {
+      "w": "tempo?",
+      "start": 2.926,
+      "end": 3.576
+     }
+    ]
+   },
+   "problem": {
+    "duration": 4.18,
+    "words": [
+     {
+      "w": "Hora",
+      "start": 0,
+      "end": 0.244
+     },
+     {
+      "w": "de",
+      "start": 0.267,
+      "end": 0.313
+     },
+     {
+      "w": "ponta,",
+      "start": 0.36,
+      "end": 0.871
+     },
+     {
+      "w": "mesas",
+      "start": 0.94,
+      "end": 1.254
+     },
+     {
+      "w": "a",
+      "start": 1.312,
+      "end": 1.335
+     },
+     {
+      "w": "chamar…",
+      "start": 1.37,
+      "end": 1.927
+     },
+     {
+      "w": "cada",
+      "start": 2.194,
+      "end": 2.415
+     },
+     {
+      "w": "pedido",
+      "start": 2.45,
+      "end": 2.763
+     },
+     {
+      "w": "é",
+      "start": 2.786,
+      "end": 2.81
+     },
+     {
+      "w": "mais",
+      "start": 2.868,
+      "end": 3.03
+     },
+     {
+      "w": "uma",
+      "start": 3.077,
+      "end": 3.193
+     },
+     {
+      "w": "volta",
+      "start": 3.239,
+      "end": 3.506
+     },
+     {
+      "w": "à",
+      "start": 3.529,
+      "end": 3.553
+     },
+     {
+      "w": "sala.",
+      "start": 3.611,
+      "end": 4.133
+     }
+    ]
+   },
+   "turn": {
+    "duration": 2.22,
+    "words": [
+     {
+      "w": "Com",
+      "start": 0,
+      "end": 0.174
+     },
+     {
+      "w": "a",
+      "start": 0.209,
+      "end": 0.232
+     },
+     {
+      "w": "MESVIO,",
+      "start": 0.255,
+      "end": 0.766
+     },
+     {
+      "w": "o",
+      "start": 0.824,
+      "end": 0.906
+     },
+     {
+      "w": "pedido",
+      "start": 0.929,
+      "end": 1.207
+     },
+     {
+      "w": "vem",
+      "start": 1.231,
+      "end": 1.37
+     },
+     {
+      "w": "até",
+      "start": 1.405,
+      "end": 1.567
+     },
+     {
+      "w": "ti.",
+      "start": 1.649,
+      "end": 2.183
+     }
+    ]
+   },
+   "tap": {
+    "duration": 3.37,
+    "words": [
+     {
+      "w": "Aproxima",
+      "start": 0,
+      "end": 0.557
+     },
+     {
+      "w": "o",
+      "start": 0.58,
+      "end": 0.604
+     },
+     {
+      "w": "telemóvel",
+      "start": 0.65,
+      "end": 1.161
+     },
+     {
+      "w": "do",
+      "start": 1.196,
+      "end": 1.254
+     },
+     {
+      "w": "NFC,",
+      "start": 1.335,
+      "end": 1.823
+     },
+     {
+      "w": "ou",
+      "start": 1.939,
+      "end": 2.043
+     },
+     {
+      "w": "lê",
+      "start": 2.113,
+      "end": 2.206
+     },
+     {
+      "w": "o",
+      "start": 2.252,
+      "end": 2.276
+     },
+     {
+      "w": "QR",
+      "start": 2.31,
+      "end": 2.519
+     },
+     {
+      "w": "Code.",
+      "start": 2.635,
+      "end": 3.344
+     }
+    ]
+   },
+   "order": {
+    "duration": 2.403,
+    "words": [
+     {
+      "w": "Escolhe",
+      "start": 0,
+      "end": 0.441
+     },
+     {
+      "w": "uma",
+      "start": 0.464,
+      "end": 0.557
+     },
+     {
+      "w": "bebida",
+      "start": 0.604,
+      "end": 0.964
+     },
+     {
+      "w": "e",
+      "start": 0.998,
+      "end": 1.022
+     },
+     {
+      "w": "confirma",
+      "start": 1.068,
+      "end": 1.498
+     },
+     {
+      "w": "o",
+      "start": 1.521,
+      "end": 1.544
+     },
+     {
+      "w": "pedido.",
+      "start": 1.579,
+      "end": 2.368
+     }
+    ]
+   },
+   "panel": {
+    "duration": 2.586,
+    "words": [
+     {
+      "w": "O",
+      "start": 0,
+      "end": 0.081
+     },
+     {
+      "w": "pedido",
+      "start": 0.197,
+      "end": 0.441
+     },
+     {
+      "w": "aparece",
+      "start": 0.464,
+      "end": 0.836
+     },
+     {
+      "w": "logo",
+      "start": 0.882,
+      "end": 1.138
+     },
+     {
+      "w": "no",
+      "start": 1.173,
+      "end": 1.242
+     },
+     {
+      "w": "painel",
+      "start": 1.277,
+      "end": 1.533
+     },
+     {
+      "w": "do",
+      "start": 1.567,
+      "end": 1.614
+     },
+     {
+      "w": "restaurante.",
+      "start": 1.649,
+      "end": 2.554
+     }
+    ]
+   },
+   "deliver": {
+    "duration": 4.18,
+    "words": [
+     {
+      "w": "E",
+      "start": 0,
+      "end": 0.151
+     },
+     {
+      "w": "a",
+      "start": 0.186,
+      "end": 0.302
+     },
+     {
+      "w": "equipa",
+      "start": 0.441,
+      "end": 0.813
+     },
+     {
+      "w": "deixa",
+      "start": 0.848,
+      "end": 1.115
+     },
+     {
+      "w": "de",
+      "start": 1.161,
+      "end": 1.207
+     },
+     {
+      "w": "recolher",
+      "start": 1.254,
+      "end": 1.66
+     },
+     {
+      "w": "pedidos,",
+      "start": 1.718,
+      "end": 2.171
+     },
+     {
+      "w": "para",
+      "start": 2.287,
+      "end": 2.438
+     },
+     {
+      "w": "se",
+      "start": 2.496,
+      "end": 2.554
+     },
+     {
+      "w": "concentrar",
+      "start": 2.589,
+      "end": 3.146
+     },
+     {
+      "w": "em",
+      "start": 3.181,
+      "end": 3.228
+     },
+     {
+      "w": "servir.",
+      "start": 3.286,
+      "end": 4.133
+     }
+    ]
+   },
+   "end": {
+    "duration": 4.415,
+    "words": [
+     {
+      "w": "MESVIO.",
+      "start": 0,
+      "end": 0.615
+     },
+     {
+      "w": "O",
+      "start": 0.778,
+      "end": 0.871
+     },
+     {
+      "w": "empregado",
+      "start": 0.906,
+      "end": 1.277
+     },
+     {
+      "w": "que",
+      "start": 1.3,
+      "end": 1.37
+     },
+     {
+      "w": "não",
+      "start": 1.405,
+      "end": 1.509
+     },
+     {
+      "w": "sabias",
+      "start": 1.567,
+      "end": 1.939
+     },
+     {
+      "w": "que",
+      "start": 1.997,
+      "end": 2.067
+     },
+     {
+      "w": "precisavas.",
+      "start": 2.09,
+      "end": 2.74
+     },
+     {
+      "w": "Solicita",
+      "start": 2.879,
+      "end": 3.367
+     },
+     {
+      "w": "uma",
+      "start": 3.39,
+      "end": 3.495
+     },
+     {
+      "w": "demonstração.",
+      "start": 3.529,
+      "end": 4.365
+     }
+    ]
+   }
+  },
+  "maria": {
+   "hook": {
+    "duration": 3.762,
+    "words": [
+     {
+      "w": "Tens",
+      "start": 0,
+      "end": 0.186
+     },
+     {
+      "w": "um",
+      "start": 0.255,
+      "end": 0.302
+     },
+     {
+      "w": "restaurante",
+      "start": 0.337,
+      "end": 0.824
+     },
+     {
+      "w": "e",
+      "start": 0.848,
+      "end": 0.894
+     },
+     {
+      "w": "a",
+      "start": 0.917,
+      "end": 0.94
+     },
+     {
+      "w": "equipa",
+      "start": 0.964,
+      "end": 1.242
+     },
+     {
+      "w": "não",
+      "start": 1.277,
+      "end": 1.37
+     },
+     {
+      "w": "consegue",
+      "start": 1.405,
+      "end": 1.695
+     },
+     {
+      "w": "atender",
+      "start": 1.718,
+      "end": 2.067
+     },
+     {
+      "w": "todas",
+      "start": 2.101,
+      "end": 2.31
+     },
+     {
+      "w": "as",
+      "start": 2.357,
+      "end": 2.415
+     },
+     {
+      "w": "mesas",
+      "start": 2.473,
+      "end": 2.67
+     },
+     {
+      "w": "a",
+      "start": 2.705,
+      "end": 2.728
+     },
+     {
+      "w": "tempo?",
+      "start": 2.775,
+      "end": 3.715
+     }
+    ]
+   },
+   "problem": {
+    "duration": 4.598,
+    "words": [
+     {
+      "w": "Hora",
+      "start": 0,
+      "end": 0.221
+     },
+     {
+      "w": "de",
+      "start": 0.267,
+      "end": 0.313
+     },
+     {
+      "w": "ponta,",
+      "start": 0.36,
+      "end": 0.755
+     },
+     {
+      "w": "mesas",
+      "start": 0.789,
+      "end": 1.022
+     },
+     {
+      "w": "a",
+      "start": 1.08,
+      "end": 1.103
+     },
+     {
+      "w": "chamar…",
+      "start": 1.138,
+      "end": 1.765
+     },
+     {
+      "w": "cada",
+      "start": 1.904,
+      "end": 2.113
+     },
+     {
+      "w": "pedido",
+      "start": 2.159,
+      "end": 2.508
+     },
+     {
+      "w": "é",
+      "start": 2.566,
+      "end": 2.612
+     },
+     {
+      "w": "mais",
+      "start": 2.659,
+      "end": 2.821
+     },
+     {
+      "w": "uma",
+      "start": 2.856,
+      "end": 2.972
+     },
+     {
+      "w": "volta",
+      "start": 3.019,
+      "end": 3.239
+     },
+     {
+      "w": "à",
+      "start": 3.262,
+      "end": 3.286
+     },
+     {
+      "w": "sala.",
+      "start": 3.332,
+      "end": 4.551
+     }
+    ]
+   },
+   "turn": {
+    "duration": 2.351,
+    "words": [
+     {
+      "w": "Com",
+      "start": 0,
+      "end": 0.151
+     },
+     {
+      "w": "a",
+      "start": 0.186,
+      "end": 0.209
+     },
+     {
+      "w": "MESVIO,",
+      "start": 0.244,
+      "end": 0.859
+     },
+     {
+      "w": "o",
+      "start": 0.894,
+      "end": 0.964
+     },
+     {
+      "w": "pedido",
+      "start": 1.01,
+      "end": 1.289
+     },
+     {
+      "w": "vem",
+      "start": 1.312,
+      "end": 1.451
+     },
+     {
+      "w": "até",
+      "start": 1.474,
+      "end": 1.602
+     },
+     {
+      "w": "ti.",
+      "start": 1.66,
+      "end": 2.322
+     }
+    ]
+   },
+   "tap": {
+    "duration": 3.291,
+    "words": [
+     {
+      "w": "Aproxima",
+      "start": 0,
+      "end": 0.441
+     },
+     {
+      "w": "o",
+      "start": 0.464,
+      "end": 0.488
+     },
+     {
+      "w": "telemóvel",
+      "start": 0.534,
+      "end": 1.033
+     },
+     {
+      "w": "do",
+      "start": 1.08,
+      "end": 1.161
+     },
+     {
+      "w": "NFC,",
+      "start": 1.219,
+      "end": 1.765
+     },
+     {
+      "w": "ou",
+      "start": 1.869,
+      "end": 1.974
+     },
+     {
+      "w": "lê",
+      "start": 2.02,
+      "end": 2.101
+     },
+     {
+      "w": "o",
+      "start": 2.148,
+      "end": 2.183
+     },
+     {
+      "w": "QR",
+      "start": 2.229,
+      "end": 2.426
+     },
+     {
+      "w": "Code.",
+      "start": 2.531,
+      "end": 3.251
+     }
+    ]
+   },
+   "order": {
+    "duration": 2.691,
+    "words": [
+     {
+      "w": "Escolhe",
+      "start": 0,
+      "end": 0.418
+     },
+     {
+      "w": "uma",
+      "start": 0.441,
+      "end": 0.546
+     },
+     {
+      "w": "bebida",
+      "start": 0.592,
+      "end": 1.01
+     },
+     {
+      "w": "e",
+      "start": 1.057,
+      "end": 1.161
+     },
+     {
+      "w": "confirma",
+      "start": 1.207,
+      "end": 1.533
+     },
+     {
+      "w": "o",
+      "start": 1.556,
+      "end": 1.579
+     },
+     {
+      "w": "pedido.",
+      "start": 1.625,
+      "end": 2.647
+     }
+    ]
+   },
+   "panel": {
+    "duration": 2.586,
+    "words": [
+     {
+      "w": "O",
+      "start": 0,
+      "end": 0.081
+     },
+     {
+      "w": "pedido",
+      "start": 0.151,
+      "end": 0.418
+     },
+     {
+      "w": "aparece",
+      "start": 0.464,
+      "end": 0.778
+     },
+     {
+      "w": "logo",
+      "start": 0.801,
+      "end": 0.987
+     },
+     {
+      "w": "no",
+      "start": 1.01,
+      "end": 1.08
+     },
+     {
+      "w": "painel",
+      "start": 1.126,
+      "end": 1.382
+     },
+     {
+      "w": "do",
+      "start": 1.416,
+      "end": 1.486
+     },
+     {
+      "w": "restaurante.",
+      "start": 1.521,
+      "end": 2.554
+     }
+    ]
+   },
+   "deliver": {
+    "duration": 4.023,
+    "words": [
+     {
+      "w": "E",
+      "start": 0,
+      "end": 0.128
+     },
+     {
+      "w": "a",
+      "start": 0.174,
+      "end": 0.197
+     },
+     {
+      "w": "equipa",
+      "start": 0.221,
+      "end": 0.546
+     },
+     {
+      "w": "deixa",
+      "start": 0.592,
+      "end": 0.824
+     },
+     {
+      "w": "de",
+      "start": 0.859,
+      "end": 0.917
+     },
+     {
+      "w": "recolher",
+      "start": 0.964,
+      "end": 1.277
+     },
+     {
+      "w": "pedidos,",
+      "start": 1.335,
+      "end": 1.741
+     },
+     {
+      "w": "para",
+      "start": 1.962,
+      "end": 2.113
+     },
+     {
+      "w": "se",
+      "start": 2.159,
+      "end": 2.218
+     },
+     {
+      "w": "concentrar",
+      "start": 2.241,
+      "end": 2.682
+     },
+     {
+      "w": "em",
+      "start": 2.728,
+      "end": 2.775
+     },
+     {
+      "w": "servir.",
+      "start": 2.821,
+      "end": 3.994
+     }
+    ]
+   },
+   "end": {
+    "duration": 5.146,
+    "words": [
+     {
+      "w": "MESVIO.",
+      "start": 0,
+      "end": 0.546
+     },
+     {
+      "w": "O",
+      "start": 1.173,
+      "end": 1.231
+     },
+     {
+      "w": "empregado",
+      "start": 1.289,
+      "end": 1.683
+     },
+     {
+      "w": "que",
+      "start": 1.707,
+      "end": 1.776
+     },
+     {
+      "w": "não",
+      "start": 1.811,
+      "end": 1.904
+     },
+     {
+      "w": "sabias",
+      "start": 1.95,
+      "end": 2.241
+     },
+     {
+      "w": "que",
+      "start": 2.287,
+      "end": 2.357
+     },
+     {
+      "w": "precisavas.",
+      "start": 2.392,
+      "end": 3.123
+     },
+     {
+      "w": "Solicita",
+      "start": 3.518,
+      "end": 4.029
+     },
+     {
+      "w": "uma",
+      "start": 4.052,
+      "end": 4.168
+     },
+     {
+      "w": "demonstração.",
+      "start": 4.203,
+      "end": 5.108
+     }
+    ]
+   }
+  }
+ }
+}

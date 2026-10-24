@@ -216,3 +216,90 @@ wav(
   }
   wav("batida", s);
 }
+
+// --- Campanhas v2: música de fundo discreta (112 bpm) e ambiente de sala ---
+const BPM = 112;
+const BEAT = 60 / BPM;
+const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
+/** Filtro passa-baixo de um polo, aplicado a um array. */
+function lowpass(s, fc) {
+  const a = 1 - Math.exp((-2 * Math.PI * fc) / SR);
+  let y = 0;
+  return s.map((x) => (y += a * (x - y)));
+}
+
+// Tensão (abertura e problema): baixo em Lá menor a pulsar em colcheias, bombo suave, prato fechado
+// e um pad que cresce. Escuro, mas sem ser dramático.
+{
+  const len = 11;
+  const n = N(len);
+  const s = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const b = t % BEAT;
+    const e8 = t % (BEAT / 2);
+    const e16 = t % (BEAT / 4);
+    const kick = Math.sin(2 * Math.PI * (48 + 90 * Math.exp(-b * 35)) * b) * Math.exp(-b / 0.12) * 0.55;
+    const bass = (Math.sin(2 * Math.PI * hz(33) * t) + 0.35 * Math.sin(2 * Math.PI * hz(45) * t)) * Math.exp(-e8 / 0.16) * 0.32;
+    const hat = rnd() * Math.exp(-e16 / 0.012) * (Math.floor(t / (BEAT / 4)) % 2 ? 0.05 : 0.09);
+    let pad = 0;
+    for (const m of [57, 60, 64, 69]) pad += Math.sin(2 * Math.PI * hz(m) * t) + 0.5 * Math.sin(2 * Math.PI * hz(m) * 1.003 * t);
+    const swell = Math.min(1, t / len) * 0.035;
+    s[i] = (kick + bass + hat + pad * swell) * Math.min(1, t / 0.3, (len - t) / 0.4);
+  }
+  wav("musica-tensao", lowpass(s, 5000));
+}
+
+// Leve (da viragem ao fim): Dó–Sol–Lám–Fá, arpejos tipo marimba, baixo, bombo e palmas suaves,
+// shaker. Otimista e discreta, para ficar por baixo da voz.
+{
+  const len = 26;
+  const n = N(len);
+  const s = new Array(n).fill(0);
+  const chords = [
+    [48, 60, 64, 67, 72],
+    [43, 59, 62, 67, 71],
+    [45, 60, 64, 69, 72],
+    [41, 60, 65, 69, 72],
+  ];
+  const bar = BEAT * 4;
+  const arp = [1, 2, 3, 4, 3, 2, 3, 4];
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const chord = chords[Math.floor(t / bar) % 4];
+    const b = t % BEAT;
+    const beatNo = Math.floor(t / BEAT) % 4;
+    const e8 = t % (BEAT / 2);
+    const e16 = t % (BEAT / 4);
+    const step = Math.floor(t / (BEAT / 2)) % 8;
+    const kick = Math.sin(2 * Math.PI * (45 + 80 * Math.exp(-b * 40)) * b) * Math.exp(-b / 0.1) * 0.4;
+    const clap = beatNo % 2 ? rnd() * Math.exp(-b / 0.03) * 0.12 : 0;
+    const shaker = rnd() * Math.exp(-e16 / 0.01) * 0.04;
+    const bass = beatNo % 2 === 0 ? Math.sin(2 * Math.PI * hz(chord[0] - 12 + 12) * t) * Math.exp(-b / 0.35) * 0.3 : 0;
+    const f = hz(chord[arp[step]] + 12);
+    const pluck = (Math.sin(2 * Math.PI * f * e8) + 0.2 * Math.sin(2 * Math.PI * f * 4 * e8)) * Math.exp(-e8 / 0.18) * 0.13;
+    let pad = 0;
+    for (const m of chord.slice(1)) pad += Math.sin(2 * Math.PI * hz(m) * t);
+    s[i] = (kick + clap + shaker + bass + pluck + pad * 0.018) * Math.min(1, t / 0.5, (len - t) / 1.5);
+  }
+  wav("musica-leve", lowpass(s, 7000));
+}
+
+// Burburinho de sala (restaurante), em loop: ruído na zona da voz humana com variações lentas.
+{
+  const len = 8;
+  const n = N(len);
+  const s = new Array(n);
+  let low = 0;
+  let band = 0;
+  const f = 2 * Math.sin((Math.PI * 700) / SR);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const high = rnd() - low - 0.9 * band;
+    band += f * high;
+    low += f * band;
+    const mod = 0.6 + 0.25 * Math.sin(2 * Math.PI * 0.7 * t) + 0.15 * Math.sin(2 * Math.PI * 3.1 * t + 1);
+    s[i] = band * mod * 0.9 * Math.min(1, t / 0.3, (len - t) / 0.3);
+  }
+  wav("burburinho", s);
+}

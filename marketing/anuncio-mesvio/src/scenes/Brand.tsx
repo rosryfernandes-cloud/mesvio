@@ -4,6 +4,7 @@ import { useLayout } from "../components/layout";
 import { Logo } from "../components/Logo";
 import { MenuScreen, StatusScreen, type MenuState } from "../components/MenuScreen";
 import { Phone, SCREEN_H, SCREEN_W } from "../components/Phone";
+import { usePlace } from "../components/place";
 import { RestaurantPanel } from "../components/RestaurantPanel";
 import { TEXT } from "../script";
 import { Beach } from "./Beach";
@@ -12,7 +13,7 @@ const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const empty: MenuState = { qty: { burger: 0, mojito: 0 }, bar: 0, sheet: 0, pressed: false };
 
 /** Fundo verde-escuro da marca, com uma luz menta suave. */
-function BrandBackground() {
+export function BrandBackground() {
   return <AbsoluteFill style={{ background: `radial-gradient(circle at 70% 30%, rgba(145,233,195,0.14), transparent 55%), ${C.forest}` }} />;
 }
 
@@ -54,7 +55,8 @@ function FrozenChaos({ at, duration }: { at: number; duration: number }) {
 }
 
 /** Autocolante da mesa: QR Code + NFC. */
-function Sticker({ size }: { size: number }) {
+export function Sticker({ size }: { size: number }) {
+  const place = usePlace();
   const cells = 21;
   const cell = (size * 0.62) / cells;
   // Padrão determinístico com os três "olhos" de um QR (decorativo, não aponta para lado nenhum).
@@ -82,7 +84,7 @@ function Sticker({ size }: { size: number }) {
         <svg viewBox="0 0 24 24" width={size * 0.09} height={size * 0.09} fill="none" stroke={C.forest} strokeWidth={2} strokeLinecap="round">
           <path d="M8 8a6 6 0 0 1 0 8M11.5 5a10 10 0 0 1 0 14M4.5 11a2 2 0 0 1 0 2" />
         </svg>
-        NFC · {TEXT.table}
+        NFC · {place.table}
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ function tablesFor(vertical: boolean, w: number, h: number) {
   return out;
 }
 
-function Umbrella({ x, y, r, color }: { x: number; y: number; r: number; color: string }) {
+export function Umbrella({ x, y, r, color }: { x: number; y: number; r: number; color: string }) {
   const wedges = 8;
   return (
     <g transform={`translate(${x} ${y})`}>
@@ -53,7 +53,7 @@ function Umbrella({ x, y, r, color }: { x: number; y: number; r: number; color: 
 }
 
 /** Balão de "faz favor!" (mão no ar) ou, depois da MESVIO, um visto menta. */
-function Call({ x, y, s, ok }: { x: number; y: number; s: number; ok: boolean }) {
+export function Call({ x, y, s, ok }: { x: number; y: number; s: number; ok: boolean }) {
   if (s <= 0.01) return null;
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
@@ -76,7 +76,7 @@ function Call({ x, y, s, ok }: { x: number; y: number; s: number; ok: boolean })
 }
 
 /** O empregado visto de cima: camisa branca, avental verde, cabeça; bloco de notas ou bandeja. */
-function Waiter({ x, y, s, tray, angle }: { x: number; y: number; s: number; tray: boolean; angle: number }) {
+export function Waiter({ x, y, s, tray, angle }: { x: number; y: number; s: number; tray: boolean; angle: number }) {
   return (
     <g transform={`translate(${x} ${y}) rotate(${angle}) scale(${s})`}>
       <ellipse cx={6} cy={10} rx={46} ry={30} fill="rgba(0,0,0,0.18)" />

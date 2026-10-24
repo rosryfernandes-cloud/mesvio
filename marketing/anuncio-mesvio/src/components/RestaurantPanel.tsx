@@ -1,17 +1,15 @@
 import { C, fontFamily } from "../brand";
-import { TEXT } from "../script";
+import { orderLines, usePlace } from "./place";
 
 /**
  * O "sistema do restaurante": o painel MESVIO num tablet, com o pedido novo a entrar. `arrive`
  * (0–1) faz o cartão do pedido #014 descer para o topo da lista com um brilho menta.
  */
-export function RestaurantPanel({ width, arrive }: { width: number; arrive: number }) {
+export function RestaurantPanel({ width, arrive, qty = { burger: 1, mojito: 1 } }: { width: number; arrive: number; qty?: { burger: number; mojito: number } }) {
   const s = width / 760;
-  const old = [
-    ["#013", "Mesa 4", "2× Imperial · 1× Tosta mista", "11,50 €"],
-    ["#012", "Cama 3", "1× Bowl de açaí", "9,50 €"],
-    ["#011", "Mesa 7", "3× Limonada · 1× Couvert", "20,50 €"],
-  ];
+  const place = usePlace();
+  const old = place.oldOrders;
+  const order = orderLines(qty);
   return (
     <div style={{ width, height: width * 0.66, borderRadius: 34 * s, background: C.deep, padding: 16 * s, boxShadow: `0 ${40 * s}px ${90 * s}px rgba(0,0,0,0.35)` }}>
       <div style={{ width: "100%", height: "100%", borderRadius: 22 * s, background: C.cream, overflow: "hidden", fontFamily, color: C.ink }}>
@@ -22,9 +20,9 @@ export function RestaurantPanel({ width, arrive }: { width: number; arrive: numb
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.inkSoft }}>PAINEL</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{TEXT.restaurant}</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{place.restaurant}</div>
             </div>
-            <div style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#166534", background: "#ecfdf3", padding: "6px 12px", borderRadius: 999 }}>● POS ligado</div>
+            <div style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#166534", background: "#ecfdf3", padding: "6px 12px", borderRadius: 999 }}>{place.panelBadge}</div>
           </div>
           <div style={{ marginTop: 18, fontSize: 15, fontWeight: 800 }}>
             Confirmados <span style={{ background: "#166534", color: "#fff", borderRadius: 999, padding: "2px 9px", fontSize: 12 }}>{arrive > 0.5 ? 4 : 3}</span>
@@ -45,11 +43,11 @@ export function RestaurantPanel({ width, arrive }: { width: number; arrive: numb
             >
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 19, fontWeight: 800 }}>
                 <span>
-                  #014 <span style={{ fontWeight: 600, fontSize: 16 }}>{TEXT.table}</span>
+                  #014 <span style={{ fontWeight: 600, fontSize: 16 }}>{place.table}</span>
                 </span>
                 <span style={{ fontSize: 13, color: "#166534", background: "#ecfdf3", borderRadius: 999, padding: "4px 10px" }}>Novo · confirmado</span>
               </div>
-              <div style={{ fontSize: 15, marginTop: 6, color: C.inkSoft }}>1× Hambúrguer da casa · 1× Mojito de maracujá · 23,50 €</div>
+              <div style={{ fontSize: 15, marginTop: 6, color: C.inkSoft }}>{[...order.lines.map(([a]) => a), order.total].join(" · ")}</div>
             </div>
             {old.map(([n, t, items, total]) => (
               <div key={n} style={{ background: "#fff", borderRadius: 18, border: "1px solid #dfe5df", padding: "14px 18px", opacity: 0.75 }}>

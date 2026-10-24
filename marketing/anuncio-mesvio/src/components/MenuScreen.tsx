@@ -1,6 +1,6 @@
 import { C, fontFamily, TEXT_STYLE } from "./menu-style";
 import { Acai, Burger, Mojito } from "./Food";
-import { TEXT } from "../script";
+import { orderLines, usePlace } from "./place";
 
 const ITEMS = [
   { id: "burger", name: "Hambúrguer da casa", desc: "Pão brioche, novilho, cheddar", price: "14,00 €", Img: Burger },
@@ -26,17 +26,17 @@ const Badge = ({ n }: { n: number }) => (
 
 /** A ementa MESVIO (igual à da app): cabeçalho, separadores, cartões, barra do pedido e folha. */
 export function MenuScreen({ s }: { s: MenuState }) {
+  const place = usePlace();
   const count = s.qty.burger + s.qty.mojito;
-  const total = (s.qty.burger * 1400 + s.qty.mojito * 950) / 100;
-  const totalText = `${total.toFixed(2).replace(".", ",")} €`;
+  const { lines, total: totalText } = orderLines(s.qty);
   return (
     <div style={{ ...TEXT_STYLE, width: 390, height: 844, background: C.cream, position: "relative", overflow: "hidden" }}>
       <div style={{ padding: "62px 22px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.forest }}>{TEXT.table} · Esplanada</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.forest }}>{place.table} · {place.area}</span>
           <span style={{ fontSize: 12, fontWeight: 600, border: `1px solid #dfe5df`, background: "#fff", borderRadius: 999, padding: "6px 12px" }}>Conta da mesa</span>
         </div>
-        <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>{TEXT.restaurant}</div>
+        <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>{place.restaurant}</div>
         <div style={{ display: "flex", gap: 6, marginTop: 16 }}>
           {["Comida", "Bebidas", "Bar"].map((t, i) => (
             <span key={t} style={{ flex: 1, textAlign: "center", fontSize: 14, fontWeight: 700, padding: "11px 0", borderRadius: 14, background: i === 0 ? C.forest : "#fff", color: i === 0 ? "#fff" : C.ink }}>
@@ -77,12 +77,9 @@ export function MenuScreen({ s }: { s: MenuState }) {
       {/* Folha "O seu pedido" */}
       <div style={{ position: "absolute", inset: 0, background: `rgba(16,33,29,${0.45 * s.sheet})`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 470, transform: `translateY(${(1 - s.sheet) * 480}px)`, background: C.cream, borderRadius: "28px 28px 0 0", padding: "26px 22px" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.forest }}>{TEXT.table}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.forest }}>{place.table}</div>
         <div style={{ fontSize: 26, fontWeight: 800, marginTop: 2 }}>O seu pedido</div>
-        {[
-          ["1× Hambúrguer da casa", "14,00 €"],
-          ["1× Mojito de maracujá", "9,50 €"],
-        ].map(([a, b]) => (
+        {lines.map(([a, b]) => (
           <div key={a} style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 600, padding: "16px 0", borderBottom: "1px solid #dfe5df" }}>
             <span>{a}</span>
             <span>{b}</span>
@@ -90,7 +87,7 @@ export function MenuScreen({ s }: { s: MenuState }) {
         ))}
         <div style={{ marginTop: 26, background: C.forest, color: "#fff", borderRadius: 20, padding: "20px", display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 17, transform: `scale(${s.pressed ? 0.96 : 1})`, filter: s.pressed ? "brightness(1.25)" : "none" }}>
           <span>Enviar pedido para a cozinha</span>
-          <span>23,50 €</span>
+          <span>{totalText}</span>
         </div>
         <div style={{ textAlign: "center", fontSize: 12, color: C.inkSoft, marginTop: 10 }}>O pagamento é feito no restaurante, no fim da refeição.</div>
       </div>
@@ -122,11 +119,13 @@ export function Finger({ x, y, opacity, press }: { x: number; y: number; opacity
 }
 
 /** Ecrã de estado: "✓ Confirmado". `check` (0–1) desenha o visto. */
-export function StatusScreen({ check }: { check: number }) {
+export function StatusScreen({ check, qty = { burger: 1, mojito: 1 } }: { check: number; qty?: { burger: number; mojito: number } }) {
+  const place = usePlace();
+  const { lines, total } = orderLines(qty);
   return (
     <div style={{ ...TEXT_STYLE, width: 390, height: 844, background: C.cream, padding: "70px 22px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: C.forest }}>
-        <span>{TEXT.table}</span>
+        <span>{place.table}</span>
         <span>Pedido nº 014</span>
       </div>
       <div style={{ marginTop: 14, background: "#ecfdf3", color: "#166534", borderRadius: 22, padding: "24px 22px" }}>
@@ -140,12 +139,8 @@ export function StatusScreen({ check }: { check: number }) {
       </div>
       <div style={{ marginTop: 26, fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: C.inkSoft }}>RESUMO</div>
       <div style={{ marginTop: 8, background: "#fff", borderRadius: 18, padding: "4px 18px", border: "1px solid #dfe5df" }}>
-        {[
-          ["1× Hambúrguer da casa", "14,00 €"],
-          ["1× Mojito de maracujá", "9,50 €"],
-          ["Total", "23,50 €"],
-        ].map(([a, b], i) => (
-          <div key={a} style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: i === 2 ? 800 : 500, padding: "14px 0", borderTop: i ? "1px solid #dfe5df" : "none" }}>
+        {[...lines, ["Total", total]].map(([a, b], i, all) => (
+          <div key={a} style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: i === all.length - 1 ? 800 : 500, padding: "14px 0", borderTop: i ? "1px solid #dfe5df" : "none" }}>
             <span>{a}</span>
             <span>{b}</span>
           </div>
