@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({ email: z.email().max(200) });
 // Mesma resposta exista ou não a conta: não revela quem tem acesso.
-const SENT = { ok: true, message: "Se este email tiver acesso, enviámos um código de 6 dígitos." };
+const SENT = { ok: true, message: "Se este email tiver acesso, enviámos um código de entrada." };
 
 /** Passo 1: envia um código de entrada por email (só a utilizadores já convidados). */
 export async function POST(request: Request) {

@@ -16,7 +16,7 @@ async function post(url: string, body: unknown): Promise<{ ok: boolean; message?
   }
 }
 
-/** Entrada com código de 6 dígitos enviado por email (Supabase Auth). Funciona num tablet partilhado. */
+/** Entrada com o código enviado por email (Supabase Auth: 6 a 10 dígitos, conforme a definição do projeto). Funciona num tablet partilhado. */
 export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pessoas convidadas pelo dono ou gerente do restaurante." }: { redirectTo?: string; hint?: string }) {
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
@@ -62,18 +62,18 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
     <form onSubmit={verify} className="mt-8 grid gap-4">
       {info && <p className="rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">{info}</p>}
       <label className="text-sm font-semibold">
-        Código de 6 dígitos
+        Código do email
         <input
           className={`${field} text-center text-2xl tracking-[0.4em] tabular-nums`}
           value={codigo}
-          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 10))}
           inputMode="numeric"
           autoComplete="one-time-code"
           required
         />
       </label>
       {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
-      <button type="submit" disabled={busy || codigo.length !== 6} className={primary}>{busy ? "A verificar…" : "Entrar"}</button>
+      <button type="submit" disabled={busy || codigo.length < 6} className={primary}>{busy ? "A verificar…" : "Entrar"}</button>
       <button type="button" onClick={() => { setStep("email"); setCodigo(""); setError(null); }} className="text-sm text-ink-soft underline">
         Usar outro email
       </button>

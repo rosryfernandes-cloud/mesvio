@@ -11,14 +11,14 @@ import { findPlatformAdmin } from "@/server/platform/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ email: z.email().max(200), codigo: z.string().regex(/^\d{6}$/) });
+const schema = z.object({ email: z.email().max(200), codigo: z.string().regex(/^\d{6,10}$/) });
 
 /** Passo 2: valida o código; a Supabase grava a sessão em cookies httpOnly. */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return NextResponse.json({ message: "Pedido recusado." }, { status: 403 });
   if (authMode() !== "supabase") return NextResponse.json({ message: "Entrada por email indisponível." }, { status: 404 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ message: "O código tem 6 dígitos." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ message: "Escreva o código que recebeu por email." }, { status: 400 });
   const email = parsed.data.email.trim().toLowerCase();
   const db = await getDb();
 
