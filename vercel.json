@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["fra1"],
+  "regions": ["lhr1"],
   "crons": [{ "path": "/api/cron/outbox", "schedule": "* * * * *" }]
 }
