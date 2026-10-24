@@ -3,6 +3,9 @@
 O que já está preparado no projeto: repositório git local, `vercel.json` (região Londres — a mesma da base de dados — e cron da fila a cada minuto), `npm run db:migrate:producao` e `npm run demo:supabase`.
 O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as chaves. **Nunca cole chaves no chat nem no código**: vão para as definições da Vercel e para `.env.production.local` (ignorado pelo git).
 
+> **Estado atual (teste no plano Hobby):** o bloco `crons` foi retirado do `vercel.json`. Ao passar para o Pro, volte a pô-lo:
+> `"crons": [{ "path": "/api/cron/outbox", "schedule": "* * * * *" }]`
+
 > Plano da Vercel: o plano grátis (Hobby) é só para uso pessoal **não comercial** e só aceita crons diários, por isso o deploy com `vercel.json` falha nesse plano. Para a MESVIO use o **Pro** (cerca de 20 $/mês por membro). Para experimentar no Hobby, apague temporariamente o bloco `crons` do `vercel.json`: os pedidos seguem na mesma para o POS, mas os reenvios e as limpezas automáticas deixam de correr.
 
 ## 1. Domínio
