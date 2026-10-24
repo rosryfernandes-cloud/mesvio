@@ -75,3 +75,18 @@ Para avaliar o ritmo: `Mesvio16x9ComSom` e `Mesvio9x16ComSom` (`npm run render:s
 - **Efeitos e fundo musical:** sintetizados em código, sem direitos de terceiros (`npm run sons` → `public/audio/sfx/`): ondas do mar, tique-taque a acelerar no caos, impacto e brilho na viragem, "ping" NFC, toques no ecrã, "whoosh" do pedido, campainha do "Confirmado", acordes calmos da viragem ao fim.
 - **Versão final:** substituir os ficheiros de `public/audio/voz/` pela locução gravada (mesmos nomes, um por cena) e `public/audio/sfx/fundo.wav` por música licenciada; os tempos já estão sincronizados em `src/Soundtrack.tsx`.
 - A fala final ficou "O empregado que não sabias que precisavas." (sem "MESVIO", que já está no ecrã) para caber nos 3 s.
+
+## 9. Anúncio POV do dono (TikTok, 15 s, 9:16)
+Composição `MesvioPOV9x16` (`src/pov/Pov.tsx`, `npm run render:pov` → `out/mesvio-pov-9x16.mp4`). Estilo nativo do TikTok: vemos o telemóvel do dono, na mão, com textos em caixa branca no topo.
+
+| Tempo | Imagem | Locução (Carlos) | Texto no ecrã |
+|---|---|---|---|
+| 0–3,5 s | Ecrã de bloqueio, 14:07, praia desfocada atrás; chega a 1.ª notificação "Mesa 7 está à espera há 20 min 😤". | "És dono de um beach club… e é sábado de agosto." | POV: és dono de um beach club num sábado de agosto ☀️ |
+| 3,5–7 s | Notificações em cascata (Sala, Cozinha), relógio a saltar para 14:31, mão a tremer, vinheta vermelha, batida. | "Mesas a chamar. Pedidos trocados. Clientes à espera." | Mesas a chamar. / Pedidos trocados. / Clientes à espera. |
+| 7–8,4 s | Risco de disco: imagem congela a preto e branco. | "Até que…" | Até que… |
+| 8,4–11,8 s | Varrimento menta: o ecrã passa para o painel MESVIO e os pedidos entram sozinhos (Mesa 7, Cama 4, Mesa 3, conta paga, Cama 9). | "…cada mesa passou a pedir pelo telemóvel. Direto para a cozinha." | cada mesa pede pelo telemóvel / direto para a cozinha 👨‍🍳 / *o dono finalmente respira* |
+| 11,8–15 s | Assinatura (a mesma do anúncio de 30 s). | "Mesvio. O empregado que não sabias que precisavas." | Slogan · Pede uma demonstração |
+
+- Voz gerada na ElevenLabs (Carlos, velocidade 1,1) para `public/audio/pov-voz/`; "POV" fica só no texto (a voz não o lê bem).
+- Efeitos novos em `scripts/gerar-sons.mjs`: `notif`, `risco`, `batida`.
+- Sem promessas de resultados nem menção à ZoneSoft; as mensagens das notificações são ilustrativas.

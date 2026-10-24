@@ -161,3 +161,58 @@ wav(
   }
   wav("fundo", s);
 }
+
+// --- Anúncio POV (15 s) ---
+
+// Notificação do telemóvel: duas notas curtas e brilhantes (Si5, Mi6).
+wav(
+  "notif",
+  Array.from({ length: N(0.5) }, (_, i) => {
+    const t = i / SR;
+    const note = (f, start) => {
+      const u = t - start;
+      return u < 0 ? 0 : (Math.sin(2 * Math.PI * f * u) + 0.15 * Math.sin(2 * Math.PI * f * 3 * u)) * env(u, 0.002, 0.07);
+    };
+    return 0.55 * note(987.77, 0) + 0.55 * note(1318.5, 0.07);
+  }),
+);
+
+// Risco de disco ("Até que…"): ruído filtrado com o filtro a ir e voltar, como o disco a ser puxado.
+{
+  const len = 0.55;
+  const n = N(len);
+  const s = new Array(n);
+  let low = 0;
+  let band = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const p = t / len;
+    // vai (agudo → grave) e volta (grave → agudo), mais rápido na volta
+    const fc = p < 0.6 ? 2600 - 2200 * (p / 0.6) : 400 + 3000 * ((p - 0.6) / 0.4);
+    const f = 2 * Math.sin((Math.PI * fc) / SR);
+    const high = rnd() - low - 0.12 * band;
+    band += f * high;
+    low += f * band;
+    s[i] = band * Math.sin(Math.PI * p) ** 0.6 * 1.2;
+  }
+  wav("risco", s);
+}
+
+// Batida rápida para o caos (124 bpm, 7 s): bombo a cada tempo, prato fechado no contratempo.
+{
+  const len = 7;
+  const n = N(len);
+  const s = new Array(n).fill(0);
+  const beat = 60 / 124;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const k = t % beat;
+    const h = (t + beat / 2) % beat;
+    const kick = Math.sin(2 * Math.PI * (50 + 110 * Math.exp(-k * 30)) * k) * Math.exp(-k / 0.14);
+    const hat = rnd() * Math.exp(-h / 0.02) * 0.25;
+    // baixo pulsante em Mi
+    const bass = Math.sin(2 * Math.PI * 82.4 * t) * 0.25 * (1 - Math.exp(-k * 40)) * Math.exp(-k / 0.2);
+    s[i] = (kick * 0.8 + hat + bass) * Math.min(1, t / 0.05, (len - t) / 0.1);
+  }
+  wav("batida", s);
+}
