@@ -54,21 +54,20 @@ export async function getConnectStatus(db: Db, s: Scope, stripe: Stripe | null =
 export async function startOnboarding(db: Db, s: Scope, baseUrl: string, stripe: Stripe = stripeClient()): Promise<string> {
   let { accountId, name } = await storedAccount(db, s);
   if (!accountId) {
-    const account = await stripe.accounts.create(
+    // Accounts v2: a Stripe já não deixa contas Stripe novas criarem contas ligadas pela API v1.
+    // Conta com o dashboard Stripe completo; o restaurante é o comerciante (cobranças diretas),
+    // paga as comissões da Stripe e assume as perdas (disputas) — como antes.
+    const account = await stripe.v2.core.accounts.create(
       {
-        country: "PT",
-        business_profile: { name, mcc: "5812" }, // 5812: restaurantes
-        controller: {
-          stripe_dashboard: { type: "full" },
-          fees: { payer: "account" },
-          losses: { payments: "stripe" },
-          requirement_collection: "stripe",
-        },
-        capabilities: { card_payments: { requested: true }, mb_way_payments: { requested: true } },
+        display_name: name,
+        dashboard: "full",
+        identity: { country: "pt" },
+        defaults: { currency: "eur", responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        configuration: { merchant: { mcc: "5812", capabilities: { card_payments: { requested: true } } } }, // 5812: restaurantes
         metadata: { establishmentId: s.establishmentId, organizationId: s.organizationId },
       },
       // Dois cliques seguidos não criam duas contas.
-      { idempotencyKey: `mesvio-acct:${s.establishmentId}` },
+      { idempotencyKey: `mesvio-acct-v2:${s.establishmentId}` },
     );
     accountId = await withTenant(db, tenantOf(s), async (tx) => {
       const [saved] = await tx
@@ -90,12 +89,19 @@ export async function startOnboarding(db: Db, s: Scope, baseUrl: string, stripe:
       return e!.id!;
     });
   }
-  const link = await stripe.accountLinks.create({
+  // `configurations` é obrigatório na API mas ainda não está nos tipos desta versão do SDK.
+  const params = {
     account: accountId,
-    type: "account_onboarding",
-    refresh_url: `${baseUrl}/painel/stripe/ligar`,
-    return_url: `${baseUrl}/painel/stripe/retorno`,
-  });
+    use_case: {
+      type: "account_onboarding",
+      account_onboarding: {
+        configurations: ["merchant"],
+        refresh_url: `${baseUrl}/painel/stripe/ligar`,
+        return_url: `${baseUrl}/painel/stripe/retorno`,
+      },
+    },
+  } as Stripe.V2.Core.AccountLinkCreateParams;
+  const link = await stripe.v2.core.accountLinks.create(params);
   return link.url;
 }
 
