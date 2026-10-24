@@ -89,19 +89,13 @@ export async function startOnboarding(db: Db, s: Scope, baseUrl: string, stripe:
       return e!.id!;
     });
   }
-  // `configurations` é obrigatório na API mas ainda não está nos tipos desta versão do SDK.
-  const params = {
+  const link = await stripe.v2.core.accountLinks.create({
     account: accountId,
     use_case: {
       type: "account_onboarding",
-      account_onboarding: {
-        configurations: ["merchant"],
-        refresh_url: `${baseUrl}/painel/stripe/ligar`,
-        return_url: `${baseUrl}/painel/stripe/retorno`,
-      },
+      account_onboarding: { refresh_url: `${baseUrl}/painel/stripe/ligar`, return_url: `${baseUrl}/painel/stripe/retorno` },
     },
-  } as Stripe.V2.Core.AccountLinkCreateParams;
-  const link = await stripe.v2.core.accountLinks.create(params);
+  });
   return link.url;
 }
 
