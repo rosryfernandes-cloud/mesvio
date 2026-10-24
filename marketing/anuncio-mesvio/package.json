@@ -1,0 +1,24 @@
+{
+  "name": "mesvio-anuncio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Anúncio de 30 s da MESVIO (Remotion): 16:9 para o site e 9:16 para TikTok/Reels",
+  "scripts": {
+    "studio": "remotion studio",
+    "render:16x9": "remotion render Mesvio16x9 out/mesvio-16x9.mp4",
+    "render:9x16": "remotion render Mesvio9x16 out/mesvio-9x16.mp4",
+    "render": "npm run render:16x9 && npm run render:9x16",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.538",
+    "@remotion/google-fonts": "4.0.538",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.538"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.0"
+  }
+}
