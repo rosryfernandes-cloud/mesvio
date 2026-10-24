@@ -70,7 +70,8 @@ Pasta `marketing/anuncio-mesvio/` — React + Remotion, editável:
 
 ## 8. Versão com som provisório
 Para avaliar o ritmo: `Mesvio16x9ComSom` e `Mesvio9x16ComSom` (`npm run render:som` → `out/*-som-provisorio.mp4`).
-- **Voz:** sintética, voz "Joana" (PT-PT) do macOS (`npm run voz` → `public/audio/voz/`). Não é para publicar.
+- **Voz:** ElevenLabs, voz "Maria" (português europeu), gerada com `npm run voz:ia` (chave e Voice ID no `.env`, fora do git). Mais estabilidade e menos estilo para suavizar o tom. Uso comercial exige um plano pago da ElevenLabs ativo na altura da geração. (A voz "Joana" do macOS continua disponível com `npm run voz`, só para testes: substitui os ficheiros.)
+- **Tempos da voz:** a fala do caos entra no início da cena e a pergunta da viragem entra logo no congelamento (esta voz é mais pausada); ver `VOICE_OFFSET` em `src/Soundtrack.tsx`.
 - **Efeitos e fundo musical:** sintetizados em código, sem direitos de terceiros (`npm run sons` → `public/audio/sfx/`): ondas do mar, tique-taque a acelerar no caos, impacto e brilho na viragem, "ping" NFC, toques no ecrã, "whoosh" do pedido, campainha do "Confirmado", acordes calmos da viragem ao fim.
 - **Versão final:** substituir os ficheiros de `public/audio/voz/` pela locução gravada (mesmos nomes, um por cena) e `public/audio/sfx/fundo.wav` por música licenciada; os tempos já estão sincronizados em `src/Soundtrack.tsx`.
 - A fala final ficou "O empregado que não sabias que precisavas." (sem "MESVIO", que já está no ecrã) para caber nos 3 s.

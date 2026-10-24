@@ -44,8 +44,8 @@ if (!VOICE) {
 // de entrada em src/Soundtrack.tsx e uma pequena folga).
 const LINES = [
   ["full", "Sábado. Duas da tarde. Casa cheia.", 3.6],
-  ["chaos", "Os clientes querem pedir… e a equipa não chega a todo o lado.", 3.7],
-  ["turn", "E se ninguém tivesse de esperar para pedir?", 2.0],
+  ["chaos", "Os clientes querem pedir… e a equipa não chega a todo o lado.", 3.95],
+  ["turn", "E se ninguém tivesse de esperar para pedir?", 3.3],
   ["tap", "O cliente aproxima o telemóvel, ou lê o QR Code…", 3.5],
   ["order", "…escolhe e pede. Em segundos.", 4.1],
   ["send", "O pedido segue para o sistema do restaurante.", 3.6],
@@ -66,7 +66,7 @@ for (let i = 0; i < LINES.length; i++) {
       // Frases vizinhas: a entoação fica contínua, como uma só leitura.
       previous_text: LINES[i - 1]?.[1],
       next_text: LINES[i + 1]?.[1],
-      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.25, use_speaker_boost: true },
+      voice_settings: { stability: 0.6, similarity_boost: 0.8, style: 0.1, use_speaker_boost: true },
     }),
   });
   if (!res.ok) {
