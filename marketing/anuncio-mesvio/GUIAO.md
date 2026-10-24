@@ -17,7 +17,7 @@ O **ponto final verde-menta do logótipo** ("mesvio**.**") é o fio condutor: ap
 |---|---|---|---|
 | 0–4 s | Esplanada cheia ao sol. Mãos no ar a aparecer mesa a mesa. Relógio "Espera: 4 min". | "Sábado. Duas da tarde. Casa cheia." | Sábado, 14h. Casa cheia. |
 | 4–8 s | O relógio dispara (12, 18 min). O empregado corre de mesa em mesa; a lista de pedidos no bloco cresce. | "Os clientes querem pedir… e a equipa não chega a todo o lado." | A equipa não chega a todo o lado. |
-| 8–11 s | Tudo congela. Varrimento para verde-escuro. Logótipo **mesvio.** com o ponto menta. | "E se cada mesa tivesse o seu empregado?" | E se cada mesa tivesse o seu empregado? |
+| 8–11 s | Tudo congela. Varrimento para verde-escuro. Logótipo **mesvio.** com o ponto menta. | "E se ninguém tivesse de esperar para pedir?" | E se ninguém tivesse de esperar para pedir? |
 | 11–15 s | Telemóvel aproxima-se da etiqueta NFC/QR da mesa: ondas menta e a ementa abre. | "O cliente aproxima o telemóvel, ou lê o QR Code…" | Aproxima. Ou lê o QR. Sem instalar nada. |
 | 15–20 s | Ementa MESVIO: toca em "Mojito" e "Hambúrguer", o carrinho sobe, "Enviar pedido". | "…escolhe e pede, em segundos." | Escolhe. Pede. Em segundos. |
 | 20–24 s | O ponto menta viaja do telemóvel para o ecrã do restaurante: "Pedido #014 · Mesa 12". No telemóvel: "✓ Confirmado". | "O pedido segue para o sistema do restaurante." | Direto para o sistema do restaurante.* |

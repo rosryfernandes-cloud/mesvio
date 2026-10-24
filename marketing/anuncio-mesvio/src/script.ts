@@ -7,7 +7,7 @@ export const FPS = 30;
 export const SCENES = {
   full: { seconds: 4, caption: "Sábado, 14h. Casa cheia." },
   chaos: { seconds: 4, caption: "A equipa não chega a todo o lado." },
-  turn: { seconds: 3, caption: "E se cada mesa tivesse o seu empregado?" },
+  turn: { seconds: 3, caption: "E se ninguém tivesse de esperar para pedir?" },
   tap: { seconds: 4, caption: "Aproxima. Ou lê o QR. Sem instalar nada." },
   order: { seconds: 5, caption: "Escolhe. Pede. Em segundos." },
   send: { seconds: 4, caption: "Direto para o sistema do restaurante." },
