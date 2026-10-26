@@ -8,6 +8,7 @@ import { getTableBrandingForRequest } from "@/server/branding/table-branding";
 import { getRequestLocale } from "@/server/i18n/request-locale";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { MESSAGES } from "@/lib/i18n/messages";
+import { CallStaff } from "@/components/order/call-staff";
 
 // A ementa depende do token e do estado do POS — nunca gerada estaticamente.
 export const dynamic = "force-dynamic";
@@ -65,6 +66,8 @@ export default async function TableMenuPage({ params }: Props) {
         </h1>
         {menu.establishment.address && <p className="mt-1 text-sm text-ink-soft">{menu.establishment.address}</p>}
       </header>
+
+      <CallStaff tableToken={token} payFirst={payFirst} />
 
       {menu.ordering.enabled && payFirst && (
         <div className="mx-4 mt-4 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm">

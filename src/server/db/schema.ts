@@ -196,6 +196,29 @@ export const tableSessions = pgTable(
   (t) => [index("table_sessions_table_idx").on(t.tableId, t.openedAt)],
 );
 
+/**
+ * Chamadas do cliente ao staff, a partir da ementa: pedir a conta (com o meio de pagamento) ou
+ * chamar um empregado (com o motivo). Ficam abertas até o staff as dar por feitas ou fechar a mesa.
+ */
+export const serviceRequestKind = pgEnum("service_request_kind", ["bill", "waiter"]);
+export const serviceRequests = pgTable(
+  "service_requests",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    tableId: uuid("table_id").notNull().references(() => diningTables.id),
+    kind: serviceRequestKind("kind").notNull(),
+    /** Conta: "card" | "cash". Empregado: "order" | "napkins" | "clear" | "other". */
+    detail: text("detail"),
+    createdAt: createdAt(),
+    /** O staff carregou em "A caminho" (o cliente vê-o no telemóvel). */
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("service_requests_open_idx").on(t.establishmentId, t.resolvedAt), index("service_requests_table_idx").on(t.tableId, t.createdAt)],
+);
+
 // ───────────────────────── Integração POS ─────────────────────────
 export const posIntegrations = pgTable("pos_integrations", {
   id: id(),

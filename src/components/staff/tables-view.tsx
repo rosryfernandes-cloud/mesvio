@@ -169,6 +169,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                 <div className="flex h-full min-h-24 flex-col justify-between rounded-2xl border border-dashed border-line px-4 py-3 text-ink-soft">
                   <span className="font-semibold">{t.label}</span>
                   <span className="text-sm">Livre</span>
+                  <CallBadges calls={t.calls} />
                 </div>
               ) : (
                 <div
@@ -209,6 +210,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                     <span className="text-xs text-ink-soft">
                       {t.bill.orders.length} {t.bill.orders.length === 1 ? "pedido" : "pedidos"} · aberta {since(t.bill.openedAt!, now)}
                     </span>
+                    <CallBadges calls={t.calls} />
                   </button>
 
                   {selected && (
@@ -285,5 +287,16 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       </section>
       ))}
     </div>
+  );
+}
+
+/** Chamadas abertas do cliente nesta mesa (o painel também as mostra no topo, com som). */
+function CallBadges({ calls }: { calls: TableOverview["calls"] }) {
+  if (!calls?.length) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {calls.includes("bill") && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-ink">🧾 Pede a conta</span>}
+      {calls.includes("waiter") && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-ink">🙋 Chama</span>}
+    </span>
   );
 }

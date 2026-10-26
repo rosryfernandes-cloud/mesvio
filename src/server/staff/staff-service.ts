@@ -8,6 +8,7 @@ import { dispatchWithinDeadline, SUBMIT_ORDER_TOPIC, type WorkerDeps } from "@/s
 import type { OrderStatus } from "@/server/orders/order-view";
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 import { withTenant } from "@/server/db/tenant";
+import { loadOpenCalls, type BoardCall } from "@/server/tables/service-requests";
 import type { StaffContext } from "./context";
 
 /** O que os serviços do painel precisam de saber de quem age. */
@@ -48,6 +49,8 @@ export interface Board {
   /** Limite opcional acima do qual os pedidos esperam aprovação (null = desligado). */
   approvalThresholdCents: number | null;
   orders: BoardOrder[];
+  /** Clientes que pedem a conta ou chamam um empregado (mais antigos primeiro). */
+  calls: BoardCall[];
 }
 
 /** Pedidos de hoje + qualquer pedido ainda por resolver (mesmo de ontem). */
@@ -111,10 +114,12 @@ async function loadBoard(db: Db, s: StaffScope, now: Date): Promise<Board> {
     }
   }
 
+  const calls = await loadOpenCalls(db, s.establishmentId, now);
   return {
     establishmentName: est.name,
     manualAcceptance: est.manualAcceptance,
     approvalThresholdCents: est.threshold,
+    calls,
     orders: rows.map((r) => ({
       id: r.id,
       shortCode: r.shortCode,

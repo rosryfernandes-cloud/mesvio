@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatEur } from "@/lib/money";
 import type { Board, BoardOrder, StaffAction, StaffCatalogSection } from "@/server/staff/staff-service";
+import type { BoardCall } from "@/server/tables/service-requests";
 import type { StaffRole } from "@/server/staff/context";
 import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
@@ -60,15 +61,28 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 
   const urgent = board.orders.filter((o) => o.status === "NEEDS_ATTENTION" || o.awaitingApproval);
   const urgentCount = urgent.length;
+  const calls = board.calls ?? [];
+  // Pedidos urgentes e chamadas de clientes ("pede a conta", "chamar empregado") contam como alertas.
+  const alertIds = [...urgent.map((o) => o.id), ...calls.map((c) => c.id)];
+  const alertCount = alertIds.length;
 
-  // Alerta sonoro e no título do separador quando aparece um pedido urgente novo.
-  const seenUrgent = useRef(new Set(urgent.map((o) => o.id)));
+  // Alerta sonoro e no título do separador quando aparece um pedido urgente ou uma chamada nova.
+  const seenAlerts = useRef(new Set(alertIds));
   useEffect(() => {
-    const fresh = urgent.filter((o) => !seenUrgent.current.has(o.id));
+    const fresh = alertIds.filter((id) => !seenAlerts.current.has(id));
     if (fresh.length > 0) sound.play();
-    seenUrgent.current = new Set(urgent.map((o) => o.id));
-    document.title = urgentCount > 0 ? `(${urgentCount}) Painel · ${board.establishmentName}` : `Painel · ${board.establishmentName}`;
-  }, [urgent, urgentCount, board.establishmentName, sound]);
+    seenAlerts.current = new Set(alertIds);
+    document.title = alertCount > 0 ? `(${alertCount}) Painel · ${board.establishmentName}` : `Painel · ${board.establishmentName}`;
+  }, [alertIds.join(), alertCount, board.establishmentName, sound]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function actOnCall(call: BoardCall, action: "ack" | "done") {
+    await fetch(`/api/painel/chamadas/${call.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    }).catch(() => null);
+    await refresh();
+  }
 
   async function act(order: BoardOrder, action: StaffAction): Promise<string | null> {
     const res = await fetch(`/api/painel/pedidos/${order.id}`, {
@@ -188,6 +202,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         </button>
       )}
 
+      {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
+
       <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
         {(
           [
@@ -233,6 +249,77 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 }
 
 // ─────────────────────────── Pedidos ───────────────────────────
+
+const CALL_DETAIL: Record<string, string> = {
+  card: "Cartão",
+  cash: "Dinheiro",
+  order: "quer pedir mais",
+  napkins: "guardanapos ou talheres",
+  clear: "levantar a mesa",
+  other: "outra coisa",
+};
+
+/** Clientes à espera: pedir a conta ou chamar um empregado. Visível em todos os separadores. */
+function CallsList({ calls, now, onAct }: { calls: BoardCall[]; now: number; onAct: (c: BoardCall, a: "ack" | "done") => Promise<void> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = async (c: BoardCall, a: "ack" | "done") => {
+    setBusy(c.id + a);
+    await onAct(c, a);
+    setBusy(null);
+  };
+  return (
+    <section aria-label="Chamadas de clientes" className="mb-5 grid gap-2">
+      {calls.map((c) => {
+        const minutes = Math.max(0, Math.floor((now - new Date(c.createdAt).getTime()) / 60_000));
+        const detail = c.detail ? CALL_DETAIL[c.detail] ?? c.detail : null;
+        return (
+          <div
+            key={c.id}
+            className={`flex flex-wrap items-center gap-3 rounded-2xl border-2 px-4 py-3 ${
+              c.acknowledged ? "border-line bg-card" : "border-amber-500 bg-amber-50"
+            }`}
+          >
+            <span aria-hidden="true" className="text-2xl">{c.kind === "bill" ? "🧾" : "🙋"}</span>
+            <div className="min-w-0">
+              <p className="font-semibold">
+                {c.tableLabel}
+                {c.zone && <span className="font-normal text-ink-soft"> · {c.zone}</span>}
+                {" — "}
+                {c.kind === "bill" ? "pede a conta" : "chama um empregado"}
+                {detail && <span> · {detail}</span>}
+                {c.kind === "bill" && !!c.dueCents && <span> · {formatEur(c.dueCents)}</span>}
+              </p>
+              <p className="text-sm text-ink-soft">
+                {minutes === 0 ? "agora" : `há ${minutes} min`}
+                {c.acknowledged && " · a caminho"}
+              </p>
+            </div>
+            <div className="ml-auto flex gap-2">
+              {!c.acknowledged && (
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => act(c, "ack")}
+                  className="min-h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  A caminho
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => act(c, "done")}
+                className="min-h-10 rounded-xl border border-line bg-card px-4 text-sm font-semibold disabled:opacity-60"
+              >
+                Feito
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
 
 function OrdersView({
   board,

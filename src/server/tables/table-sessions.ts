@@ -3,7 +3,7 @@ import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/serve
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { and, asc, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, payments, tableSessions } from "@/server/db/schema";
+import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, payments, serviceRequests, tableSessions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import type { OrderStatus } from "@/server/orders/order-view";
 import type { StaffContext } from "@/server/staff/context";
@@ -223,6 +223,8 @@ export interface TableOverview {
   bill: TableBill | null;
   /** Pedidos por resolver nesta conta (aprovar, confirmar, precisa de atenção…). */
   pendingCount: number;
+  /** Chamadas abertas do cliente: pede a conta e/ou chama um empregado. */
+  calls: ("bill" | "waiter")[];
 }
 
 /** Todas as mesas do restaurante com a conta aberta de cada uma. */
@@ -233,6 +235,12 @@ export async function listTables(db: Db, s: Scope, now = new Date()): Promise<Ta
       .from(diningTables)
       .where(and(eq(diningTables.establishmentId, s.establishmentId), eq(diningTables.active, true)));
     const bills = await loadBills(tx, tables.map((t) => t.id), now);
+    const openCalls = tables.length
+      ? await tx
+          .select({ tableId: serviceRequests.tableId, kind: serviceRequests.kind })
+          .from(serviceRequests)
+          .where(and(eq(serviceRequests.establishmentId, s.establishmentId), isNull(serviceRequests.resolvedAt)))
+      : [];
     const result: TableOverview[] = [];
     for (const t of tables) {
       const bill = bills.get(t.id);
@@ -244,6 +252,7 @@ export async function listTables(db: Db, s: Scope, now = new Date()): Promise<Ta
         orderingMode: t.orderingMode,
         bill: open,
         pendingCount: open?.orders.filter((o) => o.pending).length ?? 0,
+        calls: openCalls.filter((c) => c.tableId === t.id).map((c) => c.kind),
       });
     }
     // Por zona e depois em ordem natural ("Mesa 2" antes de "Mesa 10").
@@ -332,6 +341,11 @@ export async function closeTable(db: Db, s: Scope, tableId: string, { force = fa
     const mayBeInPos = pendingRows.filter((r) => ["SUBMITTED", "SUBMITTING", "NEEDS_ATTENTION"].includes(r.status));
 
     await tx.update(tableSessions).set({ closedAt: now }).where(eq(tableSessions.id, session.id));
+    // Mesa fechada: as chamadas dela ("pede a conta", "chamar empregado") ficam resolvidas.
+    await tx
+      .update(serviceRequests)
+      .set({ resolvedAt: now })
+      .where(and(eq(serviceRequests.tableId, tableId), isNull(serviceRequests.resolvedAt)));
     await tx.insert(auditLogs).values({
       organizationId: s.organizationId,
       actorType: "user",
