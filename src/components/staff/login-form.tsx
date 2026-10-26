@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const field = "mt-1 block w-full rounded-xl border border-line bg-card px-4 py-3 text-base";
@@ -18,13 +18,13 @@ async function post(url: string, body: unknown): Promise<{ ok: boolean; message?
 
 /** Entrada com o código enviado por email (Supabase Auth: 6 a 10 dígitos, conforme a definição do projeto). Funciona num tablet partilhado. */
 export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pessoas convidadas pelo dono ou gerente do restaurante." }: { redirectTo?: string; hint?: string }) {
-  const router = useRouter();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [codigo, setCodigo] = useState("");
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const verifying = useRef(false);
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -39,13 +39,20 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
 
   async function verify(e: React.FormEvent) {
     e.preventDefault();
+    // O Safari preenche o código a partir do email e envia o formulário sozinho; um segundo envio
+    // (o toque em "Entrar") chegava com o código já gasto e mostrava erro apesar da entrada feita.
+    if (verifying.current) return;
+    verifying.current = true;
     setBusy(true);
     setError(null);
     const r = await post("/api/painel/auth/verificar", { email, codigo });
-    setBusy(false);
-    if (!r.ok) return setError(r.message ?? "Código inválido.");
-    router.replace(redirectTo);
-    router.refresh();
+    if (!r.ok) {
+      verifying.current = false;
+      setBusy(false);
+      return setError(r.message ?? "Código inválido.");
+    }
+    // Carregamento completo: a sessão nova entra sem reaproveitar páginas guardadas pelo router.
+    window.location.assign(redirectTo);
   }
 
   return step === "email" ? (

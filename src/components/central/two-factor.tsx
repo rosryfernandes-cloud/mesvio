@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const codeField =
@@ -20,16 +20,20 @@ function CodeForm({ action, label, onDone }: { action: string; label: string; on
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   return (
     <form
       className="mt-6 grid gap-4"
       onSubmit={async (e) => {
         e.preventDefault();
-        if (busy) return;
+        // Um envio de cada vez (o preenchimento automático do código também envia o formulário).
+        if (sending.current) return;
+        sending.current = true;
         setBusy(true);
         setError(null);
         const r = await post(action, { codigo: code });
         if (!r.ok) {
+          sending.current = false;
           setBusy(false);
           setCode("");
           return setError(r.data.message ?? "Código inválido.");
