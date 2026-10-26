@@ -120,7 +120,14 @@ const invalid: MfaResult = { ok: false, code: "INVALID", message: "Código errad
 export async function confirmEnrollment(db: Db, admin: PlatformAdmin, code: string, now = Date.now()): Promise<MfaResult> {
   if (!(await hitRateLimit(db, `mfa:${admin.userId}`, MFA_ATTEMPTS)).allowed) return rateLimited;
   const [fresh] = await db.select().from(platformAdmins).where(eq(platformAdmins.userId, admin.userId));
-  if (!fresh?.totpPendingCiphertext || fresh.totpSecretCiphertext) {
+  // Já ativado há instantes (o mesmo código enviado duas vezes): aceitar esse mesmo código, para o
+  // segundo envio não mostrar um erro. Fora disso, a entrada normal faz-se pelo passo de verificação.
+  if (fresh?.totpSecretCiphertext) {
+    const step = verifyTotp(open(fresh.totpSecretCiphertext), code, now);
+    const justEnrolled = fresh.totpEnabledAt !== null && now - fresh.totpEnabledAt.getTime() < 2 * 60_000;
+    return step !== null && justEnrolled && step === fresh.totpLastStep ? { ok: true } : invalid;
+  }
+  if (!fresh?.totpPendingCiphertext) {
     return { ok: false, code: "NOT_STARTED", message: "Comece de novo a configuração." };
   }
   const step = verifyTotp(open(fresh.totpPendingCiphertext), code, now);

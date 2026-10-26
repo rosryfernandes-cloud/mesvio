@@ -25,14 +25,16 @@ function CodeForm({ action, label, onDone }: { action: string; label: string; on
       className="mt-6 grid gap-4"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (busy) return;
         setBusy(true);
         setError(null);
         const r = await post(action, { codigo: code });
-        setBusy(false);
         if (!r.ok) {
+          setBusy(false);
           setCode("");
           return setError(r.data.message ?? "Código inválido.");
         }
+        // Fica "a verificar" até a página mudar: um segundo envio já não acontece.
         onDone();
       }}
     >
