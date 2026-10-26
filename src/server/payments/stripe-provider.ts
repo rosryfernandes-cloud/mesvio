@@ -10,7 +10,9 @@ import type { CreatedPayment, CreatePaymentInput, PaymentProvider, ProviderPayme
  */
 
 /** Métodos que se pagam na hora, sem sair da página: cartão (com Apple Pay / Google Pay) e MB WAY. */
-const EXCLUDED_METHODS: Stripe.PaymentIntentCreateParams.ExcludedPaymentMethodType[] = ["multibanco", "sepa_debit", "customer_balance"];
+// Multibanco e débito direto não são imediatos; o Revolut Pay fica de fora por decisão da MESVIO
+// (a Stripe mostra-o se estiver ativo na conta do restaurante, mesmo desligado na da plataforma).
+const EXCLUDED_METHODS: Stripe.PaymentIntentCreateParams.ExcludedPaymentMethodType[] = ["multibanco", "sepa_debit", "customer_balance", "revolut_pay"];
 
 export class StripePaymentProvider implements PaymentProvider {
   readonly id = "stripe" as const;
