@@ -18,6 +18,7 @@ import { generateTableToken } from "@/server/tables/table-token";
 import type { UserDirectory } from "@/server/auth/user-directory";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { PlatformAdmin } from "./admin-auth";
+import { isValidNif } from "@/lib/nif";
 
 /**
  * Serviço do painel central: lê e escreve em TODOS os restaurantes (ligação de sistema, fora do
@@ -45,7 +46,7 @@ const tablesInput = z.object({
 
 export const createRestaurantSchema = z.object({
   legalName: z.string().trim().min(2).max(160),
-  nif: z.string().trim().regex(/^\d{9}$/, "O NIF tem 9 dígitos."),
+  nif: z.string().trim().regex(/^\d{9}$/, "O NIF tem 9 dígitos.").refine(isValidNif, "Este NIF não é válido (confirme os dígitos)."),
   billingEmail: z.email().max(200).optional().or(z.literal("")),
   name: z.string().trim().min(2).max(120),
   slug,

@@ -96,7 +96,7 @@ export function TranslationsView() {
     setBusy(false);
     if (!res?.ok) return setMessage({ text: "Não foi possível guardar. Tente de novo.", error: true });
     const { saved, removed } = await res.json();
-    setMessage({ text: `Guardado: ${saved} traduções${removed ? `, ${removed} apagadas` : ""}. Os clientes já as veem.`, error: false });
+    setMessage({ text: `Guardado: ${saved} ${saved === 1 ? "tradução" : "traduções"}${removed ? `, ${removed} ${removed === 1 ? "apagada" : "apagadas"}` : ""}. Os clientes já as veem.`, error: false });
     setDrafts(new Map());
     await load(locale);
   }
