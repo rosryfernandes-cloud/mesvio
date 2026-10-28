@@ -5,6 +5,7 @@ import { pruneDemoRequests } from "@/server/contact/demo-requests";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
 import { hitRateLimit, pruneRateLimits } from "@/server/security/rate-limit";
+import { issuePendingInvoices } from "@/server/invoicing/invoices";
 
 /**
  * Tarefas de fundo: reenvios ao POS, pagamentos por confirmar ou abandonados (cancelados ao fim de
@@ -16,9 +17,14 @@ export async function runMaintenance(db: Db) {
   for (let n = await runOutboxOnce(db); n > 0; n = await runOutboxOnce(db)) processed += n;
   const provider = activePaymentProvider();
   const payments = provider ? await reconcilePendingPayments(db, provider) : null;
+  // Faturas pedidas em pagamentos já confirmados (programa de faturação do restaurante).
+  const invoices = await issuePendingInvoices(db).catch((err) => {
+    console.error("[faturas] falhou", err);
+    return null;
+  });
   await pruneRateLimits(db);
   await pruneDemoRequests(db);
-  return { processed, payments };
+  return { processed, payments, invoices };
 }
 
 /** No máximo uma vez por minuto em toda a plataforma, seja quem for que a peça primeiro. */

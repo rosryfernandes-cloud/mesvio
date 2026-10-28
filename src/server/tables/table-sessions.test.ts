@@ -43,6 +43,7 @@ describe("conta da mesa", () => {
       pendingPaymentCents: 0,
       overpaidCents: 0,
       tipCents: 0,
+      invoicing: false,
       paymentsEnabled: true,
     });
   });

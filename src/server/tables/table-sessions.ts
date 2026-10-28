@@ -91,6 +91,8 @@ export interface TableBill {
   tipCents: number;
   /** O restaurante aceita pagamentos na mesa. */
   paymentsEnabled: boolean;
+  /** O restaurante emite fatura por email (programa de faturação ligado no painel). */
+  invoicing: boolean;
 }
 
 export async function loadBill(tx: Db, tableId: string, now: Date, tr?: MenuTranslator): Promise<TableBill | null> {
@@ -107,7 +109,13 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
   const result = new Map<string, TableBill>();
   if (tableIds.length === 0) return result;
   const tables = await tx
-    .select({ id: diningTables.id, label: diningTables.label, paymentsOn: establishments.paymentsEnabled, plan: establishments.plan })
+    .select({
+      id: diningTables.id,
+      label: diningTables.label,
+      paymentsOn: establishments.paymentsEnabled,
+      plan: establishments.plan,
+      invoicing: sql<boolean>`${establishments.invoicingAccount} is not null and ${establishments.invoicingApiKeyCiphertext} is not null`,
+    })
     .from(diningTables)
     .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
     .where(inArray(diningTables.id, tableIds))
@@ -170,6 +178,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
         overpaidCents: 0,
         tipCents: 0,
         paymentsEnabled: table.paymentsEnabled,
+        invoicing: table.invoicing,
       });
       continue;
     }
@@ -207,6 +216,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
       overpaidCents: Math.max(0, paidCents - totalCents),
       tipCents: Number(sums.find((r) => r.sessionId === session.id && r.status === "SUCCEEDED")?.tips ?? 0),
       paymentsEnabled: table.paymentsEnabled,
+      invoicing: table.invoicing,
     });
   }
   return result;

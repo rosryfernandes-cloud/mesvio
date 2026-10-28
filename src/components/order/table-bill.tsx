@@ -33,14 +33,22 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const [starting, setStarting] = useState(false);
   // Gorjeta em percentagem do que falta pagar (0 = sem gorjeta).
   const [tipPct, setTipPct] = useState(0);
+  // Fatura com NIF por email (só se o restaurante tiver o programa de faturação ligado).
+  const [wantInvoice, setWantInvoice] = useState(false);
+  const [nif, setNif] = useState("");
+  const [email, setEmail] = useState("");
 
   async function startPayment() {
+    const nifDigits = nif.replace(/\s/g, "");
+    if (wantInvoice && ((nifDigits && !/^\d{9}$/.test(nifDigits)) || !/^\S+@\S+\.\S+$/.test(email.trim()))) {
+      return setPayError(t.bill.invoiceInvalid);
+    }
     setStarting(true);
     setPayError(null);
     const res = await fetch(`/api/mesa/${tableToken}/pagamento`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipCents }),
+      body: JSON.stringify({ tipCents, ...(wantInvoice ? { fatura: { nif: nifDigits, email: email.trim() } } : {}) }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setStarting(false);
@@ -184,6 +192,41 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                     </div>
                     <p className="mt-1 text-xs text-ink-soft">{t.bill.tipNote}</p>
                   </fieldset>
+                  {bill.invoicing && (
+                    <div className="mb-3 rounded-2xl border border-line bg-card p-3">
+                      <label className="flex items-center gap-3 text-sm font-semibold">
+                        <input type="checkbox" className="size-5" checked={wantInvoice} onChange={(e) => setWantInvoice(e.target.checked)} />
+                        {t.bill.wantInvoice}
+                      </label>
+                      {wantInvoice && (
+                        <div className="mt-3 grid gap-2">
+                          <label className="text-sm">
+                            {t.bill.invoiceNif}
+                            <input
+                              className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5 tabular-nums"
+                              value={nif}
+                              onChange={(e) => setNif(e.target.value.replace(/[^\d ]/g, "").slice(0, 11))}
+                              inputMode="numeric"
+                              autoComplete="off"
+                            />
+                          </label>
+                          <label className="text-sm">
+                            {t.bill.invoiceEmail}
+                            <input
+                              className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              type="email"
+                              inputMode="email"
+                              autoComplete="email"
+                              required
+                            />
+                          </label>
+                          <p className="text-xs text-ink-soft">{t.bill.invoiceHint}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={startPayment}

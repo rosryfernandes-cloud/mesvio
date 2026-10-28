@@ -154,6 +154,11 @@ const pt = {
     tipNote: "A gorjeta vai toda para a equipa do restaurante.",
     tipIncluded: (tip: string) => `Inclui ${tip} de gorjeta`,
     tipsLeft: (tip: string) => `Gorjeta: ${tip}. Obrigado!`,
+    wantInvoice: "Quero fatura",
+    invoiceNif: "NIF (opcional)",
+    invoiceEmail: "Email para receber a fatura",
+    invoiceHint: "A fatura-recibo chega por email depois do pagamento. Sem NIF, sai como consumidor final.",
+    invoiceInvalid: "Confirme o NIF (9 dígitos) e o email.",
   },
   call: {
     askBill: "Pedir a conta",
@@ -325,6 +330,11 @@ const en: Messages = {
     tipNote: "The whole tip goes to the restaurant team.",
     tipIncluded: (tip: string) => `Includes a ${tip} tip`,
     tipsLeft: (tip: string) => `Tip: ${tip}. Thank you!`,
+    wantInvoice: "I need an invoice",
+    invoiceNif: "Portuguese tax number (NIF, optional)",
+    invoiceEmail: "Email to receive the invoice",
+    invoiceHint: "The invoice is emailed to you after payment. Without a NIF it is issued to a final consumer.",
+    invoiceInvalid: "Please check the NIF (9 digits) and the email.",
   },
   call: {
     askBill: "Ask for the bill",

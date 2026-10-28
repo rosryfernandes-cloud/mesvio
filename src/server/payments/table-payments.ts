@@ -44,7 +44,7 @@ export async function startTablePayment(
   token: string,
   provider: PaymentProvider,
   now = new Date(),
-  { tipCents = 0 }: { tipCents?: number } = {},
+  { tipCents = 0, invoice = null }: { tipCents?: number; invoice?: { nif: string | null; email: string } | null } = {},
 ): Promise<StartPaymentResult> {
   if (!isWellFormedTableToken(token)) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
   const t = await resolveTableToken(db, token);
@@ -99,6 +99,8 @@ export async function startTablePayment(
     // 4) Criar (ou reaproveitar, com a mesma chave idempotente) o pagamento no fornecedor.
     const finished = await tx.$count(payments, and(eq(payments.tableSessionId, session.id), ne(payments.status, "PENDING")));
     const amountCents = bill.dueCents + tipCents;
+    // Fatura pedida pelo cliente: emite-se depois de o pagamento ficar confirmado.
+    const invoiceFields = invoice ? { invoiceNif: invoice.nif, invoiceEmail: invoice.email, invoiceStatus: "pending" as const } : {};
     const created = await provider.create({
       amountCents,
       applicationFeeCents: fee,
@@ -126,11 +128,14 @@ export async function startTablePayment(
             amountCents,
             tipCents,
             applicationFeeCents: fee,
+            ...invoiceFields,
             createdAt: now,
             updatedAt: now,
           })
           .returning({ id: payments.id })
       )[0].id;
+    // O mesmo pagamento reaproveitado (segundo toque): a fatura pedida agora também conta.
+    if (existing && invoice) await tx.update(payments).set(invoiceFields).where(eq(payments.id, existing.id));
     return { ok: true, paymentId, provider: provider.id, amountCents, clientSecret: created.clientSecret, accountId: accountId ?? undefined };
   });
 }

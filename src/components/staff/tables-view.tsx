@@ -5,6 +5,7 @@ import { formatEur } from "@/lib/money";
 import { ConfirmInline } from "./confirm-inline";
 import { usePolling } from "../use-polling";
 import { SubscriptionCard } from "./subscription-card";
+import { InvoicingCard } from "./invoicing-card";
 import { StripeConnectCard } from "./stripe-connect-card";
 import type { TableOverview } from "@/server/tables/table-sessions";
 
@@ -142,6 +143,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       )}
       {canEditSettings && <SubscriptionCard />}
       {canEditSettings && paymentsInPlan && <StripeConnectCard />}
+      {canEditSettings && paymentsInPlan && <InvoicingCard />}
       {canEditSettings && (
         <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
           <span>
