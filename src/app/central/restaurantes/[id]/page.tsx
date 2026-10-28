@@ -8,6 +8,7 @@ import { getEstablishmentDetail } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
 import { AddTablesForm, InviteOwnerForm } from "@/components/central/establishment-actions";
 import { formatEur } from "@/lib/money";
+import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Restaurante" };
@@ -74,6 +75,8 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
           </li>
         ))}
       </ul>
+
+      <OwnMenuSwitch establishmentId={id} provider={s.posProvider} />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section aria-labelledby="donos" className="rounded-3xl border border-line bg-card p-5">

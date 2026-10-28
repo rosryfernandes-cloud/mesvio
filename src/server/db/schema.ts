@@ -33,7 +33,8 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
 // ───────────────────────── Enums ─────────────────────────
 export const memberRole = pgEnum("member_role", ["owner", "manager", "staff"]);
 export const orgStatus = pgEnum("org_status", ["active", "suspended", "onboarding"]);
-export const posProvider = pgEnum("pos_provider", ["mock", "zonesoft"]);
+/** "mesvio": sem POS — a ementa vive na MESVIO e é editada no painel; os pedidos imprimem-se na cozinha. */
+export const posProvider = pgEnum("pos_provider", ["mock", "zonesoft", "mesvio"]);
 export const integrationStatus = pgEnum("integration_status", ["not_configured", "healthy", "degraded", "failing", "disabled"]);
 export const orderStatus = pgEnum("order_status", [
   /** Lugares "pagar ao pedir" (ex.: espreguiçadeiras): criado, mas só segue para o POS depois de pago. */
@@ -245,6 +246,8 @@ export const categories = pgTable(
     establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
     posCategoryRef: text("pos_category_ref"),
     name: text("name").notNull(),
+    /** Separador da ementa acima da categoria (ex.: "Comida", "Bebidas"). */
+    section: text("section"),
     sortOrder: integer("sort_order").notNull().default(0),
     visible: boolean("visible").notNull().default(true),
   },
@@ -302,6 +305,7 @@ export const modifiers = pgTable("modifiers", {
   name: text("name").notNull(),
   priceDeltaCents: integer("price_delta_cents").notNull().default(0),
   available: boolean("available").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const productModifierGroups = pgTable(

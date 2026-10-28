@@ -6,7 +6,7 @@
  * declarará capacidades depois de confirmadas na documentação oficial.
  */
 
-export type PosProviderId = "mock" | "zonesoft";
+export type PosProviderId = "mock" | "zonesoft" | "mesvio";
 
 export interface PosCapabilities {
   /** Ler catálogo (produtos, preços, IVA, categorias, extras). */

@@ -1,6 +1,7 @@
 import type { PosAdapter, PosConnectionConfig, PosProviderId } from "./types";
 import { MockPosAdapter } from "./mock/mock-pos-adapter";
 import { ZoneSoftAdapter } from "./zonesoft/zonesoft-adapter";
+import { MesvioMenuAdapter } from "./mesvio/mesvio-menu-adapter";
 
 /**
  * Fábrica de adaptadores POS. Na Fase 3 a configuração virá de `pos_integrations`
@@ -13,6 +14,8 @@ export function createPosAdapter(provider: PosProviderId, config: PosConnectionC
       return getDemoPosAdapter();
     case "zonesoft":
       return new ZoneSoftAdapter(config);
+    case "mesvio":
+      return new MesvioMenuAdapter(config.establishmentId);
     default: {
       const exhaustive: never = provider;
       throw new Error(`Fornecedor POS desconhecido: ${String(exhaustive)}`);

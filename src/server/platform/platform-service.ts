@@ -19,6 +19,8 @@ import type { UserDirectory } from "@/server/auth/user-directory";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { PlatformAdmin } from "./admin-auth";
 import { isValidNif } from "@/lib/nif";
+import { importCatalog } from "@/server/menu/own-menu";
+import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 
 /**
  * Serviço do painel central: lê e escreve em TODOS os restaurantes (ligação de sistema, fora do
@@ -51,7 +53,7 @@ export const createRestaurantSchema = z.object({
   name: z.string().trim().min(2).max(120),
   slug,
   address: z.string().trim().max(200).optional(),
-  posProvider: z.enum(["mock", "zonesoft"]),
+  posProvider: z.enum(["mock", "zonesoft", "mesvio"]),
   commissionBps: z.int().min(0).max(2000).default(DEFAULT_COMMISSION_BPS),
   tables: z.array(tablesInput).max(5),
   owner: z.object({
@@ -138,7 +140,7 @@ export async function createRestaurant(
       establishmentId: est.id,
       provider: input.posProvider,
       // ZoneSoft: fica por configurar até haver credenciais (a ementa só mostra, não recebe pedidos).
-      status: input.posProvider === "mock" ? "healthy" : "not_configured",
+      status: input.posProvider === "zonesoft" ? "not_configured" : "healthy",
     });
     await tx.insert(commissionRules).values({
       organizationId: org.id,
@@ -169,6 +171,31 @@ export async function addTables(db: Db, admin: PlatformAdmin, establishmentId: s
     const created = await insertTables(tx, org, establishmentId, parsed.data);
     await audit(tx, admin, org, "platform.add_tables", establishmentId, { ...parsed.data, created });
     return { ok: true, created };
+  });
+}
+
+/**
+ * Passa o restaurante para "sem POS": a ementa atual (MockPOS ou POS) é copiada para a ementa
+ * própria, editável no painel, e os pedidos passam a sair em talão na cozinha. Fotos, traduções e
+ * esgotados mantêm-se (as referências dos pratos são as mesmas).
+ */
+export async function switchToOwnMenu(
+  db: Db,
+  admin: PlatformAdmin,
+  establishmentId: string,
+  resolvePos: PosResolver = resolvePosAdapter,
+): Promise<PlatformResult<{ categories: number; products: number }>> {
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const [integration] = await db.select({ provider: posIntegrations.provider }).from(posIntegrations).where(eq(posIntegrations.establishmentId, establishmentId));
+  if (integration?.provider === "mesvio") return { ok: true, categories: 0, products: 0 };
+  // Um POS ainda por ligar (ZoneSoft) não tem ementa para copiar: começa vazia.
+  const catalog = integration ? await resolvePos(integration.provider, establishmentId).fetchCatalog().catch(() => null) : null;
+  return db.transaction(async (tx) => {
+    const imported = catalog ? await importCatalog(tx, org, establishmentId, catalog) : { categories: 0, products: 0 };
+    await tx.update(posIntegrations).set({ provider: "mesvio", status: "healthy" }).where(eq(posIntegrations.establishmentId, establishmentId));
+    await audit(tx, admin, org, "platform.switch_to_own_menu", establishmentId, { from: integration?.provider, ...imported });
+    return { ok: true, ...imported };
   });
 }
 

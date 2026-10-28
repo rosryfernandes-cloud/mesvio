@@ -12,12 +12,13 @@ import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
 import { TranslationsView } from "./translations-view";
 import { PhotosView } from "./photos-view";
+import { MenuEditor } from "./menu-editor";
 import { usePolling } from "../use-polling";
 import { LogoMark } from "../brand/logo";
 
 const POLL_MS = 3000;
 
-type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "fotos" | "ementa" | "traducoes";
+type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes";
 
 export interface PanelUser {
   displayName: string;
@@ -74,6 +75,43 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
     seenAlerts.current = new Set(alertIds);
     document.title = alertCount > 0 ? `(${alertCount}) Painel · ${board.establishmentName}` : `Painel · ${board.establishmentName}`;
   }, [alertIds.join(), alertCount, board.establishmentName, sound]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Impressão automática dos talões (por aparelho: ligada só no computador da cozinha/bar).
+  const [autoPrint, setAutoPrint] = useState(false);
+  useEffect(() => {
+    try {
+      setAutoPrint(localStorage.getItem(AUTO_PRINT_KEY) === "1");
+    } catch {
+      // sem armazenamento local: fica desligada
+    }
+  }, []);
+  const kitchenIds = board.orders.filter((o) => KITCHEN_STATUSES.includes(o.status)).map((o) => o.id);
+  const printed = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!autoPrint) {
+      printed.current = null;
+      return;
+    }
+    // Ao ligar, os pedidos que já estão no painel não se imprimem; só os que chegarem a seguir.
+    if (!printed.current) {
+      printed.current = new Set(kitchenIds);
+      return;
+    }
+    const fresh = kitchenIds.filter((id) => !printed.current!.has(id));
+    fresh.forEach((id, i) => {
+      printed.current!.add(id);
+      setTimeout(() => printTicket(id), i * 2500);
+    });
+  }, [autoPrint, kitchenIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleAutoPrint(on: boolean) {
+    setAutoPrint(on);
+    try {
+      localStorage.setItem(AUTO_PRINT_KEY, on ? "1" : "0");
+    } catch {
+      // ignorar
+    }
+  }
 
   async function actOnCall(call: BoardCall, action: "ack" | "done") {
     await fetch(`/api/painel/chamadas/${call.id}`, {
@@ -211,7 +249,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
             "mesas",
             "esgotados",
             ...(me.canViewTeam ? (["equipa"] as const) : []),
-            ...(me.canEditSettings ? (["fotos", "ementa", "traducoes"] as const) : []),
+            ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes"] as const) : []),
           ] as Tab[]
         ).map((t) => (
           <button
@@ -223,11 +261,23 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês" }[t]}
+            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês" }[t]}
           </button>
         ))}
       </nav>
 
+      {tab === "pedidos" && (
+        <label className="mb-4 flex items-start gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+          <input type="checkbox" className="mt-1 size-5" checked={autoPrint} onChange={(e) => toggleAutoPrint(e.target.checked)} />
+          <span>
+            <span className="font-semibold">🖨 Imprimir talões automaticamente neste aparelho</span>
+            <span className="block text-sm text-ink-soft">
+              Ligue no computador ou tablet ligado à impressora da cozinha. Cada pedido confirmado sai em talão. Para imprimir sem a
+              janela de impressão, abra o painel no Chrome com a opção de impressão silenciosa (ver guia).
+            </span>
+          </span>
+        </label>
+      )}
       {tab === "pedidos" && (
         <OrdersView
           board={board}
@@ -241,6 +291,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "mesas" && <TablesView canEditSettings={me.canEditSettings} />}
       {tab === "esgotados" && <SoldOutView />}
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
+      {tab === "carta" && <MenuEditor />}
       {tab === "ementa" && <BrandingView establishmentName={board.establishmentName} />}
       {tab === "traducoes" && <TranslationsView />}
       {tab === "fotos" && <PhotosView />}
@@ -249,6 +300,19 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 }
 
 // ─────────────────────────── Pedidos ───────────────────────────
+
+const AUTO_PRINT_KEY = "mesvio_autoprint";
+/** Estados em que o pedido já chegou à cozinha (sai em talão). */
+const KITCHEN_STATUSES: BoardOrder["status"][] = ["SUBMITTED", "ACCEPTED", "IN_PREPARATION"];
+
+/** Imprime o talão de um pedido sem sair do painel (iframe escondido que chama a impressão). */
+function printTicket(orderId: string) {
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  frame.src = `/painel/talao/${orderId}?auto=1`;
+  document.body.appendChild(frame);
+  setTimeout(() => frame.remove(), 60_000);
+}
 
 const CALL_DETAIL: Record<string, string> = {
   card: "Cartão",
@@ -585,6 +649,11 @@ function OrderCard({
       <footer className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
         <span className="font-semibold tabular-nums">{formatEur(o.totalCents)}</span>
         {compact && STATUS_LABEL[o.status] && <span className="text-sm text-ink-soft">{STATUS_LABEL[o.status]}</span>}
+        {KITCHEN_STATUSES.includes(o.status) && (
+          <button type="button" onClick={() => printTicket(o.id)} className="min-h-9 rounded-xl border border-line bg-paper px-3 text-sm" aria-label={`Imprimir talão do pedido ${o.shortCode}`}>
+            🖨 Talão
+          </button>
+        )}
         {actions.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {actions.map((a) => (

@@ -14,7 +14,7 @@ const POS_STATE: Record<string, { label: string; className: string }> = {
   not_configured: { label: "Por configurar", className: "bg-line text-ink-soft" },
   disabled: { label: "Desligado", className: "bg-line text-ink-soft" },
 };
-const POS_NAME: Record<string, string> = { mock: "MockPOS (testes)", zonesoft: "ZoneSoft" };
+const POS_NAME: Record<string, string> = { mock: "MockPOS (testes)", zonesoft: "ZoneSoft", mesvio: "Sem POS (ementa MESVIO)" };
 const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-50 text-amber-900", info: "bg-brand-soft text-brand" };
 
 export default async function CentralOverviewPage() {

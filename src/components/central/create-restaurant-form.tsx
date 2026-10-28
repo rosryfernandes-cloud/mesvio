@@ -119,11 +119,12 @@ export function CreateRestaurantForm() {
         </label>
         <label className={label}>
           Sistema POS
-          <select name="posProvider" defaultValue="mock" className={field}>
+          <select name="posProvider" defaultValue="mesvio" className={field}>
+            <option value="mesvio">Sem POS — ementa MESVIO e talão na cozinha</option>
             <option value="mock">MockPOS (testes e demonstração)</option>
             <option value="zonesoft">ZoneSoft (por configurar)</option>
           </select>
-          <span className={hint}>Com ZoneSoft, a ementa só mostra até a integração estar ligada.</span>
+          <span className={hint}>Sem POS, o dono cria a ementa no painel (separador Ementa) e os pedidos imprimem-se na cozinha.</span>
         </label>
         <label className={label}>
           Comissão (%)
