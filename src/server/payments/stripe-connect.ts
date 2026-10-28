@@ -24,6 +24,8 @@ export interface ConnectStatus {
   detailsSubmitted: boolean;
   /** Dados que a Stripe ainda pede ao restaurante. */
   requirementsDue: number;
+  /** Apple Pay neste site (só quando se pediu com o domínio e a conta já cobra). */
+  applePay?: ApplePayStatus | "error";
 }
 
 async function storedAccount(db: Db, s: Scope): Promise<{ accountId: string | null; name: string }> {
@@ -33,17 +35,32 @@ async function storedAccount(db: Db, s: Scope): Promise<{ accountId: string | nu
   });
 }
 
-export async function getConnectStatus(db: Db, s: Scope, stripe: Stripe | null = process.env.STRIPE_SECRET_KEY ? stripeClient() : null): Promise<ConnectStatus> {
+export async function getConnectStatus(
+  db: Db,
+  s: Scope,
+  stripe: Stripe | null = process.env.STRIPE_SECRET_KEY ? stripeClient() : null,
+  { domain }: { domain?: string } = {},
+): Promise<ConnectStatus> {
   const { accountId } = await storedAccount(db, s);
   if (!stripe) return { available: false, accountId, chargesEnabled: false, detailsSubmitted: false, requirementsDue: 0 };
   if (!accountId) return { available: true, accountId: null, chargesEnabled: false, detailsSubmitted: false, requirementsDue: 0 };
   const account = await stripe.accounts.retrieve(accountId);
+  let applePay: ConnectStatus["applePay"];
+  // Sempre que o painel vê a conta pronta: garantir o domínio do Apple Pay (a conta pode ter ficado
+  // aprovada depois do regresso do formulário, e aí o domínio nunca chegou a ser registado).
+  if (domain && account.charges_enabled) {
+    applePay = await ensureApplePayDomain(stripe, accountId, domain).catch((err) => {
+      console.warn("[stripe] domínio do Apple Pay:", err instanceof Error ? err.message : err);
+      return "error" as const;
+    });
+  }
   return {
     available: true,
     accountId,
     chargesEnabled: account.charges_enabled,
     detailsSubmitted: account.details_submitted,
     requirementsDue: account.requirements?.currently_due?.length ?? 0,
+    applePay,
   };
 }
 
@@ -99,19 +116,24 @@ export async function startOnboarding(db: Db, s: Scope, baseUrl: string, stripe:
   return link.url;
 }
 
+export type ApplePayStatus = "active" | "inactive" | "pending" | "local";
+
 /**
- * Regressa do formulário: se a conta já pode cobrar, regista o domínio da MESVIO nessa conta
- * (obrigatório para o Apple Pay aparecer na ementa). Repetir não faz mal.
+ * O Apple Pay só aparece na ementa se o domínio da MESVIO estiver registado na conta do restaurante
+ * (e ativo). Regista-o se faltar, liga-o se estiver desligado e, se a Apple o tiver recusado,
+ * pede nova validação. Repetir não faz mal. Devolve o estado do Apple Pay nesse domínio.
  */
+export async function ensureApplePayDomain(stripe: Stripe, accountId: string, domain: string): Promise<ApplePayStatus> {
+  if (/^(localhost|127\.|\[::1\])/.test(domain) || domain.endsWith(".localhost")) return "local";
+  const opts = { stripeAccount: accountId };
+  const existing = (await stripe.paymentMethodDomains.list({ domain_name: domain, limit: 1 }, opts)).data[0];
+  let d = existing ?? (await stripe.paymentMethodDomains.create({ domain_name: domain, enabled: true }, opts));
+  if (!d.enabled) d = await stripe.paymentMethodDomains.update(d.id, { enabled: true }, opts);
+  if (d.apple_pay?.status === "inactive") d = await stripe.paymentMethodDomains.validate(d.id, {}, opts);
+  return d.apple_pay?.status === "active" ? "active" : d.apple_pay?.status === "inactive" ? "inactive" : "pending";
+}
+
+/** Regressa do formulário: confirma o estado e, se a conta já pode cobrar, prepara o Apple Pay. */
 export async function finishOnboarding(db: Db, s: Scope, domain: string, stripe: Stripe = stripeClient()): Promise<ConnectStatus> {
-  const status = await getConnectStatus(db, s, stripe);
-  if (status.chargesEnabled && status.accountId && !/^(localhost|127\.|\[::1\])/.test(domain)) {
-    try {
-      await stripe.paymentMethodDomains.create({ domain_name: domain, enabled: true }, { stripeAccount: status.accountId });
-    } catch (err) {
-      // Já registado: a Stripe devolve erro; o importante é existir.
-      console.warn("[stripe] registo do domínio para Apple Pay:", err instanceof Error ? err.message : err);
-    }
-  }
-  return status;
+  return getConnectStatus(db, s, stripe, { domain });
 }

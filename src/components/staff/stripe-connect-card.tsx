@@ -8,7 +8,16 @@ type Status = {
   chargesEnabled: boolean;
   detailsSubmitted: boolean;
   requirementsDue: number;
+  applePay?: "active" | "inactive" | "pending" | "local" | "error";
   canConnect: boolean;
+};
+
+const APPLE_PAY: Record<NonNullable<Status["applePay"]>, string | null> = {
+  active: "✓ Apple Pay ativo neste site.",
+  pending: "Apple Pay: a Stripe está a validar o site (alguns minutos). Volte a abrir esta página depois.",
+  inactive: "Apple Pay: a Apple recusou a validação do site. Tente mais tarde ou fale com a MESVIO.",
+  error: "Apple Pay: não foi possível confirmar com a Stripe. Volte a abrir esta página.",
+  local: null,
 };
 
 const RETURN_MESSAGE: Record<string, { text: string; error: boolean }> = {
@@ -57,6 +66,7 @@ export function StripeConnectCard() {
         <p className="text-sm text-ok">
           <strong>✓ Conta Stripe ligada.</strong> Os pagamentos vão diretamente para a conta bancária do restaurante; a Stripe
           retém as comissões dela e a da MESVIO.
+          {status.applePay && APPLE_PAY[status.applePay] && <span className="mt-1 block">{APPLE_PAY[status.applePay]}</span>}
         </p>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
