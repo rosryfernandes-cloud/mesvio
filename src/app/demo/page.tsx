@@ -54,9 +54,9 @@ export default function DemoPage() {
           <span className="block font-bold">Painel do restaurante →</span>
           <span className="mt-1 block text-sm text-white/75">Pedidos em tempo real, mesas, esgotados e equipa.</span>
         </Link>
-        <Link href="/qr" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand">
+        <Link href="/painel/qr" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand">
           <span className="block font-bold">QR Codes e NFC →</span>
-          <span className="mt-1 block text-sm text-ink-soft">Folha para imprimir e URLs para gravar nas etiquetas.</span>
+          <span className="mt-1 block text-sm text-ink-soft">No painel (com login): folha para imprimir e URLs para gravar nas etiquetas.</span>
         </Link>
         <Link href="/central" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand sm:col-span-2">
           <span className="block font-bold">Painel central MESVIO →</span>
