@@ -28,7 +28,8 @@ const VAT = [
   { bps: 600, label: "6% — água, alguns bens essenciais" },
 ];
 
-const field = "min-h-11 w-full rounded-xl border border-line bg-card px-3";
+const input = "min-h-11 rounded-xl border border-line bg-card px-3";
+const field = `${input} w-full`;
 const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-60";
 const secondary = "min-h-10 rounded-xl border border-line bg-card px-3 text-sm";
 
@@ -331,15 +332,15 @@ export function MenuEditor() {
             {editing.groups.map((g, gi) => (
               <div key={gi} className="grid gap-2 rounded-xl border border-line p-3">
                 <div className="flex flex-wrap gap-2">
-                  <input className={`${field} flex-1`} value={g.name} placeholder="Nome (ex.: Acompanhamento)" onChange={(e) => setGroup(gi, { name: e.target.value })} />
-                  <select className={`${field} w-auto`} value={g.kind} onChange={(e) => setGroup(gi, { kind: e.target.value as GroupDraft["kind"] })}>
+                  <input className={`${input} min-w-0 flex-1 basis-48`} value={g.name} placeholder="Nome (ex.: Acompanhamento)" onChange={(e) => setGroup(gi, { name: e.target.value })} />
+                  <select className={input} value={g.kind} onChange={(e) => setGroup(gi, { kind: e.target.value as GroupDraft["kind"] })}>
                     <option value="variant">Escolher uma (obrigatório)</option>
                     <option value="extra">Extras (opcionais)</option>
                   </select>
                   {g.kind === "extra" && (
                     <label className="flex items-center gap-1 text-sm">
                       até
-                      <input type="number" min={1} max={20} className={`${field} w-20`} value={g.maxSelect} onChange={(e) => setGroup(gi, { maxSelect: Math.max(1, Number(e.target.value) || 1) })} />
+                      <input type="number" min={1} max={20} className={`${input} w-20`} value={g.maxSelect} onChange={(e) => setGroup(gi, { maxSelect: Math.max(1, Number(e.target.value) || 1) })} />
                     </label>
                   )}
                   <button type="button" className={`${secondary} text-danger`} onClick={() => setDraft({ groups: editing.groups.filter((_, k) => k !== gi) })}>
@@ -349,13 +350,13 @@ export function MenuEditor() {
                 {g.modifiers.map((m, mi) => (
                   <div key={mi} className="flex gap-2">
                     <input
-                      className={`${field} flex-1`}
+                      className={`${input} min-w-0 flex-1`}
                       value={m.name}
                       placeholder="Escolha (ex.: Batata frita)"
                       onChange={(e) => setGroup(gi, { modifiers: g.modifiers.map((x, k) => (k === mi ? { ...x, name: e.target.value } : x)) })}
                     />
                     <input
-                      className={`${field} w-28`}
+                      className={`${input} w-28 shrink-0`}
                       value={m.price}
                       inputMode="decimal"
                       placeholder="+0,00 €"
