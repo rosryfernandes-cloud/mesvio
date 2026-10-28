@@ -162,6 +162,13 @@
       "when": 1793219618695,
       "tag": "0022_plano_restaurante",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793221264717,
+      "tag": "0023_subscricao_e_faturas",
+      "breakpoints": true
     }
   ]
 }

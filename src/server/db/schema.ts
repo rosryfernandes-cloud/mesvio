@@ -101,6 +101,18 @@ export const establishments = pgTable(
     paymentsEnabled: boolean("payments_enabled").notNull().default(false),
     /** Conta Stripe Connect do restaurante (acct_…): o dinheiro vai diretamente para ela. */
     stripeAccountId: text("stripe_account_id"),
+    /** Subscrição da MESVIO (mensalidade do plano), cobrada na conta Stripe da plataforma. */
+    billingCustomerId: text("billing_customer_id"),
+    billingSubscriptionId: text("billing_subscription_id"),
+    /** Estado na Stripe (active, past_due, canceled…); null = ainda sem subscrição. */
+    billingStatus: text("billing_status"),
+    billingPeriodEnd: timestamp("billing_period_end", { withTimezone: true }),
+    /**
+     * Fatura por email aos clientes: conta do restaurante num programa certificado (InvoiceXpress).
+     * A chave da API fica cifrada (secret-box), nunca em claro.
+     */
+    invoicingAccount: text("invoicing_account"),
+    invoicingApiKeyCiphertext: text("invoicing_api_key_ciphertext"),
     /** Cor própria na ementa (#rrggbb, validada para contraste AA em src/lib/brand-color.ts); null = verde MESVIO. */
     brandColor: text("brand_color"),
     /** Logótipo do restaurante na ementa (URL https); null = só o nome. */
@@ -537,6 +549,13 @@ export const payments = pgTable(
     method: text("method"),
     /** Já devolvido ao cliente (reembolsos no painel ou no dashboard da Stripe). */
     refundedCents: integer("refunded_cents").notNull().default(0),
+    /** Fatura pedida pelo cliente (NIF opcional, email obrigatório) e o estado da emissão. */
+    invoiceNif: text("invoice_nif"),
+    invoiceEmail: text("invoice_email"),
+    /** pending → issued (ou failed / manual, para o restaurante tratar à mão). */
+    invoiceStatus: text("invoice_status", { enum: ["pending", "issued", "failed", "manual"] }),
+    invoiceRef: text("invoice_ref"),
+    invoiceError: text("invoice_error"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

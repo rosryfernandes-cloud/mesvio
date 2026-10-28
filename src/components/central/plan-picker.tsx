@@ -24,7 +24,13 @@ export function PlanPicker({ establishmentId, plan }: { establishmentId: string;
     setBusy(null);
     if (!res?.ok) return setMessage({ text: data.message ?? "Não foi possível mudar o plano.", error: true });
     setCurrent(p);
-    setMessage({ text: `Plano mudado para "${PLAN_LABEL[p]}". Já se aplica na ementa e no painel.`, error: false });
+    const billing =
+      data.subscription === "updated"
+        ? " A mensalidade foi atualizada na Stripe."
+        : data.subscription === "failed"
+          ? " Atenção: não foi possível atualizar a mensalidade na Stripe — confirme no dashboard."
+          : "";
+    setMessage({ text: `Plano mudado para "${PLAN_LABEL[p]}". Já se aplica na ementa e no painel.${billing}`, error: data.subscription === "failed" });
     router.refresh();
   }
 
