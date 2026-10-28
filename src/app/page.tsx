@@ -1,3 +1,4 @@
+import { PAYMENTS_PLAN_COMMISSION, PLAN_FEATURES, PLAN_LABEL, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
@@ -260,34 +261,56 @@ function Solutions() {
 function Pricing() {
   return (
     <section id="precos" className="scroll-mt-20 bg-card">
-      <div className="mx-auto grid max-w-6xl gap-12 px-4 py-20 sm:px-6 md:grid-cols-2 md:items-center md:py-28">
+      <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
         <SectionTitle
           eyebrow="Preços"
-          title="Só pagas quando a plataforma trabalha para ti."
-          text="Sem mensalidade obrigatória. Uma pequena percentagem dos pedidos que entram pela MESVIO."
+          title="Começa pela ementa. Sobe quando quiseres."
+          text="Três planos, sem fidelização. Cada um inclui tudo o do anterior."
         />
-        <div className="on-dark rounded-[2rem] bg-brand p-8 text-white sm:p-10">
-          <p className="text-sm font-semibold tracking-wide text-mint uppercase">Modelo proposto</p>
-          <p className="mt-4 flex items-baseline gap-2">
-            <span className="text-7xl font-extrabold tracking-tight">1%</span>
-            <span className="text-white/75">por pedido</span>
-          </p>
-          <p className="mt-3 leading-relaxed text-white/80">
-            sobre o valor elegível sem IVA dos pedidos originados na plataforma.
-          </p>
-          <ul className="mt-8 grid gap-3 text-white/90">
-            {["Sem mensalidade obrigatória", "Ementa, pedidos e painel da equipa", "QR Code e NFC para cada lugar"].map((t) => (
-              <li key={t} className="flex items-center gap-3">
-                <IconCheck className="size-5 shrink-0 text-mint" />
-                {t}
+        <ul className="mt-12 grid gap-4 lg:grid-cols-3">
+          {PLANS.map((p, i) => {
+            const featured = p === "payments";
+            return (
+              <li
+                key={p}
+                className={`flex flex-col rounded-[2rem] p-7 sm:p-8 ${featured ? "on-dark bg-brand text-white" : "border border-line bg-paper"}`}
+              >
+                <p className={`text-sm font-semibold tracking-wide uppercase ${featured ? "text-mint" : "text-brand"}`}>
+                  Plano {i + 1}
+                  {featured && " · o mais completo"}
+                </p>
+                <h3 className="mt-2 text-xl font-extrabold tracking-tight">{PLAN_LABEL[p]}</h3>
+                <p className="mt-5 flex items-baseline gap-1.5">
+                  <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
+                  <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês</span>
+                </p>
+                <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>
+                  {featured ? `+ ${PAYMENTS_PLAN_COMMISSION} do que se paga pela app (sem IVA)` : "sem comissões"}
+                </p>
+                <ul className={`mt-7 grid gap-3 ${featured ? "text-white/90" : ""}`}>
+                  {PLAN_FEATURES[p].map((t) => (
+                    <li key={t} className="flex items-start gap-3">
+                      <IconCheck className={`mt-0.5 size-5 shrink-0 ${featured ? "text-mint" : "text-brand"}`} />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href={DEMO_HREF}
+                  className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-2xl px-5 font-semibold ${
+                    featured ? "bg-mint text-brand hover:bg-white" : "border border-brand text-brand hover:bg-brand-soft"
+                  }`}
+                >
+                  Pedir demonstração
+                </a>
               </li>
-            ))}
-          </ul>
-          <p className="mt-8 border-t border-white/15 pt-5 text-sm leading-relaxed text-white/70">
-            As condições comerciais dependem do acordo com cada estabelecimento. Integrações POS e pagamentos no telemóvel
-            estão em validação: confirmamos na demonstração o que já está disponível para o teu sistema.
-          </p>
-        </div>
+            );
+          })}
+        </ul>
+        <p className="mt-8 max-w-3xl text-sm leading-relaxed text-ink-soft">
+          Preços sem IVA. Instalação opcional (placas com QR e NFC e ementa configurada por nós) e planos de época para bares de praia: falamos na
+          demonstração. A ligação ao sistema POS do restaurante está em validação.
+        </p>
       </div>
     </section>
   );
