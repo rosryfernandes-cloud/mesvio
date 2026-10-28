@@ -161,6 +161,37 @@ export const platformAdmins = pgTable("platform_admins", {
   createdAt: createdAt(),
 });
 
+/**
+ * Chaves de acesso (Face ID / Touch ID / chave de segurança) dos administradores: segundo passo
+ * da entrada no painel central, em alternativa ao código da app. Só a chave pública fica aqui.
+ */
+export const platformPasskeys = pgTable("platform_passkeys", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => platformAdmins.userId, { onDelete: "cascade" }),
+  /** Identificador da credencial (base64url), único. */
+  credentialId: text("credential_id").notNull().unique(),
+  /** Chave pública COSE (base64url). */
+  publicKey: text("public_key").notNull(),
+  counter: bigint("counter", { mode: "number" }).notNull().default(0),
+  transports: text("transports").array().notNull().default([]),
+  name: text("name").notNull(),
+  createdAt: createdAt(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+});
+
+/** Códigos de recuperação do painel central (uso único; só o resumo SHA-256). */
+export const platformRecoveryCodes = pgTable("platform_recovery_codes", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => platformAdmins.userId, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 // ───────────────────────── Mesas ─────────────────────────
 export const diningTables = pgTable(
   "dining_tables",

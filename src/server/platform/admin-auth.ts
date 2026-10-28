@@ -11,10 +11,12 @@ import { decodeSigned, encodeSigned, isSameOrigin } from "@/server/staff/session
 import { generateTotpSecret, totpUri, verifyTotp } from "./totp";
 import { activationCodeMatches } from "./activation";
 import { authMode } from "@/server/auth/config";
+import { countPasskeys } from "./passkeys";
 
 /**
  * Acesso ao painel central da MESVIO: sessão normal (email + código, como o painel) e, por cima,
- * 2FA obrigatório. Depois do código TOTP, um cookie assinado de 8 h marca a sessão como verificada.
+ * 2FA obrigatório: Face ID / Touch ID (chave de acesso, ver passkeys.ts) ou código da app; em último
+ * caso, um código de recuperação. Depois disso, um cookie assinado de 8 h marca a sessão como verificada.
  */
 export const PLATFORM_COOKIE = "mesvio_central";
 const MFA_SESSION_MS = 8 * 3600_000;
@@ -26,7 +28,7 @@ export type PlatformState =
   | { kind: "anonymous" }
   | { kind: "forbidden" }
   | { kind: "needs_enrollment"; admin: PlatformAdmin }
-  | { kind: "needs_mfa"; admin: PlatformAdmin }
+  | { kind: "needs_mfa"; admin: PlatformAdmin; methods: { passkey: boolean; totp: boolean } }
   | { kind: "ok"; admin: PlatformAdmin };
 
 export async function findPlatformAdmin(db: Db, userId: string): Promise<PlatformAdmin | null> {
@@ -38,11 +40,14 @@ export async function findPlatformAdmin(db: Db, userId: string): Promise<Platfor
 export async function getPlatformState(db?: Db): Promise<PlatformState> {
   const userId = await getCurrentUserId();
   if (!userId) return { kind: "anonymous" };
-  const admin = await findPlatformAdmin(db ?? (await getDb()), userId);
+  const conn = db ?? (await getDb());
+  const admin = await findPlatformAdmin(conn, userId);
   if (!admin) return { kind: "forbidden" };
-  if (!admin.totpSecretCiphertext) return { kind: "needs_enrollment", admin };
+  const passkey = (await countPasskeys(conn, userId)) > 0;
+  const totp = Boolean(admin.totpSecretCiphertext);
+  if (!passkey && !totp) return { kind: "needs_enrollment", admin };
   const session = decodeSigned((await cookies()).get(PLATFORM_COOKIE)?.value);
-  return session?.u === userId ? { kind: "ok", admin } : { kind: "needs_mfa", admin };
+  return session?.u === userId ? { kind: "ok", admin } : { kind: "needs_mfa", admin, methods: { passkey, totp } };
 }
 
 export function platformCookie(userId: string) {
@@ -69,6 +74,30 @@ async function audit(db: Db, admin: PlatformAdmin, action: string, after?: unkno
  */
 export const activationRequired = () => authMode() !== "dev";
 
+export type ActivationError = { ok: false; code: "ACTIVATION_INVALID" | "RATE_LIMITED"; message: string };
+
+/**
+ * Código de ativação (produção): exigido para ligar o primeiro método de entrada, seja a app de
+ * códigos ou o Face ID. Devolve o erro, ou null se puder continuar.
+ */
+export async function checkActivation(
+  db: Db,
+  admin: PlatformAdmin,
+  activationCode: string | undefined,
+  { requireActivation = activationRequired(), now = Date.now() }: { requireActivation?: boolean; now?: number } = {},
+): Promise<ActivationError | null> {
+  if (!requireActivation) return null;
+  if (!(await hitRateLimit(db, `mfa:${admin.userId}`, MFA_ATTEMPTS)).allowed) {
+    return { ok: false, code: "RATE_LIMITED", message: "Demasiadas tentativas. Aguarde 5 minutos." };
+  }
+  const [fresh] = await db.select().from(platformAdmins).where(eq(platformAdmins.userId, admin.userId));
+  if (!fresh || !activationCodeMatches(activationCode ?? "", fresh.enrollmentCodeHash, fresh.enrollmentCodeExpiresAt, now)) {
+    await audit(db, admin, "platform.activation_failed");
+    return { ok: false, code: "ACTIVATION_INVALID", message: "Código de ativação errado ou expirado. Peça um novo (npm run admin:repor-2fa)." };
+  }
+  return null;
+}
+
 export type EnrollmentStart =
   | { ok: true; secret: string; uri: string }
   | { ok: false; code: "ACTIVATION_INVALID" | "RATE_LIMITED" | "ALREADY_ENROLLED"; message: string };
@@ -84,15 +113,8 @@ export async function startEnrollment(
 ): Promise<EnrollmentStart> {
   const [fresh] = await db.select().from(platformAdmins).where(eq(platformAdmins.userId, admin.userId));
   if (!fresh || fresh.totpSecretCiphertext) return { ok: false, code: "ALREADY_ENROLLED", message: "O 2FA já está configurado." };
-  if (requireActivation) {
-    if (!(await hitRateLimit(db, `mfa:${admin.userId}`, MFA_ATTEMPTS)).allowed) {
-      return { ok: false, code: "RATE_LIMITED", message: "Demasiadas tentativas. Aguarde 5 minutos." };
-    }
-    if (!activationCodeMatches(activationCode ?? "", fresh.enrollmentCodeHash, fresh.enrollmentCodeExpiresAt, now)) {
-      await audit(db, admin, "platform.activation_failed");
-      return { ok: false, code: "ACTIVATION_INVALID", message: "Código de ativação errado ou expirado. Peça um novo (npm run admin:repor-2fa)." };
-    }
-  }
+  const gate = await checkActivation(db, admin, activationCode, { requireActivation, now });
+  if (gate) return gate;
   // Reutiliza o segredo pendente: abrir a página duas vezes não pode mostrar um QR diferente do guardado.
   let secret = fresh.totpPendingCiphertext ? open(fresh.totpPendingCiphertext) : null;
   if (!secret) {

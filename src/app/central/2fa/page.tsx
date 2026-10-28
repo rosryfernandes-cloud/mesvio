@@ -16,7 +16,7 @@ export default async function TwoFactorPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
       <Logo className="h-7 w-auto self-start" />
-      {state.kind === "needs_enrollment" ? <TwoFactorSetup needsActivationCode={activationRequired()} /> : <TwoFactorChallenge />}
+      {state.kind === "needs_enrollment" ? <TwoFactorSetup needsActivationCode={activationRequired()} /> : <TwoFactorChallenge methods={state.methods} />}
       <LogoutButton className="mt-8 self-start text-sm text-ink-soft underline" />
     </main>
   );

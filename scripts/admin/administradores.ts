@@ -42,7 +42,7 @@ if (!args.includes("--confirmar")) {
 function printActivation(code: string, expires: Date) {
   console.log(`\n  Código de ativação do 2FA: ${code}`);
   console.log(`  Válido até ${expires.toLocaleString("pt-PT")}, uso único. Entregue-o por telefone ou pessoalmente,`);
-  console.log("  NUNCA por email. Entrada: /central/entrar → código por email → este código → app de autenticação.\n");
+  console.log("  NUNCA por email. Entrada: /central/entrar → código por email → este código → Face ID (ou app).\n");
 }
 
 const sql = postgres(url, { prepare: false, max: 1 });
@@ -72,7 +72,10 @@ try {
       await sql`update platform_admins set totp_secret_ciphertext = null, totp_pending_ciphertext = null, totp_enabled_at = null, totp_last_step = null,
                   enrollment_code_hash = ${hashActivationCode(activation)}, enrollment_code_expires_at = ${expires}
                 where lower(email) = ${email}`;
-      console.log(`✓ 2FA de ${email} reposto.`);
+      // As chaves de acesso (Face ID) e os códigos de recuperação também deixam de servir.
+      await sql`delete from platform_passkeys where user_id = ${rows[0].user_id}`;
+      await sql`delete from platform_recovery_codes where user_id = ${rows[0].user_id}`;
+      console.log(`✓ 2FA de ${email} reposto (app, Face ID e códigos de recuperação).`);
       printActivation(activation, expires);
     } else {
       await sql`delete from platform_admins where lower(email) = ${email}`;
