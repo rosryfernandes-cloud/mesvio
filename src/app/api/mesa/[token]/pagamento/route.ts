@@ -6,9 +6,9 @@ import { clientIpFromHeaders, hashClientIp, hitPaymentLimits } from "@/server/se
 
 export const dynamic = "force-dynamic";
 
-const STATUS = { TABLE_NOT_FOUND: 404, PAYMENTS_DISABLED: 403, NOTHING_TO_PAY: 409, PENDING_ORDERS: 409, ALREADY_PAID: 409 } as const;
+const STATUS = { TABLE_NOT_FOUND: 404, PAYMENTS_DISABLED: 403, NOTHING_TO_PAY: 409, PENDING_ORDERS: 409, ALREADY_PAID: 409, INVALID_TIP: 400 } as const;
 
-/** Iniciar o pagamento do que falta na conta da mesa. O valor é calculado no servidor. */
+/** Iniciar o pagamento do que falta na conta da mesa (+ gorjeta opcional). O valor é calculado no servidor. */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const db = await getDb();
@@ -17,7 +17,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const provider = activePaymentProvider();
   if (!provider) return NextResponse.json({ message: "Pagamentos indisponíveis. Chame um funcionário." }, { status: 503 });
-  const r = await startTablePayment(db, token, provider);
+  const body = (await request.json().catch(() => ({}))) as { tipCents?: unknown };
+  const tipCents = typeof body?.tipCents === "number" ? body.tipCents : 0;
+  const r = await startTablePayment(db, token, provider, new Date(), { tipCents });
   if (!r.ok) return NextResponse.json({ code: r.code, message: r.message }, { status: STATUS[r.code] });
   return NextResponse.json(r, { headers: { "Cache-Control": "no-store" } });
 }

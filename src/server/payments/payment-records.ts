@@ -2,7 +2,8 @@ import "server-only";
 import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { Db } from "@/server/db/client";
-import { commissionRules, establishments, orderEvents, orders, payments } from "@/server/db/schema";
+import { commissionRules, establishments, orderEvents, orders, payments, tableSessions } from "@/server/db/schema";
+import { notifyTablePaid } from "@/server/tables/service-requests";
 import { enqueueSubmit } from "@/server/orders/outbox";
 import type { PaymentProvider, ProviderPaymentStatus } from "./provider";
 
@@ -58,6 +59,13 @@ export async function syncPayment(
     .returning({ id: payments.id });
   // Só quem fez a mudança aplica as consequências (webhook + worker + cliente ao mesmo tempo → uma vez).
   const activatedOrderId = changed.length && r.status === "SUCCEEDED" && p.orderId ? await activatePaidOrder(db, p.orderId, now) : null;
+  // Conta da mesa paga pelo telemóvel: avisar o painel.
+  if (changed.length && r.status === "SUCCEEDED" && !p.orderId) {
+    const [session] = await db.select({ tableId: tableSessions.tableId }).from(tableSessions).where(eq(tableSessions.id, p.tableSessionId));
+    if (session) {
+      await notifyTablePaid(db, { organizationId: p.organizationId, establishmentId: p.establishmentId, tableId: session.tableId }, p.amountCents, p.tipCents, now);
+    }
+  }
   return { status: r.status, activatedOrderId };
 }
 

@@ -380,7 +380,37 @@ function CallsList({ calls, now, onAct }: { calls: BoardCall[]; now: number; onA
     <section aria-label="Chamadas de clientes" className="mb-5 grid gap-2">
       {calls.map((c) => {
         const minutes = Math.max(0, Math.floor((now - new Date(c.createdAt).getTime()) / 60_000));
-        const detail = c.detail ? CALL_DETAIL[c.detail] ?? c.detail : null;
+        const detail = c.kind !== "paid" && c.detail ? (CALL_DETAIL[c.detail] ?? c.detail) : null;
+        if (c.kind === "paid") {
+          // Aviso (não é preciso ir à mesa): só "Visto". Com a conta toda paga, falta fechar a mesa.
+          return (
+            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-ok bg-[#ecfdf3] px-4 py-3">
+              <span aria-hidden="true" className="text-2xl">💳</span>
+              <div className="min-w-0">
+                <p className="font-semibold">
+                  {c.tableLabel}
+                  {c.zone && <span className="font-normal text-ink-soft"> · {c.zone}</span>}
+                  {" — pagou pelo telemóvel "}
+                  {formatEur((c.paidCents ?? 0) - (c.tipCents ?? 0))}
+                  {!!c.tipCents && <span> + {formatEur(c.tipCents)} de gorjeta</span>}
+                </p>
+                <p className="text-sm text-ink-soft">
+                  {minutes === 0 ? "agora" : `há ${minutes} min`}
+                  {" · "}
+                  {c.dueCents ? `ainda falta ${formatEur(c.dueCents)}` : "conta paga — pode fechar a mesa em Mesas"}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => act(c, "done")}
+                className="ml-auto min-h-10 rounded-xl border border-line bg-card px-4 text-sm font-semibold disabled:opacity-60"
+              >
+                Visto
+              </button>
+            </div>
+          );
+        }
         return (
           <div
             key={c.id}

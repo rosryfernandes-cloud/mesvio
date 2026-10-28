@@ -297,6 +297,7 @@ function CallBadges({ calls }: { calls: TableOverview["calls"] }) {
     <span className="mt-1 flex flex-wrap gap-1">
       {calls.includes("bill") && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-ink">🧾 Pede a conta</span>}
       {calls.includes("waiter") && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-ink">🙋 Chama</span>}
+      {calls.includes("paid") && <span className="rounded-full bg-ok px-2 py-0.5 text-xs font-semibold text-white">💳 Pagou no telemóvel</span>}
     </span>
   );
 }

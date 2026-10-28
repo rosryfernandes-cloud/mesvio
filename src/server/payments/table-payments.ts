@@ -15,7 +15,7 @@ export type StartPaymentResult =
   | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string; accountId?: string }
   | {
       ok: false;
-      code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID";
+      code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID" | "INVALID_TIP";
       message: string;
     };
 
@@ -24,16 +24,27 @@ const MESSAGES = {
   NOTHING_TO_PAY: "Ainda não há nada para pagar nesta mesa.",
   PENDING_ORDERS: "Há pedidos à espera de confirmação. Aguarde um momento para pagar.",
   ALREADY_PAID: "A conta desta mesa já está paga.",
+  INVALID_TIP: "Gorjeta inválida.",
 } as const;
+
+/** Gorjeta máxima: 30% da conta e nunca mais de 100 € (protege contra enganos ao escrever). */
+export const maxTipCents = (dueCents: number) => Math.min(Math.floor(dueCents * 0.3), 100_00);
 
 /**
  * Inicia o pagamento do que falta na conta da mesa. Regras (auditoria P3):
  * - o valor é sempre calculado no servidor;
  * - há no máximo UM pagamento ativo por conta: um pendente de outro valor (ex.: antes de uma nova
  *   ronda) é confirmado junto do fornecedor e, se ainda estiver pendente, cancelado lá antes de criar outro;
- * - tudo com a conta da mesa bloqueada, para dois telemóveis ao mesmo tempo não criarem dois pagamentos.
+ * - tudo com a conta da mesa bloqueada, para dois telemóveis ao mesmo tempo não criarem dois pagamentos;
+ * - a gorjeta (opcional) soma-se ao valor cobrado, vai toda para o restaurante e não paga comissão.
  */
-export async function startTablePayment(db: Db, token: string, provider: PaymentProvider, now = new Date()): Promise<StartPaymentResult> {
+export async function startTablePayment(
+  db: Db,
+  token: string,
+  provider: PaymentProvider,
+  now = new Date(),
+  { tipCents = 0 }: { tipCents?: number } = {},
+): Promise<StartPaymentResult> {
   if (!isWellFormedTableToken(token)) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
   const t = await resolveTableToken(db, token);
   if (!t) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
@@ -58,9 +69,13 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
     if (bill.totalCents === 0) return { ok: false, code: "NOTHING_TO_PAY", message: MESSAGES.NOTHING_TO_PAY };
     if (bill.orders.some((o) => o.pending)) return { ok: false, code: "PENDING_ORDERS", message: MESSAGES.PENDING_ORDERS };
 
-    // 2) Um só pagamento ativo: cancelar pendentes de outro valor (se o fornecedor deixar).
+    if (!Number.isInteger(tipCents) || tipCents < 0 || tipCents > maxTipCents(bill.dueCents)) {
+      return { ok: false, code: "INVALID_TIP", message: MESSAGES.INVALID_TIP };
+    }
+
+    // 2) Um só pagamento ativo: cancelar pendentes de outro valor ou gorjeta (se o fornecedor deixar).
     for (const p of await pendingRows()) {
-      if (p.amountCents === bill.dueCents) continue;
+      if (p.amountCents === bill.dueCents + tipCents && p.tipCents === tipCents) continue;
       if (await provider.cancel(p.providerRef, accountId)) {
         await tx.update(payments).set({ status: "CANCELLED", updatedAt: now }).where(eq(payments.id, p.id));
       } else {
@@ -82,12 +97,13 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
 
     // 4) Criar (ou reaproveitar, com a mesma chave idempotente) o pagamento no fornecedor.
     const finished = await tx.$count(payments, and(eq(payments.tableSessionId, session.id), ne(payments.status, "PENDING")));
+    const amountCents = bill.dueCents + tipCents;
     const created = await provider.create({
-      amountCents: bill.dueCents,
+      amountCents,
       applicationFeeCents: fee,
       accountId,
       // Mesma conta + mesma tentativa + mesmo valor → mesmo pagamento (toques repetidos, outro telemóvel).
-      idempotencyKey: `${session.id}:${finished}:${bill.dueCents}`,
+      idempotencyKey: `${session.id}:${finished}:${bill.dueCents}:${tipCents}`,
       description: `${bill.tableLabel} — conta`,
       metadata: { tableSessionId: session.id, establishmentId: t.establishmentId },
     });
@@ -106,14 +122,15 @@ export async function startTablePayment(db: Db, token: string, provider: Payment
             tableSessionId: session.id,
             provider: provider.id,
             providerRef: created.providerRef,
-            amountCents: bill.dueCents,
+            amountCents,
+            tipCents,
             applicationFeeCents: fee,
             createdAt: now,
             updatedAt: now,
           })
           .returning({ id: payments.id })
       )[0].id;
-    return { ok: true, paymentId, provider: provider.id, amountCents: bill.dueCents, clientSecret: created.clientSecret, accountId: accountId ?? undefined };
+    return { ok: true, paymentId, provider: provider.id, amountCents, clientSecret: created.clientSecret, accountId: accountId ?? undefined };
   });
 }
 

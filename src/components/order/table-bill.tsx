@@ -10,6 +10,8 @@ import type { BillOrder, TableBill } from "@/server/tables/table-sessions";
 import { useI18n } from "../i18n/i18n-provider";
 import { apiErrorText, LOCALE_TAGS, type Messages } from "@/lib/i18n/messages";
 
+const TIP_OPTIONS = [0, 5, 10, 15];
+
 // 10 s nos primeiros 5 min, 30 s até à meia hora, depois 60 s; parado com o ecrã bloqueado.
 const BILL_POLL = backoffSchedule([[5 * 60_000, 10_000], [30 * 60_000, 30_000]], 60_000);
 
@@ -29,11 +31,17 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const [payError, setPayError] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState(false);
   const [starting, setStarting] = useState(false);
+  // Gorjeta em percentagem do que falta pagar (0 = sem gorjeta).
+  const [tipPct, setTipPct] = useState(0);
 
   async function startPayment() {
     setStarting(true);
     setPayError(null);
-    const res = await fetch(`/api/mesa/${tableToken}/pagamento`, { method: "POST" }).catch(() => null);
+    const res = await fetch(`/api/mesa/${tableToken}/pagamento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipCents }),
+    }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setStarting(false);
     if (!res?.ok) return setPayError(res ? apiErrorText(t, locale, data, t.apiError.generic) : t.pay.offline);
@@ -69,6 +77,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const time = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE_TAGS[locale], { hour: "2-digit", minute: "2-digit" });
   const hasPending = bill.orders.some((o) => o.pending);
   const fullyPaid = bill.totalCents > 0 && bill.dueCents === 0;
+  const tipCents = Math.round((bill.dueCents * tipPct) / 100);
 
   return (
     <main className="mx-auto max-w-2xl px-4 pt-8 pb-16">
@@ -147,6 +156,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
               <p className="mt-1 text-sm">
                 {justPaid ? t.bill.thanksJustPaid : t.bill.thanksPaid}
               </p>
+              {bill.tipCents > 0 && <p className="mt-1 text-sm">{t.bill.tipsLeft(formatEur(bill.tipCents))}</p>}
             </div>
           ) : bill.paymentsEnabled ? (
             <div className="mt-4">
@@ -155,15 +165,36 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                   {t.bill.waitConfirmation}
                 </p>
               ) : (
-                <button
-                  type="button"
-                  onClick={startPayment}
-                  disabled={starting}
-                  className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
-                >
-                  <span>{starting ? t.order.preparing : t.bill.payBill}</span>
-                  <span className="tabular-nums">{formatEur(bill.dueCents)}</span>
-                </button>
+                <>
+                  <fieldset className="mb-3">
+                    <legend className="mb-2 text-sm font-semibold">{t.bill.tipTitle}</legend>
+                    <div className="grid grid-cols-4 gap-2">
+                      {TIP_OPTIONS.map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          aria-pressed={tipPct === pct}
+                          onClick={() => setTipPct(pct)}
+                          className={`min-h-12 rounded-xl border text-sm font-semibold ${tipPct === pct ? "border-brand bg-brand-soft text-brand" : "border-line bg-card"}`}
+                        >
+                          {pct === 0 ? t.bill.tipNone : `${pct}%`}
+                          {pct > 0 && <span className="block text-xs font-normal text-ink-soft tabular-nums">{formatEur(Math.round((bill.dueCents * pct) / 100))}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-ink-soft">{t.bill.tipNote}</p>
+                  </fieldset>
+                  <button
+                    type="button"
+                    onClick={startPayment}
+                    disabled={starting}
+                    className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
+                  >
+                    <span>{starting ? t.order.preparing : t.bill.payBill}</span>
+                    <span className="tabular-nums">{formatEur(bill.dueCents + tipCents)}</span>
+                  </button>
+                  {tipCents > 0 && <p className="mt-1 text-center text-xs text-ink-soft">{t.bill.tipIncluded(formatEur(tipCents))}</p>}
+                </>
               )}
               <p className="mt-2 text-center text-xs text-ink-soft">{t.bill.methods}</p>
             </div>

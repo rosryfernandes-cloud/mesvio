@@ -86,6 +86,8 @@ export interface TableBill {
   pendingPaymentCents: number;
   /** Pago a mais do que o total (tem de ser reembolsado). */
   overpaidCents: number;
+  /** Gorjetas deixadas nos pagamentos pelo telemóvel (fora do total e do pago). */
+  tipCents: number;
   /** O restaurante aceita pagamentos na mesa. */
   paymentsEnabled: boolean;
 }
@@ -139,8 +141,13 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
     : [];
   const sums = sessionIds.length
     ? await tx
-        // Pago = cobrado menos o que já foi devolvido ao cliente.
-        .select({ sessionId: payments.tableSessionId, status: payments.status, cents: sum(sql<number>`${payments.amountCents} - ${payments.refundedCents}`) })
+        // Pago = cobrado menos a gorjeta e o que já foi devolvido ao cliente.
+        .select({
+          sessionId: payments.tableSessionId,
+          status: payments.status,
+          cents: sum(sql<number>`${payments.amountCents} - ${payments.tipCents} - ${payments.refundedCents}`),
+          tips: sum(payments.tipCents),
+        })
         .from(payments)
         .where(and(inArray(payments.tableSessionId, sessionIds), inArray(payments.status, ["SUCCEEDED", "PENDING"])))
         .groupBy(payments.tableSessionId, payments.status)
@@ -158,6 +165,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
         dueCents: 0,
         pendingPaymentCents: 0,
         overpaidCents: 0,
+        tipCents: 0,
         paymentsEnabled: table.paymentsEnabled,
       });
       continue;
@@ -194,6 +202,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
       dueCents: Math.max(0, totalCents - paidCents),
       pendingPaymentCents: cents("PENDING"),
       overpaidCents: Math.max(0, paidCents - totalCents),
+      tipCents: Number(sums.find((r) => r.sessionId === session.id && r.status === "SUCCEEDED")?.tips ?? 0),
       paymentsEnabled: table.paymentsEnabled,
     });
   }
@@ -224,7 +233,7 @@ export interface TableOverview {
   /** Pedidos por resolver nesta conta (aprovar, confirmar, precisa de atenção…). */
   pendingCount: number;
   /** Chamadas abertas do cliente: pede a conta e/ou chama um empregado. */
-  calls: ("bill" | "waiter")[];
+  calls: ("bill" | "waiter" | "paid")[];
 }
 
 /** Todas as mesas do restaurante com a conta aberta de cada uma. */

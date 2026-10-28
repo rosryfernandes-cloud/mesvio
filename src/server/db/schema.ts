@@ -232,7 +232,8 @@ export const tableSessions = pgTable(
  * Chamadas do cliente ao staff, a partir da ementa: pedir a conta (com o meio de pagamento) ou
  * chamar um empregado (com o motivo). Ficam abertas até o staff as dar por feitas ou fechar a mesa.
  */
-export const serviceRequestKind = pgEnum("service_request_kind", ["bill", "waiter"]);
+/** "paid" = aviso ao painel de que a mesa pagou a conta pelo telemóvel (não é pedido pelo cliente). */
+export const serviceRequestKind = pgEnum("service_request_kind", ["bill", "waiter", "paid"]);
 export const serviceRequests = pgTable(
   "service_requests",
   {
@@ -525,6 +526,8 @@ export const payments = pgTable(
     /** Referência no fornecedor (ex.: PaymentIntent pi_…). */
     providerRef: text("provider_ref").notNull(),
     amountCents: integer("amount_cents").notNull(),
+    /** Gorjeta incluída em `amountCents` (vai toda para o restaurante; não abate à conta nem paga comissão). */
+    tipCents: integer("tip_cents").notNull().default(0),
     /** Comissão da plataforma retida no pagamento (Stripe application fee). */
     applicationFeeCents: integer("application_fee_cents").notNull(),
     status: paymentStatus("status").notNull().default("PENDING"),

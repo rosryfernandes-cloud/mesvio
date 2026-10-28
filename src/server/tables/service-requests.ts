@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { diningTables, serviceRequests } from "@/server/db/schema";
@@ -14,8 +14,10 @@ import { isWellFormedTableToken } from "./table-token";
  * Chamadas do cliente ao staff: "Pedir a conta" (com o meio de pagamento) e "Chamar empregado"
  * (com o motivo). Uma chamada aberta por tipo e mesa: carregar outra vez só atualiza o detalhe,
  * não enche o painel. Fecham quando o staff as dá por feitas ou fecha a mesa.
+ * "paid" não vem do cliente: é o aviso ao painel de que a mesa pagou a conta pelo telemóvel.
  */
-export type ServiceRequestKind = "bill" | "waiter";
+export type ServiceRequestKind = "bill" | "waiter" | "paid";
+export type CustomerCallKind = Exclude<ServiceRequestKind, "paid">;
 export const BILL_DETAILS = ["card", "cash"] as const;
 export const WAITER_DETAILS = ["order", "napkins", "clear", "other"] as const;
 
@@ -33,7 +35,7 @@ export const CALL_RATE_LIMITS = {
 
 /** Estado das chamadas abertas de uma mesa, para o cliente. */
 export interface TableCall {
-  kind: ServiceRequestKind;
+  kind: CustomerCallKind;
   detail: string | null;
   /** O staff carregou em "A caminho". */
   acknowledged: boolean;
@@ -49,9 +51,9 @@ async function openCallsOf(tx: Db, tableId: string): Promise<TableCall[]> {
   const rows = await tx
     .select({ kind: serviceRequests.kind, detail: serviceRequests.detail, acknowledgedAt: serviceRequests.acknowledgedAt })
     .from(serviceRequests)
-    .where(and(eq(serviceRequests.tableId, tableId), isNull(serviceRequests.resolvedAt)))
+    .where(and(eq(serviceRequests.tableId, tableId), inArray(serviceRequests.kind, ["bill", "waiter"]), isNull(serviceRequests.resolvedAt)))
     .orderBy(asc(serviceRequests.createdAt));
-  return rows.map((r) => ({ kind: r.kind, detail: r.detail, acknowledged: r.acknowledgedAt !== null }));
+  return rows.map((r) => ({ kind: r.kind as CustomerCallKind, detail: r.detail, acknowledged: r.acknowledgedAt !== null }));
 }
 
 /** O cliente (com o QR/NFC da mesa) pede a conta ou chama um empregado. */
@@ -132,8 +134,39 @@ export interface BoardCall {
   detail: string | null;
   createdAt: string;
   acknowledged: boolean;
-  /** Pedir a conta: total por pagar da mesa (para levar o terminal ou o troco certo). */
+  /** Pedir a conta / pagou: total por pagar da mesa (para levar o terminal ou o troco certo). */
   dueCents?: number;
+  /** Pagou pelo telemóvel: valor cobrado (com a gorjeta) e a gorjeta. */
+  paidCents?: number;
+  tipCents?: number;
+}
+
+/** Aviso "pagou pelo telemóvel": o detalhe guarda "cobrado:gorjeta" em cêntimos. */
+const paidDetail = (amountCents: number, tipCents: number) => `${amountCents}:${tipCents}`;
+function parsePaidDetail(detail: string | null): { paidCents: number; tipCents: number } {
+  const [a, t] = (detail ?? "").split(":").map(Number);
+  return { paidCents: Number.isFinite(a) ? a : 0, tipCents: Number.isFinite(t) ? t : 0 };
+}
+
+/**
+ * A mesa pagou a conta (ou parte) pelo telemóvel: avisa o painel (com som, como as chamadas) e, se
+ * já não falta nada, dá por resolvido o "Pedir a conta" que estivesse aberto.
+ */
+export async function notifyTablePaid(
+  tx: Db,
+  t: { organizationId: string; establishmentId: string; tableId: string },
+  amountCents: number,
+  tipCents: number,
+  now: Date,
+): Promise<void> {
+  await tx.insert(serviceRequests).values({ ...t, kind: "paid", detail: paidDetail(amountCents, tipCents), createdAt: now });
+  const bill = (await loadBills(tx, [t.tableId], now)).get(t.tableId);
+  if (bill && bill.dueCents === 0) {
+    await tx
+      .update(serviceRequests)
+      .set({ resolvedAt: now })
+      .where(and(eq(serviceRequests.tableId, t.tableId), eq(serviceRequests.kind, "bill"), isNull(serviceRequests.resolvedAt)));
+  }
 }
 
 /** Chamadas abertas do restaurante, mais antigas primeiro (dentro de uma transação com o tenant). */
@@ -153,7 +186,7 @@ export async function loadOpenCalls(tx: Db, establishmentId: string, now: Date):
     .innerJoin(diningTables, eq(diningTables.id, serviceRequests.tableId))
     .where(and(eq(serviceRequests.establishmentId, establishmentId), isNull(serviceRequests.resolvedAt)))
     .orderBy(asc(serviceRequests.createdAt));
-  const billTables = [...new Set(rows.filter((r) => r.kind === "bill").map((r) => r.tableId))];
+  const billTables = [...new Set(rows.filter((r) => r.kind !== "waiter").map((r) => r.tableId))];
   const bills = billTables.length ? await loadBills(tx, billTables, now) : new Map();
   return rows.map((r) => ({
     id: r.id,
@@ -164,7 +197,8 @@ export async function loadOpenCalls(tx: Db, establishmentId: string, now: Date):
     detail: r.detail,
     createdAt: r.createdAt.toISOString(),
     acknowledged: r.acknowledgedAt !== null,
-    dueCents: r.kind === "bill" ? (bills.get(r.tableId)?.dueCents ?? 0) : undefined,
+    dueCents: r.kind !== "waiter" ? (bills.get(r.tableId)?.dueCents ?? 0) : undefined,
+    ...(r.kind === "paid" ? parsePaidDetail(r.detail) : {}),
   }));
 }
 

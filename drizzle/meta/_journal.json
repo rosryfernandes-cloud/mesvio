@@ -148,6 +148,13 @@
       "when": 1793210224126,
       "tag": "0020_chaves_de_acesso",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793211092807,
+      "tag": "0021_gorjeta_e_aviso_pago",
+      "breakpoints": true
     }
   ]
 }

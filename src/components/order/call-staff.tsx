@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useI18n } from "@/components/i18n/i18n-provider";
 
 type Kind = "bill" | "waiter";
@@ -16,18 +17,27 @@ export function CallStaff({ tableToken, payFirst }: { tableToken: string; payFir
   const { t } = useI18n();
   const [sheet, setSheet] = useState<Kind | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
+  const [payInApp, setPayInApp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/mesa/${tableToken}/chamar`, { cache: "no-store" }).catch(() => null);
-    if (res?.ok) setCalls((await res.json()).calls ?? []);
+    if (res?.ok) {
+      const data = await res.json();
+      setCalls(data.calls ?? []);
+      setPayInApp(Boolean(data.payInApp));
+    }
   }, [tableToken]);
 
-  // Só faz sentido acompanhar enquanto há uma chamada aberta.
+  // Só faz sentido acompanhar enquanto há uma chamada aberta; ao abrir "Pedir a conta" atualiza
+  // (pode já haver pedidos para pagar pelo telemóvel).
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (sheet === "bill") void load();
+  }, [sheet, load]);
   useEffect(() => {
     if (calls.length === 0) return;
     const id = setInterval(load, POLL_MS);
@@ -104,6 +114,15 @@ export function CallStaff({ tableToken, payFirst }: { tableToken: string; payFir
               </button>
             </div>
             <div className="mt-4 grid gap-2">
+              {sheet === "bill" && payInApp && (
+                <Link
+                  href={`/m/${tableToken}/conta`}
+                  className="flex min-h-14 flex-col justify-center rounded-2xl bg-brand px-4 text-left font-semibold text-white"
+                >
+                  <span>💳 {t.call.payNow}</span>
+                  <span className="text-xs font-normal text-white/80">{t.call.payNowHint}</span>
+                </Link>
+              )}
               {options[sheet].choices.map(([value, label]) => (
                 <button
                   key={value}
