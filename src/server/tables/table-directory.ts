@@ -1,4 +1,5 @@
 import "server-only";
+import { effectiveOrderingMode, type Plan } from "@/lib/plan";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
@@ -22,6 +23,8 @@ export interface ResolvedTable {
   approvalThresholdCents: number | null;
   /** "pay_first": cada pedido é pago ao pedir (espreguiçadeiras) e só depois segue para o POS. */
   orderingMode: "pay_later" | "pay_first";
+  /** Plano do restaurante (o orderingMode acima já vem ajustado a ele). */
+  plan: Plan;
   zone: string | null;
   /** Conta Stripe Connect do restaurante (acct_…), ou null se ainda não ligou pagamentos. */
   stripeAccountId: string | null;
@@ -54,6 +57,7 @@ export function createDbTableDirectory(db: Db, resolvePos: PosResolver = resolve
             manualAcceptance: establishments.manualAcceptance,
             approvalThresholdCents: establishments.approvalThresholdCents,
             orderingMode: diningTables.orderingMode,
+            plan: establishments.plan,
             zone: diningTables.zone,
             stripeAccountId: establishments.stripeAccountId,
             provider: posIntegrations.provider,
@@ -70,6 +74,7 @@ export function createDbTableDirectory(db: Db, resolvePos: PosResolver = resolve
       const { provider, establishmentAddress, posTableRef, ...rest } = row;
       return {
         ...rest,
+        orderingMode: effectiveOrderingMode(row.plan, row.orderingMode),
         posTableRef,
         establishmentAddress: establishmentAddress ?? undefined,
         locallyUnavailable,

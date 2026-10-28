@@ -1,4 +1,5 @@
 import "server-only";
+import { planAllowsPayments } from "@/lib/plan";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { auditLogs, categories, diningTables, establishments, orderEvents, orderItems, orders, outbox, posIntegrations, products, tableSessions } from "@/server/db/schema";
@@ -321,9 +322,14 @@ export async function setBranding(db: Db, s: StaffScope, branding: Establishment
 }
 
 export async function getPaymentsEnabled(db: Db, s: StaffScope): Promise<boolean> {
+  return (await getPaymentsSetting(db, s)).enabled;
+}
+
+/** Interruptor dos pagamentos e se o plano do restaurante os inclui. */
+export async function getPaymentsSetting(db: Db, s: StaffScope): Promise<{ enabled: boolean; planAllows: boolean }> {
   return withTenant(db, tenantOf(s), async (tx) => {
-    const [e] = await tx.select({ v: establishments.paymentsEnabled }).from(establishments).where(eq(establishments.id, s.establishmentId));
-    return e?.v ?? false;
+    const [e] = await tx.select({ v: establishments.paymentsEnabled, plan: establishments.plan }).from(establishments).where(eq(establishments.id, s.establishmentId));
+    return { enabled: e?.v ?? false, planAllows: e ? planAllowsPayments(e.plan) : false };
   });
 }
 

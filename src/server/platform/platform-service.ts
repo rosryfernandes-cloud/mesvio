@@ -1,4 +1,5 @@
 import "server-only";
+import { PLANS, planAllowsPayments, type Plan } from "@/lib/plan";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
@@ -54,6 +55,7 @@ export const createRestaurantSchema = z.object({
   slug,
   address: z.string().trim().max(200).optional(),
   posProvider: z.enum(["mock", "zonesoft", "mesvio"]),
+  plan: z.enum(PLANS).default("payments"),
   commissionBps: z.int().min(0).max(2000).default(DEFAULT_COMMISSION_BPS),
   tables: z.array(tablesInput).max(5),
   owner: z.object({
@@ -133,7 +135,7 @@ export async function createRestaurant(
       .returning({ id: organizations.id });
     const [est] = await tx
       .insert(establishments)
-      .values({ organizationId: org.id, name: input.name, slug: input.slug, address: input.address || null })
+      .values({ organizationId: org.id, name: input.name, slug: input.slug, address: input.address || null, plan: input.plan })
       .returning({ id: establishments.id });
     await tx.insert(posIntegrations).values({
       organizationId: org.id,
@@ -218,6 +220,27 @@ export async function inviteOwner(
   return { ok: true, invited };
 }
 
+/**
+ * Mudar o plano do restaurante. Descer para um plano sem pagamentos desliga também o interruptor
+ * dos pagamentos no painel, para não voltarem a aparecer sozinhos se subir outra vez.
+ */
+export async function setPlan(db: Db, admin: PlatformAdmin, establishmentId: string, raw: unknown): Promise<PlatformResult<{ plan: Plan }>> {
+  const parsed = z.enum(PLANS).safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: "Plano inválido." };
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const plan = parsed.data;
+  await db.transaction(async (tx) => {
+    const [before] = await tx.select({ plan: establishments.plan }).from(establishments).where(eq(establishments.id, establishmentId));
+    await tx
+      .update(establishments)
+      .set({ plan, ...(planAllowsPayments(plan) ? {} : { paymentsEnabled: false }), updatedAt: new Date() })
+      .where(eq(establishments.id, establishmentId));
+    await audit(tx, admin, org, "platform.plan_changed", establishmentId, { from: before?.plan, to: plan });
+  });
+  return { ok: true, plan };
+}
+
 /** Início do mês corrente em Lisboa (o mês de faturação). */
 export function monthStart(now = new Date()): Date {
   const [y, m] = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit" }).format(now).split("-").map(Number);
@@ -246,6 +269,8 @@ export interface EstablishmentSummary {
   lastOrderAt: string | null;
   /** Conta Stripe do restaurante ligada (pagamentos no telemóvel). */
   stripeConnected: boolean;
+  /** Plano contratado (o que a app deixa fazer). */
+  plan: Plan;
 }
 
 export interface PlatformAlert {
@@ -290,6 +315,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
         posProvider: posIntegrations.provider,
         posStatus: posIntegrations.status,
         stripeAccountId: establishments.stripeAccountId,
+        plan: establishments.plan,
       })
       .from(establishments)
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
@@ -351,6 +377,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       needsAttention: attentionM.get(e.id)?.n ?? 0,
       lastOrderAt: last ? new Date(last).toISOString() : null,
       stripeConnected: !!e.stripeAccountId,
+      plan: e.plan,
     };
   });
 

@@ -1,9 +1,10 @@
 import "server-only";
+import { effectiveOrderingMode, planAllowsOrdering } from "@/lib/plan";
 import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { diningTables, serviceRequests } from "@/server/db/schema";
+import { diningTables, establishments, serviceRequests } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { hitRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
 import type { StaffContext } from "@/server/staff/context";
@@ -82,12 +83,15 @@ export async function createServiceRequest(
   const { kind, detail } = parsed.data;
   return withTenant(db, { organizationId: t.organizationId }, async (tx) => {
     const [table] = await tx
-      .select({ active: diningTables.active, orderingMode: diningTables.orderingMode })
+      .select({ active: diningTables.active, orderingMode: diningTables.orderingMode, plan: establishments.plan })
       .from(diningTables)
+      .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
       .where(eq(diningTables.id, t.tableId));
     if (!table?.active) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
+    // Plano só com a ementa: não há chamadas ao staff pela app.
+    if (!planAllowsOrdering(table.plan)) return { ok: false, code: "NOT_ALLOWED", message: "Chame um funcionário." };
     // Nos lugares que pagam ao pedir (camas) não há conta para pedir.
-    if (kind === "bill" && table.orderingMode === "pay_first") {
+    if (kind === "bill" && effectiveOrderingMode(table.plan, table.orderingMode) === "pay_first") {
       return { ok: false, code: "NOT_ALLOWED", message: "Aqui paga ao pedir: não há conta por pagar." };
     }
     const [open] = await tx

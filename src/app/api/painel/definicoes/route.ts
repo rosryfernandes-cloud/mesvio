@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
-import { setApprovalThreshold, setManualAcceptance, setPaymentsEnabled } from "@/server/staff/staff-service";
+import { getPaymentsSetting, setApprovalThreshold, setManualAcceptance, setPaymentsEnabled } from "@/server/staff/staff-service";
 import { getConnectStatus } from "@/server/payments/stripe-connect";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,9 @@ export async function POST(request: Request) {
   const db = await getDb();
   if (parsed.data.manualAcceptance !== undefined) await setManualAcceptance(db, ctx, parsed.data.manualAcceptance);
   if (parsed.data.paymentsEnabled !== undefined) {
+    if (parsed.data.paymentsEnabled && !(await getPaymentsSetting(db, ctx)).planAllows) {
+      return json({ message: "O plano do restaurante não inclui pagamentos no telemóvel. Fale com a MESVIO para mudar de plano." }, 409);
+    }
     // Com a Stripe, só se ligam pagamentos com a conta do restaurante verificada.
     if (parsed.data.paymentsEnabled && process.env.STRIPE_SECRET_KEY && !(await getConnectStatus(db, ctx)).chargesEnabled) {
       return json({ message: "Ligue primeiro a conta Stripe do restaurante (o dono, no separador Mesas)." }, 409);

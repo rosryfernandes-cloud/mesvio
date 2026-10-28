@@ -2,7 +2,8 @@ import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { diningTables, orderItems, orders, orderStatus } from "@/server/db/schema";
+import { diningTables, establishments, orderItems, orders, orderStatus } from "@/server/db/schema";
+import { effectiveOrderingMode } from "@/lib/plan";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/server/menu/menu-translations";
@@ -34,16 +35,20 @@ export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator 
       totalCents: orders.totalGrossCents,
       createdAt: orders.createdAt,
       tableLabel: diningTables.label,
-      orderingMode: diningTables.orderingMode,
+      mode: diningTables.orderingMode,
+      plan: establishments.plan,
     })
     .from(orders)
     .innerJoin(diningTables, eq(diningTables.id, orders.tableId))
+    .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!o) return null;
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).orderBy(asc(orderItems.lineNo));
+  const { mode, plan, ...rest } = o;
   return {
-    ...o,
+    ...rest,
+    orderingMode: effectiveOrderingMode(plan, mode),
     notes: o.notes ?? undefined,
     createdAt: o.createdAt.toISOString(),
     lines: items.map((i) => ({

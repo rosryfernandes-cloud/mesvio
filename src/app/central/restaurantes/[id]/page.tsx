@@ -9,6 +9,7 @@ import { CentralShell } from "@/components/central/central-shell";
 import { AddTablesForm, InviteOwnerForm } from "@/components/central/establishment-actions";
 import { formatEur } from "@/lib/money";
 import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
+import { PlanPicker } from "@/components/central/plan-picker";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Restaurante" };
@@ -75,6 +76,8 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
           </li>
         ))}
       </ul>
+
+      <PlanPicker establishmentId={id} plan={s.plan} />
 
       <OwnMenuSwitch establishmentId={id} provider={s.posProvider} />
 

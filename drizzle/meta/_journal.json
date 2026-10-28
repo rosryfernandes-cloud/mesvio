@@ -155,6 +155,13 @@
       "when": 1793211092807,
       "tag": "0021_gorjeta_e_aviso_pago",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793219618695,
+      "tag": "0022_plano_restaurante",
+      "breakpoints": true
     }
   ]
 }

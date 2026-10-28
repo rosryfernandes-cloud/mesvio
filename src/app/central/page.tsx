@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PLAN_LABEL } from "@/lib/plan";
 import { getDb } from "@/server/db/client";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getPlatformOverview } from "@/server/platform/platform-service";
@@ -102,6 +103,7 @@ export default async function CentralOverviewPage() {
                           {e.name}
                         </Link>
                         <span className="block text-xs text-ink-soft">{e.legalName}</span>
+                        <span className="mt-1 inline-block rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">{PLAN_LABEL[e.plan]}</span>
                       </td>
                       <td className="px-5 py-3">
                         <span className="block">{POS_NAME[e.posProvider] ?? e.posProvider}</span>

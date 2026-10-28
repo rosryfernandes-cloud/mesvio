@@ -43,12 +43,14 @@ export default async function TableMenuPage({ params }: Props) {
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <LanguageSwitcher />
-            <Link
-              href={`/m/${token}/conta`}
-              className="inline-flex min-h-9 items-center rounded-full border border-line bg-card px-3.5 text-sm font-medium hover:border-brand hover:text-brand"
-            >
-              {payFirst ? t.menu.myOrders : t.menu.tableBill}
-            </Link>
+            {menu.plan !== "menu" && (
+              <Link
+                href={`/m/${token}/conta`}
+                className="inline-flex min-h-9 items-center rounded-full border border-line bg-card px-3.5 text-sm font-medium hover:border-brand hover:text-brand"
+              >
+                {payFirst ? t.menu.myOrders : t.menu.tableBill}
+              </Link>
+            )}
           </div>
         </div>
         {branding?.logoUrl && (
@@ -67,7 +69,7 @@ export default async function TableMenuPage({ params }: Props) {
         {menu.establishment.address && <p className="mt-1 text-sm text-ink-soft">{menu.establishment.address}</p>}
       </header>
 
-      <CallStaff tableToken={token} payFirst={payFirst} />
+      {menu.plan !== "menu" && <CallStaff tableToken={token} payFirst={payFirst} />}
 
       {menu.ordering.enabled && payFirst && (
         <div className="mx-4 mt-4 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm">
@@ -75,7 +77,8 @@ export default async function TableMenuPage({ params }: Props) {
         </div>
       )}
 
-      {!menu.ordering.enabled && (
+      {/* Plano só com a ementa: não é "por agora", é assim — sem aviso. */}
+      {!menu.ordering.enabled && menu.plan !== "menu" && (
         <div role="status" className="mx-4 mt-4 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm">
           <strong className="font-semibold">{t.menu.viewOnlyTitle}</strong> {t.menu.viewOnlyBody}
         </div>

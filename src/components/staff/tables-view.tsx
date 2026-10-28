@@ -18,6 +18,7 @@ function since(iso: string, now: number) {
 export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
   const [tables, setTables] = useState<TableOverview[] | null>(null);
   const [paymentsEnabled, setPaymentsEnabled] = useState<boolean | null>(null);
+  const [paymentsInPlan, setPaymentsInPlan] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessageState] = useState<{ text: string; error: boolean } | null>(null);
@@ -32,6 +33,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       const data = await res.json();
       setTables(data.tables);
       setPaymentsEnabled(data.paymentsEnabled);
+      setPaymentsInPlan(data.paymentsInPlan !== false);
     }
     setNow(Date.now());
   }, []);
@@ -115,6 +117,13 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
 
   return (
     <div className="grid gap-4">
+      {!paymentsInPlan ? (
+        <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-ink-soft">
+          <span className="block font-semibold text-ink">Pagamentos no telemóvel</span>
+          O plano do restaurante não inclui pagamentos pela app: os clientes pagam no restaurante. Para os ativar (Apple Pay, MB WAY,
+          cartão, gorjetas), fale com a MESVIO.
+        </p>
+      ) : (
       <label className="flex items-start gap-3 rounded-2xl border border-line bg-card p-4">
         <input
           type="checkbox"
@@ -129,7 +138,8 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span className="block text-sm text-ink-soft">Apple Pay, MB WAY e cartão. As mesas pagas aparecem a verde; depois é só fechar a mesa.</span>
         </span>
       </label>
-      {canEditSettings && <StripeConnectCard />}
+      )}
+      {canEditSettings && paymentsInPlan && <StripeConnectCard />}
       {canEditSettings && (
         <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
           <span>

@@ -1,4 +1,5 @@
 import "server-only";
+import { planAllowsOrdering } from "@/lib/plan";
 import { and, count, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { netFromGross } from "@/lib/money";
@@ -83,7 +84,7 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
   }
   const table = await (deps.directory ?? createDbTableDirectory(db, deps.resolvePos)).findActiveByToken(input.tableToken);
   if (!table) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
-  if (!table.pos.capabilities.createOrder) {
+  if (!planAllowsOrdering(table.plan) || !table.pos.capabilities.createOrder) {
     return { ok: false, code: "ORDERING_DISABLED", message: "Este restaurante ainda não recebe pedidos pela app." };
   }
   const payFirst = table.orderingMode === "pay_first";

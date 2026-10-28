@@ -1,4 +1,5 @@
 import "server-only";
+import { effectiveOrderingMode, planAllowsPayments } from "@/lib/plan";
 import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/server/menu/menu-translations";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { and, asc, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
@@ -106,10 +107,12 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
   const result = new Map<string, TableBill>();
   if (tableIds.length === 0) return result;
   const tables = await tx
-    .select({ id: diningTables.id, label: diningTables.label, paymentsEnabled: establishments.paymentsEnabled })
+    .select({ id: diningTables.id, label: diningTables.label, paymentsOn: establishments.paymentsEnabled, plan: establishments.plan })
     .from(diningTables)
     .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
-    .where(inArray(diningTables.id, tableIds));
+    .where(inArray(diningTables.id, tableIds))
+    // Só o plano com pagamentos deixa pagar a conta no telemóvel.
+    .then((rows) => rows.map((r) => ({ ...r, paymentsEnabled: r.paymentsOn && planAllowsPayments(r.plan) })));
 
   // Sessão aberta mais recente de cada mesa.
   const sessionRows = await tx
@@ -240,9 +243,11 @@ export interface TableOverview {
 export async function listTables(db: Db, s: Scope, now = new Date()): Promise<TableOverview[]> {
   return withTenant(db, tenantOf(s), async (tx) => {
     const tables = await tx
-      .select({ id: diningTables.id, label: diningTables.label, zone: diningTables.zone, orderingMode: diningTables.orderingMode })
+      .select({ id: diningTables.id, label: diningTables.label, zone: diningTables.zone, mode: diningTables.orderingMode, plan: establishments.plan })
       .from(diningTables)
-      .where(and(eq(diningTables.establishmentId, s.establishmentId), eq(diningTables.active, true)));
+      .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
+      .where(and(eq(diningTables.establishmentId, s.establishmentId), eq(diningTables.active, true)))
+      .then((rows) => rows.map((r) => ({ ...r, orderingMode: effectiveOrderingMode(r.plan, r.mode) })));
     const bills = await loadBills(tx, tables.map((t) => t.id), now);
     const openCalls = tables.length
       ? await tx

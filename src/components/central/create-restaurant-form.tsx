@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PLAN_LABEL, PLANS } from "@/lib/plan";
 import { useRouter } from "next/navigation";
 
 const field = "mt-1 block w-full min-h-11 rounded-xl border border-line bg-card px-3";
@@ -37,6 +38,7 @@ export function CreateRestaurantForm() {
       slug: str("slug"),
       address: str("address") || undefined,
       posProvider: str("posProvider"),
+      plan: str("plan"),
       commissionBps: Math.round(Number(str("commission").replace(",", ".")) * 100),
       tables: [
         { count: num("tablesCount"), prefix: str("tablesPrefix") || "Mesa", zone: str("tablesZone") || undefined, orderingMode: "pay_later" },
@@ -116,6 +118,17 @@ export function CreateRestaurantForm() {
         <label className={`${label} sm:col-span-2`}>
           Morada <span className="font-normal text-ink-soft">(opcional, aparece na ementa)</span>
           <input name="address" maxLength={200} className={field} />
+        </label>
+        <label className={`${label} sm:col-span-2`}>
+          Plano
+          <select name="plan" defaultValue="payments" className={field}>
+            {PLANS.map((p, i) => (
+              <option key={p} value={p}>
+                {i + 1}. {PLAN_LABEL[p]}
+              </option>
+            ))}
+          </select>
+          <span className={hint}>Pode mudar-se depois, na página do restaurante.</span>
         </label>
         <label className={label}>
           Sistema POS

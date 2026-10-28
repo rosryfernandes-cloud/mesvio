@@ -1,4 +1,5 @@
 import "server-only";
+import { planAllowsOrdering, type Plan } from "@/lib/plan";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { getDb, type Db } from "@/server/db/client";
 import { cache } from "react";
@@ -29,6 +30,8 @@ export interface TableMenuView {
   /** `section`: nome mostrado (traduzido); `sectionKey`: nome original, estável entre línguas. */
   categories: { ref: string; name: string; section?: string; sectionKey?: string; products: MenuProductView[] }[];
   ordering: { enabled: boolean; reason?: string };
+  /** Plano "menu": só a ementa (sem pedir, sem chamar o empregado). */
+  plan: Plan;
 }
 
 export async function getTableMenu(
@@ -83,9 +86,12 @@ export async function getTableMenu(
     establishment: { name: found.establishmentName, address: found.establishmentAddress },
     table: { label: found.tableLabel, zone: found.zone, orderingMode: found.orderingMode },
     categories,
-    ordering: found.pos.capabilities.createOrder
-      ? { enabled: true }
-      : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },
+    ordering: !planAllowsOrdering(found.plan)
+      ? { enabled: false, reason: "Ementa digital: peça ao empregado." }
+      : found.pos.capabilities.createOrder
+        ? { enabled: true }
+        : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },
+    plan: found.plan,
   };
 }
 

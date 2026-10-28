@@ -1,4 +1,5 @@
 import "server-only";
+import { planAllowsPayments } from "@/lib/plan";
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { Db } from "@/server/db/client";
@@ -51,11 +52,11 @@ export async function startTablePayment(
 
   return withTenant(db, { organizationId: t.organizationId }, async (tx): Promise<StartPaymentResult> => {
     const [est] = await tx
-      .select({ paymentsEnabled: establishments.paymentsEnabled, stripeAccountId: establishments.stripeAccountId })
+      .select({ paymentsEnabled: establishments.paymentsEnabled, plan: establishments.plan, stripeAccountId: establishments.stripeAccountId })
       .from(establishments)
       .where(eq(establishments.id, t.establishmentId));
     const accountId = est.stripeAccountId;
-    if (!est.paymentsEnabled || !canCharge(provider, accountId)) return { ok: false, code: "PAYMENTS_DISABLED", message: MESSAGES.PAYMENTS_DISABLED };
+    if (!est.paymentsEnabled || !planAllowsPayments(est.plan) || !canCharge(provider, accountId)) return { ok: false, code: "PAYMENTS_DISABLED", message: MESSAGES.PAYMENTS_DISABLED };
 
     const session = await currentSession(tx, t.tableId, { lock: true });
     if (!session || !isOpen(session, now)) return { ok: false, code: "NOTHING_TO_PAY", message: MESSAGES.NOTHING_TO_PAY };
