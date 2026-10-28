@@ -11,6 +11,7 @@ import { placeOrder } from "@/server/orders/place-order";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { switchToOwnMenu } from "@/server/platform/platform-service";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
+import { getBoard } from "@/server/staff/staff-service";
 import { deleteCategory, deleteProduct, getOwnMenu, move, saveCategory, saveProduct } from "./own-menu";
 
 const MESA = DEMO_TABLES.find((t) => t.orderingMode === "pay_later")!;
@@ -120,5 +121,34 @@ describe("ementa própria (sem POS)", () => {
     for (const p of first.products) expect(await deleteProduct(db, owner, p.id)).toEqual({ ok: true });
     expect(await deleteCategory(db, owner, first.id)).toEqual({ ok: true });
     expect((await getOwnMenu(db, owner))!.categories.some((c) => c.id === first.id)).toBe(false);
+  });
+
+  it("cada categoria tem um posto (cozinha ou bar) e o painel sabe de que posto é cada artigo", async () => {
+    await switchDemo();
+    const menu = (await getOwnMenu(db, owner))!;
+    // Ao passar para sem POS, as bebidas vão para o bar e o resto para a cozinha.
+    for (const c of menu.categories) expect(c.station).toBe(/bebida|caf|vinho|cerveja|cocktail|sumo|refriger|água|agua|drink/i.test(`${c.section ?? ""} ${c.name}`) ? "bar" : "kitchen");
+
+    const bar = await saveCategory(db, owner, { name: "Cervejas" });
+    const barId = (bar as { value: { id: string } }).value.id;
+    const food = await saveCategory(db, owner, { name: "Pregos" });
+    const foodId = (food as { value: { id: string } }).value.id;
+    expect((await getOwnMenu(db, owner))!.categories.find((c) => c.id === barId)!.station).toBe("bar");
+    await saveProduct(db, owner, { categoryId: barId, name: "Imperial", priceCents: 200, vatRateBps: 2300 });
+    await saveProduct(db, owner, { categoryId: foodId, name: "Prego no pão", priceCents: 800, vatRateBps: 1300 });
+    // Mudar o posto à mão.
+    expect(await saveCategory(db, owner, { id: foodId, name: "Pregos", station: "kitchen" })).toMatchObject({ ok: true });
+
+    const after = (await getOwnMenu(db, owner))!;
+    const ref = (id: string) => after.categories.find((c) => c.id === id)!.products[0].ref;
+    const order = await placeOrder(
+      { tableToken: MESA.publicToken, idempotencyKey: randomUUID(), lines: [{ productRef: ref(barId), quantity: 2 }, { productRef: ref(foodId), quantity: 1 }] },
+      { clientIpHash: randomUUID() },
+      { db, resolvePos, now: () => new Date() },
+    );
+    expect(order.ok).toBe(true);
+    const board = await getBoard(db, owner);
+    const o = board.orders.find((x) => x.id === (order as { order: { id: string } }).order.id)!;
+    expect(o.lines.map((l) => [l.name, l.station]).sort()).toEqual([["Imperial", "bar"], ["Prego no pão", "kitchen"]]);
   });
 });

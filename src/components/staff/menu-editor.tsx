@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatEur } from "@/lib/money";
+import { guessStation, STATION_LABEL, STATIONS, type Station } from "@/lib/station";
 import type { OwnMenu } from "@/server/menu/own-menu";
 
 type Category = OwnMenu["categories"][number];
@@ -51,7 +52,7 @@ async function post(body: unknown): Promise<{ ok: boolean; message?: string }> {
 export function MenuEditor() {
   const [menu, setMenu] = useState<OwnMenu | null | undefined>(undefined);
   const [editing, setEditing] = useState<ProductDraft | null>(null);
-  const [catDraft, setCatDraft] = useState<{ id?: string; name: string; section: string } | null>(null);
+  const [catDraft, setCatDraft] = useState<{ id?: string; name: string; section: string; station?: Station } | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -172,7 +173,12 @@ export function MenuEditor() {
           <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
             <div className="mr-auto">
               {c.section && <p className="text-xs font-semibold tracking-wide text-ink-soft uppercase">{c.section}</p>}
-              <h3 className="text-lg font-semibold">{c.name}</h3>
+              <h3 className="text-lg font-semibold">
+                {c.name}{" "}
+                <span className="ml-1 rounded-full border border-line px-2 py-0.5 align-middle text-xs font-medium text-ink-soft">
+                  {c.station === "bar" ? "🍹" : "🍳"} Talão: {STATION_LABEL[c.station]}
+                </span>
+              </h3>
             </div>
             <button type="button" className={secondary} disabled={busy || ci === 0} onClick={() => run({ action: "move", kind: "category", id: c.id, direction: "up" }, "Ordem atualizada.")} aria-label={`Subir ${c.name}`}>
               ↑
@@ -186,8 +192,8 @@ export function MenuEditor() {
             >
               ↓
             </button>
-            <button type="button" className={secondary} onClick={() => setCatDraft({ id: c.id, name: c.name, section: c.section ?? "" })}>
-              Renomear
+            <button type="button" className={secondary} onClick={() => setCatDraft({ id: c.id, name: c.name, section: c.section ?? "", station: c.station })}>
+              Editar
             </button>
             {c.products.length === 0 && (
               <button type="button" className={`${secondary} text-danger`} disabled={busy} onClick={() => run({ action: "delete_category", id: c.id }, "Categoria apagada.")}>
@@ -234,7 +240,7 @@ export function MenuEditor() {
       ))}
 
       {catDraft && (
-        <Modal title={catDraft.id ? "Renomear categoria" : "Nova categoria"} onClose={() => setCatDraft(null)}>
+        <Modal title={catDraft.id ? "Editar categoria" : "Nova categoria"} onClose={() => setCatDraft(null)}>
           <label className="grid gap-1 text-sm font-semibold">
             Nome
             <input className={field} value={catDraft.name} maxLength={60} onChange={(e) => setCatDraft({ ...catDraft, name: e.target.value })} placeholder="Ex.: Entradas" autoFocus />
@@ -249,12 +255,32 @@ export function MenuEditor() {
             </datalist>
             <span className="font-normal text-ink-soft">Os separadores aparecem no topo da ementa (Comida / Bebidas / Bar).</span>
           </label>
+          <fieldset className="grid gap-1 text-sm font-semibold">
+            <legend className="mb-1">Talão sai em</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {STATIONS.map((st) => {
+                const current = catDraft.station ?? guessStation(catDraft.name, catDraft.section);
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    aria-pressed={current === st}
+                    onClick={() => setCatDraft({ ...catDraft, station: st })}
+                    className={`min-h-11 rounded-xl border px-3 font-semibold ${current === st ? "border-brand bg-brand text-white" : "border-line bg-paper"}`}
+                  >
+                    {st === "bar" ? "🍹" : "🍳"} {STATION_LABEL[st]}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="font-normal text-ink-soft">Os artigos desta categoria saem no talão deste posto (ex.: bebidas e cafés no bar).</span>
+          </fieldset>
           <button
             type="button"
             className={primary}
             disabled={busy || !catDraft.name.trim()}
             onClick={async () => {
-              if (await run({ action: "save_category", category: catDraft }, "Categoria guardada.")) setCatDraft(null);
+              if (await run({ action: "save_category", category: { ...catDraft, station: catDraft.station ?? guessStation(catDraft.name, catDraft.section) } }, "Categoria guardada.")) setCatDraft(null);
             }}
           >
             Guardar

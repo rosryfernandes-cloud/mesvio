@@ -248,6 +248,8 @@ export const categories = pgTable(
     name: text("name").notNull(),
     /** Separador da ementa acima da categoria (ex.: "Comida", "Bebidas"). */
     section: text("section"),
+    /** Posto que prepara os artigos desta categoria: sai no talão da cozinha ou no do bar. */
+    station: text("station", { enum: ["kitchen", "bar"] }).notNull().default("kitchen"),
     sortOrder: integer("sort_order").notNull().default(0),
     visible: boolean("visible").notNull().default(true),
   },

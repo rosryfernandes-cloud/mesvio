@@ -134,6 +134,13 @@
       "when": 1793053523574,
       "tag": "0018_ementa_mesvio",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793209176650,
+      "tag": "0019_posto_categorias",
+      "breakpoints": true
     }
   ]
 }

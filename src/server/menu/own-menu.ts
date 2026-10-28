@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { auditLogs, categories, modifierGroups, modifiers, posIntegrations, productModifierGroups, products } from "@/server/db/schema";
 import { withTenant } from "@/server/db/tenant";
+import { guessStation, STATIONS, type Station } from "@/lib/station";
 import type { PosCatalog } from "@/server/pos/types";
 import type { StaffContext } from "@/server/staff/context";
 
@@ -51,6 +52,7 @@ export const categoryInputSchema = z.object({
   id: z.uuid().optional(),
   name: text(60),
   section: optionalText(40),
+  station: z.enum(STATIONS).optional(),
 });
 
 const modifierInput = z.object({ id: z.uuid().optional(), name: text(60), priceDeltaCents: z.int().min(0).max(100_00) });
@@ -83,6 +85,7 @@ export type OwnMenu = {
     id: string;
     name: string;
     section: string | null;
+    station: Station;
     products: {
       id: string;
       ref: string;
@@ -126,6 +129,7 @@ export async function getOwnMenu(db: Db, s: Scope): Promise<OwnMenu | null> {
         id: c.id,
         name: c.name,
         section: c.section,
+        station: c.station,
         products: prods
           .filter((p) => p.categoryId === c.id)
           .map((p) => ({
@@ -164,7 +168,7 @@ export async function saveCategory(db: Db, s: Scope, raw: unknown): Promise<OwnM
     if (c.id) {
       const updated = await tx
         .update(categories)
-        .set({ name: c.name, section: c.section })
+        .set({ name: c.name, section: c.section, ...(c.station && { station: c.station }) })
         .where(and(eq(categories.id, c.id), eq(categories.establishmentId, s.establishmentId)))
         .returning({ id: categories.id });
       if (!updated.length) return { ok: false, code: "NOT_FOUND", message: "Categoria não encontrada." };
@@ -173,7 +177,7 @@ export async function saveCategory(db: Db, s: Scope, raw: unknown): Promise<OwnM
     const count = await tx.$count(categories, eq(categories.establishmentId, s.establishmentId));
     const [created] = await tx
       .insert(categories)
-      .values({ organizationId: s.organizationId, establishmentId: s.establishmentId, posCategoryRef: newRef("C"), name: c.name, section: c.section, sortOrder: count })
+      .values({ organizationId: s.organizationId, establishmentId: s.establishmentId, posCategoryRef: newRef("C"), name: c.name, section: c.section, station: c.station ?? guessStation(c.name, c.section), sortOrder: count })
       .returning({ id: categories.id });
     await audit(tx, s, "menu.category_created", created.id, { name: c.name });
     return { ok: true, value: { id: created.id } };
@@ -329,7 +333,7 @@ export async function importCatalog(tx: Db, organizationId: string, establishmen
   for (const [i, c] of [...catalog.categories].sort((a, b) => a.sortOrder - b.sortOrder).entries()) {
     const [row] = await tx
       .insert(categories)
-      .values({ organizationId, establishmentId, posCategoryRef: c.posCategoryRef, name: c.name, section: c.section ?? null, sortOrder: i })
+      .values({ organizationId, establishmentId, posCategoryRef: c.posCategoryRef, name: c.name, section: c.section ?? null, station: guessStation(c.name, c.section), sortOrder: i })
       .returning({ id: categories.id });
     catId.set(c.posCategoryRef, row.id);
   }

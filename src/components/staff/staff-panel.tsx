@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatEur } from "@/lib/money";
+import { STATION_LABEL, type Station } from "@/lib/station";
 import type { Board, BoardOrder, StaffAction, StaffCatalogSection } from "@/server/staff/staff-service";
 import type { BoardCall } from "@/server/tables/service-requests";
 import type { StaffRole } from "@/server/staff/context";
@@ -77,18 +78,23 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
   }, [alertIds.join(), alertCount, board.establishmentName, sound]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Impressão automática dos talões (por aparelho: ligada só no computador da cozinha/bar).
-  const [autoPrint, setAutoPrint] = useState(false);
+  // "all" = talão completo; "kitchen"/"bar" = só os artigos desse posto.
+  const [autoPrint, setAutoPrint] = useState<PrintMode>("off");
   useEffect(() => {
     try {
-      setAutoPrint(localStorage.getItem(AUTO_PRINT_KEY) === "1");
+      const saved = localStorage.getItem(AUTO_PRINT_KEY);
+      setAutoPrint(saved === "1" ? "all" : PRINT_MODES.includes(saved as PrintMode) ? (saved as PrintMode) : "off");
     } catch {
       // sem armazenamento local: fica desligada
     }
   }, []);
-  const kitchenIds = board.orders.filter((o) => KITCHEN_STATUSES.includes(o.status)).map((o) => o.id);
+  const station = autoPrint === "kitchen" || autoPrint === "bar" ? autoPrint : undefined;
+  const kitchenIds = board.orders
+    .filter((o) => KITCHEN_STATUSES.includes(o.status) && (!station || o.lines.some((l) => l.station === station)))
+    .map((o) => o.id);
   const printed = useRef<Set<string> | null>(null);
   useEffect(() => {
-    if (!autoPrint) {
+    if (autoPrint === "off") {
       printed.current = null;
       return;
     }
@@ -100,14 +106,16 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
     const fresh = kitchenIds.filter((id) => !printed.current!.has(id));
     fresh.forEach((id, i) => {
       printed.current!.add(id);
-      setTimeout(() => printTicket(id), i * 2500);
+      setTimeout(() => printTicket(id, station), i * 2500);
     });
   }, [autoPrint, kitchenIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function toggleAutoPrint(on: boolean) {
-    setAutoPrint(on);
+  function changeAutoPrint(mode: PrintMode) {
+    // Mudar de posto recomeça: os pedidos que já estão no painel não se imprimem outra vez.
+    printed.current = null;
+    setAutoPrint(mode);
     try {
-      localStorage.setItem(AUTO_PRINT_KEY, on ? "1" : "0");
+      localStorage.setItem(AUTO_PRINT_KEY, mode);
     } catch {
       // ignorar
     }
@@ -267,16 +275,28 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       </nav>
 
       {tab === "pedidos" && (
-        <label className="mb-4 flex items-start gap-3 rounded-2xl border border-line bg-card px-4 py-3">
-          <input type="checkbox" className="mt-1 size-5" checked={autoPrint} onChange={(e) => toggleAutoPrint(e.target.checked)} />
-          <span>
-            <span className="font-semibold">🖨 Imprimir talões automaticamente neste aparelho</span>
-            <span className="block text-sm text-ink-soft">
-              Ligue no computador ou tablet ligado à impressora da cozinha. Cada pedido confirmado sai em talão. Para imprimir sem a
-              janela de impressão, abra o painel no Chrome com a opção de impressão silenciosa (ver guia).
-            </span>
-          </span>
-        </label>
+        <div className="mb-4 rounded-2xl border border-line bg-card px-4 py-3">
+          <p className="font-semibold">🖨 Talões automáticos neste aparelho</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Talões automáticos neste aparelho">
+            {PRINT_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={autoPrint === m}
+                onClick={() => changeAutoPrint(m)}
+                className={`min-h-11 rounded-xl border px-3 text-sm font-semibold ${autoPrint === m ? "border-brand bg-brand text-white" : "border-line bg-paper"}`}
+              >
+                {PRINT_MODE_LABEL[m]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-ink-soft">
+            Escolha no computador ou tablet ligado a cada impressora: na cozinha &quot;Só cozinha&quot;, no bar &quot;Só bar&quot; (o posto de cada
+            categoria escolhe-se no separador Ementa). Para imprimir sem a janela de impressão, abra o painel no Chrome com a opção de
+            impressão silenciosa (ver guia).
+          </p>
+        </div>
       )}
       {tab === "pedidos" && (
         <OrdersView
@@ -302,16 +322,41 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 // ─────────────────────────── Pedidos ───────────────────────────
 
 const AUTO_PRINT_KEY = "mesvio_autoprint";
+type PrintMode = "off" | "all" | Station;
+const PRINT_MODES: PrintMode[] = ["off", "all", "kitchen", "bar"];
+const PRINT_MODE_LABEL: Record<PrintMode, string> = { off: "Desligado", all: "Talão completo", kitchen: "🍳 Só cozinha", bar: "🍹 Só bar" };
 /** Estados em que o pedido já chegou à cozinha (sai em talão). */
 const KITCHEN_STATUSES: BoardOrder["status"][] = ["SUBMITTED", "ACCEPTED", "IN_PREPARATION"];
 
 /** Imprime o talão de um pedido sem sair do painel (iframe escondido que chama a impressão). */
-function printTicket(orderId: string) {
+function printTicket(orderId: string, station?: Station) {
   const frame = document.createElement("iframe");
   frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  frame.src = `/painel/talao/${orderId}?auto=1`;
+  frame.src = `/painel/talao/${orderId}?auto=1${station ? `&posto=${station}` : ""}`;
   document.body.appendChild(frame);
   setTimeout(() => frame.remove(), 60_000);
+}
+
+/** Reimprimir à mão: um talão por posto quando o pedido tem artigos da cozinha e do bar. */
+function PrintButtons({ order }: { order: BoardOrder }) {
+  const stations = [...new Set(order.lines.map((l) => l.station))];
+  const btn = "min-h-9 rounded-xl border border-line bg-paper px-3 text-sm";
+  if (stations.length < 2) {
+    return (
+      <button type="button" onClick={() => printTicket(order.id)} className={btn} aria-label={`Imprimir talão do pedido ${order.shortCode}`}>
+        🖨 Talão
+      </button>
+    );
+  }
+  return (
+    <span className="flex gap-2">
+      {stations.map((st) => (
+        <button key={st} type="button" onClick={() => printTicket(order.id, st)} className={btn} aria-label={`Imprimir talão ${STATION_LABEL[st].toLowerCase()} do pedido ${order.shortCode}`}>
+          🖨 {STATION_LABEL[st]}
+        </button>
+      ))}
+    </span>
+  );
 }
 
 const CALL_DETAIL: Record<string, string> = {
@@ -649,11 +694,7 @@ function OrderCard({
       <footer className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
         <span className="font-semibold tabular-nums">{formatEur(o.totalCents)}</span>
         {compact && STATUS_LABEL[o.status] && <span className="text-sm text-ink-soft">{STATUS_LABEL[o.status]}</span>}
-        {KITCHEN_STATUSES.includes(o.status) && (
-          <button type="button" onClick={() => printTicket(o.id)} className="min-h-9 rounded-xl border border-line bg-paper px-3 text-sm" aria-label={`Imprimir talão do pedido ${o.shortCode}`}>
-            🖨 Talão
-          </button>
-        )}
+        {KITCHEN_STATUSES.includes(o.status) && <PrintButtons order={o} />}
         {actions.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {actions.map((a) => (

@@ -1,7 +1,8 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, posIntegrations, tableSessions } from "@/server/db/schema";
+import { auditLogs, categories, diningTables, establishments, orderEvents, orderItems, orders, outbox, posIntegrations, products, tableSessions } from "@/server/db/schema";
+import type { Station } from "@/lib/station";
 import { listLocallyUnavailable, setLocallyUnavailable } from "@/server/catalog/availability";
 import { enqueueSubmit, startOfLocalDay } from "@/server/orders/place-order";
 import { dispatchWithinDeadline, SUBMIT_ORDER_TOPIC, type WorkerDeps } from "@/server/orders/outbox-worker";
@@ -37,7 +38,8 @@ export interface BoardOrder {
   problem?: string;
   /** O POS pode ter recebido o pedido (timeout/ligação caiu): verificar no POS antes de reenviar. */
   ambiguous: boolean;
-  lines: { name: string; quantity: number; modifierNames: string[]; notes?: string }[];
+  /** `station`: posto que prepara o artigo (talão da cozinha ou do bar). */
+  lines: { name: string; quantity: number; modifierNames: string[]; notes?: string; station: Station }[];
 }
 
 /** A partir deste valor o painel mostra a etiqueta "Valor alto" (sem bloquear o pedido). */
@@ -114,6 +116,18 @@ async function loadBoard(db: Db, s: StaffScope, now: Date): Promise<Board> {
     }
   }
 
+  // Posto de cada artigo, pela categoria na ementa MESVIO. Com um POS, o próprio POS distribui
+  // pelas impressoras; aqui fica tudo como cozinha.
+  const refs = [...new Set(items.map((i) => i.posProductRef))];
+  const stationRows = refs.length
+    ? await db
+        .select({ ref: products.posProductRef, station: categories.station })
+        .from(products)
+        .innerJoin(categories, eq(categories.id, products.categoryId))
+        .where(and(eq(products.establishmentId, s.establishmentId), inArray(products.posProductRef, refs)))
+    : [];
+  const stationOf = new Map(stationRows.map((r) => [r.ref, r.station]));
+
   const calls = await loadOpenCalls(db, s.establishmentId, now);
   return {
     establishmentName: est.name,
@@ -138,7 +152,7 @@ async function loadBoard(db: Db, s: StaffScope, now: Date): Promise<Board> {
       highValue: r.totalCents >= HIGH_VALUE_CENTS,
       lines: items
         .filter((i) => i.orderId === r.id)
-        .map((i) => ({ name: i.name, quantity: i.quantity, modifierNames: i.modifiers.map((m) => m.name), notes: i.notes ?? undefined })),
+        .map((i) => ({ name: i.name, quantity: i.quantity, modifierNames: i.modifiers.map((m) => m.name), notes: i.notes ?? undefined, station: stationOf.get(i.posProductRef) ?? "kitchen" })),
     })),
   };
 }
