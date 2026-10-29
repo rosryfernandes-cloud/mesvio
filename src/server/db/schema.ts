@@ -113,6 +113,10 @@ export const establishments = pgTable(
      */
     invoicingAccount: text("invoicing_account"),
     invoicingApiKeyCiphertext: text("invoicing_api_key_ciphertext"),
+    /** Avaliações no fim da conta (em teste: desligado por defeito). */
+    reviewsEnabled: boolean("reviews_enabled").notNull().default(false),
+    /** Link "escrever avaliação" do Google do restaurante (https); null = sem botão do Google. */
+    googleReviewUrl: text("google_review_url"),
     /** Cor própria na ementa (#rrggbb, validada para contraste AA em src/lib/brand-color.ts); null = verde MESVIO. */
     brandColor: text("brand_color"),
     /** Logótipo do restaurante na ementa (URL https); null = só o nome. */
@@ -264,6 +268,25 @@ export const serviceRequests = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (t) => [index("service_requests_open_idx").on(t.establishmentId, t.resolvedAt), index("service_requests_table_idx").on(t.tableId, t.createdAt)],
+);
+
+/**
+ * Avaliação deixada no telemóvel depois de pagar a conta (1–5 estrelas e comentário opcional).
+ * Só o restaurante as vê no painel; o cliente pode, além disso, avaliar no Google.
+ */
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    tableId: uuid("table_id").notNull().references(() => diningTables.id),
+    tableSessionId: uuid("table_session_id").notNull().references(() => tableSessions.id),
+    stars: integer("stars").notNull(),
+    comment: text("comment"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("reviews_establishment_idx").on(t.establishmentId, t.createdAt), check("reviews_stars_range", sql`${t.stars} between 1 and 5`)],
 );
 
 // ───────────────────────── Integração POS ─────────────────────────

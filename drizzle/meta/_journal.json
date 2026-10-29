@@ -169,6 +169,13 @@
       "when": 1793221264717,
       "tag": "0023_subscricao_e_faturas",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793273278853,
+      "tag": "0024_avaliacoes",
+      "breakpoints": true
     }
   ]
 }

@@ -16,10 +16,11 @@ import { PhotosView } from "./photos-view";
 import { MenuEditor } from "./menu-editor";
 import { usePolling } from "../use-polling";
 import { LogoMark } from "../brand/logo";
+import { ReviewsView } from "./reviews-view";
 
 const POLL_MS = 3000;
 
-type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes";
+type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
 export interface PanelUser {
   displayName: string;
@@ -257,7 +258,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
             "mesas",
             "esgotados",
             ...(me.canViewTeam ? (["equipa"] as const) : []),
-            ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes"] as const) : []),
+            ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
           ] as Tab[]
         ).map((t) => (
           <button
@@ -269,7 +270,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês" }[t]}
+            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -315,6 +316,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "ementa" && <BrandingView establishmentName={board.establishmentName} />}
       {tab === "traducoes" && <TranslationsView />}
       {tab === "fotos" && <PhotosView />}
+      {tab === "avaliacoes" && <ReviewsView />}
     </div>
   );
 }

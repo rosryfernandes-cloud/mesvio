@@ -44,6 +44,7 @@ describe("conta da mesa", () => {
       overpaidCents: 0,
       tipCents: 0,
       invoicing: false,
+      reviews: { enabled: false, googleUrl: null },
       paymentsEnabled: true,
     });
   });

@@ -93,6 +93,8 @@ export interface TableBill {
   paymentsEnabled: boolean;
   /** O restaurante emite fatura por email (programa de faturação ligado no painel). */
   invoicing: boolean;
+  /** Avaliação no fim da conta (em teste); link do Google, se o restaurante o pôs. */
+  reviews: { enabled: boolean; googleUrl: string | null };
 }
 
 export async function loadBill(tx: Db, tableId: string, now: Date, tr?: MenuTranslator): Promise<TableBill | null> {
@@ -115,6 +117,8 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
       paymentsOn: establishments.paymentsEnabled,
       plan: establishments.plan,
       invoicing: sql<boolean>`${establishments.invoicingAccount} is not null and ${establishments.invoicingApiKeyCiphertext} is not null`,
+      reviewsEnabled: establishments.reviewsEnabled,
+      googleReviewUrl: establishments.googleReviewUrl,
     })
     .from(diningTables)
     .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
@@ -179,6 +183,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
         tipCents: 0,
         paymentsEnabled: table.paymentsEnabled,
         invoicing: table.invoicing,
+        reviews: { enabled: table.reviewsEnabled, googleUrl: table.googleReviewUrl },
       });
       continue;
     }
@@ -217,6 +222,7 @@ export async function loadBills(tx: Db, tableIds: string[], now: Date, tr: MenuT
       tipCents: Number(sums.find((r) => r.sessionId === session.id && r.status === "SUCCEEDED")?.tips ?? 0),
       paymentsEnabled: table.paymentsEnabled,
       invoicing: table.invoicing,
+      reviews: { enabled: table.reviewsEnabled, googleUrl: table.googleReviewUrl },
     });
   }
   return result;

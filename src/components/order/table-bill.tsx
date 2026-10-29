@@ -159,13 +159,16 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
           )}
 
           {fullyPaid ? (
-            <div role="status" className="mt-4 rounded-2xl bg-[#ecfdf3] px-5 py-4 text-ok">
-              <p className="font-[family-name:var(--font-display)] text-2xl">{t.bill.paid}</p>
-              <p className="mt-1 text-sm">
-                {justPaid ? t.bill.thanksJustPaid : t.bill.thanksPaid}
-              </p>
-              {bill.tipCents > 0 && <p className="mt-1 text-sm">{t.bill.tipsLeft(formatEur(bill.tipCents))}</p>}
-            </div>
+            <>
+              <div role="status" className="mt-4 rounded-2xl bg-[#ecfdf3] px-5 py-4 text-ok">
+                <p className="font-[family-name:var(--font-display)] text-2xl">{t.bill.paid}</p>
+                <p className="mt-1 text-sm">
+                  {justPaid ? t.bill.thanksJustPaid : t.bill.thanksPaid}
+                </p>
+                {bill.tipCents > 0 && <p className="mt-1 text-sm">{t.bill.tipsLeft(formatEur(bill.tipCents))}</p>}
+              </div>
+              {bill.reviews.enabled && <ReviewPrompt tableToken={tableToken} googleUrl={bill.reviews.googleUrl} />}
+            </>
           ) : bill.paymentsEnabled ? (
             <div className="mt-4">
               {hasPending ? (
@@ -287,5 +290,95 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
         paying && <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />
       )}
     </main>
+  );
+}
+
+/**
+ * Avaliação depois de pagar: estrelas e comentário opcional (só o restaurante vê). O botão do
+ * Google aparece a todos, seja qual for a nota (filtrar por nota é proibido).
+ */
+function ReviewPrompt({ tableToken, googleUrl }: { tableToken: string; googleUrl: string | null }) {
+  const { locale, t } = useI18n();
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    setSending(true);
+    setError(null);
+    const res = await fetch(`/api/mesa/${tableToken}/avaliacao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stars, comment: comment.trim() }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setSending(false);
+    // Limite atingido = esta pessoa já avaliou: agradece na mesma.
+    if (res?.ok || res?.status === 429) return setSent(true);
+    setError(res ? apiErrorText(t, locale, data, t.apiError.generic) : t.apiError.generic);
+  }
+
+  return (
+    <section className="mt-4 rounded-2xl border border-line bg-card px-5 py-4">
+      {sent ? (
+        <p role="status" className="font-semibold text-ok">{t.review.thanks}</p>
+      ) : (
+        <>
+          <p className="font-semibold">{t.review.title}</p>
+          <div className="mt-2 flex gap-1" role="radiogroup" aria-label={t.review.title}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={stars === n}
+                aria-label={t.review.starLabel(n)}
+                onClick={() => setStars(n)}
+                className={`flex size-11 items-center justify-center text-3xl leading-none ${n <= stars ? "text-amber-500" : "text-line"}`}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          {stars > 0 && (
+            <>
+              <label className="mt-3 block text-sm">
+                {stars <= 3 ? t.review.commentBad : t.review.commentGood}
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value.slice(0, 1000))}
+                  rows={3}
+                  className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={send}
+                className="mt-3 min-h-11 w-full rounded-xl bg-brand px-4 py-2.5 font-semibold text-white disabled:opacity-60"
+              >
+                {t.review.send}
+              </button>
+              {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
+            </>
+          )}
+        </>
+      )}
+      {googleUrl && (
+        <div className="mt-4 border-t border-line pt-4">
+          <a
+            href={googleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center justify-center rounded-xl border border-line bg-paper px-4 py-2.5 font-semibold"
+          >
+            {t.review.google}
+          </a>
+          <p className="mt-1 text-center text-xs text-ink-soft">{t.review.googleHint}</p>
+        </div>
+      )}
+    </section>
   );
 }

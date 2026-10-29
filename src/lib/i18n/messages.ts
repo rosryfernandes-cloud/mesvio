@@ -160,6 +160,16 @@ const pt = {
     invoiceHint: "A fatura-recibo chega por email depois do pagamento. Sem NIF, sai como consumidor final.",
     invoiceInvalid: "Confirme o NIF (9 dígitos) e o email.",
   },
+  review: {
+    title: "Como correu?",
+    starLabel: (n: number) => `${n} ${n === 1 ? "estrela" : "estrelas"}`,
+    commentGood: "Quer deixar um comentário? (opcional)",
+    commentBad: "O que podemos melhorar? (opcional)",
+    send: "Enviar avaliação",
+    thanks: "Obrigado pela avaliação!",
+    google: "Avaliar também no Google",
+    googleHint: "Ajuda outras pessoas a conhecer o restaurante.",
+  },
   call: {
     askBill: "Pedir a conta",
     callWaiter: "Chamar empregado",
@@ -336,6 +346,16 @@ const en: Messages = {
     invoiceEmail: "Email to receive the invoice",
     invoiceHint: "The invoice is emailed to you after payment. Without a NIF it is issued to a final consumer.",
     invoiceInvalid: "Please check the NIF (9 digits) and the email.",
+  },
+  review: {
+    title: "How was it?",
+    starLabel: (n: number) => `${n} ${n === 1 ? "star" : "stars"}`,
+    commentGood: "Would you like to leave a comment? (optional)",
+    commentBad: "What could we do better? (optional)",
+    send: "Send review",
+    thanks: "Thank you for your review!",
+    google: "Also review us on Google",
+    googleHint: "It helps other people find the restaurant.",
   },
   call: {
     askBill: "Ask for the bill",
