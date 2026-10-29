@@ -4,14 +4,14 @@ import { eq } from "drizzle-orm";
 import { createTestDb, type Db } from "@/server/db/client";
 import { establishments, payments } from "@/server/db/schema";
 import { DEMO_USERS } from "@/server/db/seed-demo";
-import { DEMO_TABLES } from "@/server/pos/mock/demo-data";
+import { DEMO_ORGANIZATION, DEMO_TABLES } from "@/server/pos/mock/demo-data";
 import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { placeOrder } from "@/server/orders/place-order";
 import { MockPaymentProvider } from "@/server/payments/provider";
 import { refreshTablePayment, startTablePayment } from "@/server/payments/table-payments";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
 import { getTableBillByToken } from "@/server/tables/table-sessions";
-import { getInvoicingSettings, invoiceRequestSchema, issuePendingInvoices, saveInvoicingSettings } from "./invoices";
+import { getInvoicingSettings, invoiceRequestSchema, issuePendingInvoices, recentInvoices, retryInvoice, saveInvoicingSettings } from "./invoices";
 
 const T1 = DEMO_TABLES[0];
 const T2 = DEMO_TABLES[1];
@@ -27,13 +27,17 @@ beforeEach(async () => {
 });
 
 /** InvoiceXpress de mentira: regista os pedidos e responde como a API. */
-function fakeInvoiceXpress({ fail = false } = {}) {
+function fakeInvoiceXpress({ fail = false, reject = null as string | null, emailFails = false } = {}) {
   const requests: { method: string; url: string; body: unknown }[] = [];
   const fetchImpl = (async (url: string, init: RequestInit) => {
     requests.push({ method: init.method!, url, body: init.body ? JSON.parse(String(init.body)) : undefined });
     if (fail) return new Response("erro", { status: 500 });
-    if (url.includes("/invoice_receipts.json")) return Response.json({ invoice_receipt: { id: 42 } });
+    if (url.includes("/invoice_receipts.json")) {
+      if (reject) return Response.json({ errors: [{ error: reject }] }, { status: 422 });
+      return Response.json({ invoice_receipt: { id: 42 } });
+    }
     if (url.includes("change-state")) return Response.json({ invoice_receipt: { inverted_sequence_number: "FR 2026/17" } });
+    if (url.includes("email-document")) return emailFails ? new Response("erro", { status: 500 }) : new Response(" ", { status: 200 });
     return Response.json({});
   }) as unknown as typeof fetch;
   return { fetchImpl, requests };
@@ -129,14 +133,54 @@ describe("fatura por email (InvoiceXpress)", () => {
     expect(ix.requests.some((r) => r.url.includes("/invoice_receipts.json"))).toBe(false);
   });
 
-  it("com erro do programa de faturação fica marcado e não repete sozinho", async () => {
+  it("sem resposta do programa de faturação fica para confirmar à mão e não repete sozinho", async () => {
     await connect(fakeInvoiceXpress().fetchImpl);
     await order(T2);
     const id = await payWithInvoice({ nif: null, email: "x@y.pt" }, 0, T2);
     const broken = fakeInvoiceXpress({ fail: true });
     await issuePendingInvoices(db, { fetchImpl: broken.fetchImpl });
     const [row] = await db.select().from(payments).where(eq(payments.id, id));
-    expect(row.invoiceStatus).toBe("failed");
+    expect(row.invoiceStatus).toBe("manual");
+    expect(row.invoiceError).toMatch(/Confirme lá/);
+    expect(await retryInvoice(db, owner, id)).toBe(false);
     expect(await issuePendingInvoices(db, { fetchImpl: broken.fetchImpl })).toEqual({ checked: 0, issued: 0 });
+  });
+
+  it("recusada pelo InvoiceXpress: erro em português claro e o dono pode tentar de novo", async () => {
+    await connect(fakeInvoiceXpress().fetchImpl);
+    await order();
+    const id = await payWithInvoice({ nif: "123456789", email: "x@y.pt" });
+    const rejecting = fakeInvoiceXpress({ reject: "Contribuinte é igual ao contribuinte que tem configurado na sua conta." });
+    await issuePendingInvoices(db, { fetchImpl: rejecting.fetchImpl });
+    const [failed] = (await recentInvoices(db, owner)).filter((i) => i.id === id);
+    expect(failed).toMatchObject({ status: "failed" });
+    expect(failed.error).toMatch(/NIF do cliente é o do próprio restaurante/);
+
+    expect(await retryInvoice(db, owner, id)).toBe(true);
+    expect(await issuePendingInvoices(db, { fetchImpl: fakeInvoiceXpress().fetchImpl })).toEqual({ checked: 1, issued: 1 });
+    expect(await retryInvoice(db, owner, id)).toBe(false); // já emitida
+  });
+
+  it("email que falha depois de criar a fatura não deixa repetir (evita faturas em duplicado)", async () => {
+    await connect(fakeInvoiceXpress().fetchImpl);
+    await order();
+    const id = await payWithInvoice({ nif: null, email: "x@y.pt" });
+    await issuePendingInvoices(db, { fetchImpl: fakeInvoiceXpress({ emailFails: true }).fetchImpl });
+    const [row] = await db.select().from(payments).where(eq(payments.id, id));
+    expect(row.invoiceStatus).toBe("manual");
+    expect(row.invoiceError).toMatch(/ficou criada no InvoiceXpress/);
+    expect(await retryInvoice(db, owner, id)).toBe(false);
+  });
+
+  it("o cliente não pode pedir fatura com o NIF do restaurante", async () => {
+    await order();
+    const r = await startTablePayment(db, T1.publicToken, provider, new Date(), { invoice: { nif: DEMO_ORGANIZATION.nif, email: "x@y.pt" } });
+    expect(r).toMatchObject({ ok: false, code: "INVOICE_OWN_NIF" });
+  });
+
+  it("aceita o endereço novo (.web.invoicexpress.com) ao ligar", async () => {
+    const ix = fakeInvoiceXpress();
+    expect(await saveInvoicingSettings(db, owner, { account: "mesvio.web.invoicexpress.com", apiKey: "chave-de-teste-123" }, { fetchImpl: ix.fetchImpl })).toEqual({ ok: true });
+    expect((await getInvoicingSettings(db, owner)).account).toBe("mesvio");
   });
 });

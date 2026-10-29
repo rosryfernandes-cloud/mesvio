@@ -7,7 +7,7 @@ import { auditLogs, establishments, orderItems, orders, payments } from "@/serve
 import { isValidNif } from "@/lib/nif";
 import { open, seal } from "@/server/security/secret-box";
 import type { StaffContext } from "@/server/staff/context";
-import { InvoiceXpressClient, type Fetch, type InvoiceLine } from "./invoicexpress";
+import { InvoiceXpressClient, InvoiceXpressError, type Fetch, type InvoiceLine } from "./invoicexpress";
 
 /**
  * Fatura por email: quando o cliente paga no telemóvel e pede fatura (NIF opcional, email), a
@@ -50,8 +50,8 @@ const settingsSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    // Aceita o endereço inteiro (ex.: "restaurante.app.invoicexpress.com") e fica só com o nome.
-    .transform((v) => v.replace(/^https?:\/\//, "").replace(/\.app\.invoicexpress\.com.*$/, ""))
+    // Aceita o endereço inteiro (ex.: "restaurante.app.invoicexpress.com" ou ".web.") e fica só com o nome.
+    .transform((v) => v.replace(/^https?:\/\//, "").replace(/\.(app|web)\.invoicexpress\.com.*$/, ""))
     .pipe(z.string().regex(/^[a-z0-9-]{2,60}$/, "Nome de conta inválido.")),
   apiKey: z.string().trim().min(10).max(200),
 });
@@ -112,7 +112,50 @@ export async function recentInvoices(db: Db, s: Scope) {
   );
 }
 
+/**
+ * "Tentar de novo" no painel: só para erros em que o InvoiceXpress recusou o pedido antes de criar
+ * o documento (estado "failed"), por isso repetir não duplica faturas.
+ */
+export async function retryInvoice(db: Db, s: Scope, paymentId: string): Promise<boolean> {
+  if (!z.uuid().safeParse(paymentId).success) return false;
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const rows = await tx
+      .update(payments)
+      .set({ invoiceStatus: "pending", invoiceError: null })
+      .where(and(eq(payments.id, paymentId), eq(payments.establishmentId, s.establishmentId), eq(payments.invoiceStatus, "failed")))
+      .returning({ id: payments.id });
+    return rows.length > 0;
+  });
+}
+
 // ─────────────────────────── Emissão (tarefa de fundo) ───────────────────────────
+
+/**
+ * Erro do InvoiceXpress em português claro para o painel. "failed" = nada ficou criado e pode
+ * tentar-se de novo; "manual" = a fatura pode ter ficado criada, confirma-se no programa.
+ */
+export function explainInvoiceError(err: unknown): { status: "failed" | "manual"; message: string } {
+  const raw = err instanceof Error ? err.message : String(err);
+  const detail = raw.replace(/^InvoiceXpress \d+: /, "").slice(0, 200);
+  if (err instanceof InvoiceXpressError && err.documentId) {
+    return { status: "manual", message: `A fatura ficou criada no InvoiceXpress mas não foi finalizada ou enviada: termine-a lá. (${detail})` };
+  }
+  const status = err instanceof InvoiceXpressError ? err.status : null;
+  if (status === 401 || status === 403) {
+    return { status: "failed", message: "O InvoiceXpress não aceitou a chave da API. Ligue de novo a conta (Trocar chave) e tente outra vez." };
+  }
+  if (status !== null && status >= 400 && status < 500) {
+    if (/contribuinte.*igual/i.test(detail)) {
+      return { status: "failed", message: "O NIF do cliente é o do próprio restaurante, e o InvoiceXpress não deixa faturar a si próprio. Emita a fatura no programa com o NIF certo." };
+    }
+    if (/impost|tax/i.test(detail)) {
+      return { status: "failed", message: `Falta uma taxa de IVA no InvoiceXpress (Configurações → Impostos): ${detail}` };
+    }
+    return { status: "failed", message: `O InvoiceXpress recusou a fatura: ${detail}` };
+  }
+  return { status: "manual", message: "O InvoiceXpress não respondeu a tempo. Confirme lá se a fatura foi criada; se não, emita-a à mão." };
+}
+
 
 const toLines = (items: (typeof orderItems.$inferSelect)[]): InvoiceLine[] =>
   items.map((i) => ({ name: i.name, quantity: i.quantity, unitGrossCents: Math.round(i.lineGrossCents / i.quantity), vatRateBps: i.vatRateBps }));
@@ -182,8 +225,9 @@ export async function issuePendingInvoices(systemDb: Db, { fetchImpl = fetch, li
       await done({ invoiceStatus: "issued", invoiceRef: r.number ?? r.id, invoiceError: null });
       issued++;
     } catch (err) {
-      // Não se tenta outra vez sozinho: o documento pode ter ficado criado no programa.
-      await done({ invoiceStatus: "failed", invoiceError: (err instanceof Error ? err.message : String(err)).slice(0, 300) });
+      // Não se tenta outra vez sozinho: só o dono, no painel, e só se nada ficou criado.
+      const e = explainInvoiceError(err);
+      await done({ invoiceStatus: e.status, invoiceError: e.message.slice(0, 300) });
     }
   }
   return { checked: rows.length, issued };

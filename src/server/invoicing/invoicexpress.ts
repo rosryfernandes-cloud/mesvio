@@ -29,7 +29,28 @@ const TAX_NAME: Record<number, string> = { 2300: "IVA23", 1300: "IVA13", 600: "I
 
 const today = () => new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date());
 
-export class InvoiceXpressError extends Error {}
+export class InvoiceXpressError extends Error {
+  constructor(
+    message: string,
+    /** Código HTTP da resposta (null: sem resposta, ex. tempo esgotado). */
+    readonly status: number | null = null,
+    /** Documento já criado no InvoiceXpress quando o erro aconteceu (não se pode repetir às cegas). */
+    readonly documentId: string | null = null,
+  ) {
+    super(message);
+  }
+}
+
+/** Texto do erro que o InvoiceXpress devolve ({"errors":[{"error":"…"}]} ou parecido). */
+function errorDetail(text: string): string {
+  try {
+    const body = JSON.parse(text) as { errors?: unknown };
+    const list = Array.isArray(body.errors) ? body.errors : body.errors ? [body.errors] : [];
+    const msgs = list.map((e) => (typeof e === "string" ? e : (e as { error?: string })?.error)).filter(Boolean);
+    if (msgs.length) return msgs.join(" ");
+  } catch {}
+  return text.slice(0, 200);
+}
 
 export class InvoiceXpressClient {
   constructor(
@@ -49,8 +70,13 @@ export class InvoiceXpressClient {
       signal: AbortSignal.timeout(15_000),
     });
     const text = await res.text();
-    if (!res.ok) throw new InvoiceXpressError(`InvoiceXpress ${res.status}: ${text.slice(0, 200)}`);
-    return text ? JSON.parse(text) : null;
+    if (!res.ok) throw new InvoiceXpressError(`InvoiceXpress ${res.status}: ${errorDetail(text)}`, res.status);
+    // Algumas respostas (ex. enviar por email) vêm vazias ou sem JSON: com 2xx, correu bem.
+    try {
+      return text.trim() ? JSON.parse(text) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Confirma a conta e a chave (uma leitura simples). */
@@ -83,12 +109,17 @@ export class InvoiceXpressClient {
     })) as { invoice_receipt?: { id?: number | string } };
     const id = created?.invoice_receipt?.id;
     if (id === undefined) throw new InvoiceXpressError("InvoiceXpress não devolveu o documento criado.");
-    const finalized = (await this.call("PUT", `invoice_receipts/${id}/change-state.json`, { invoice_receipt: { state: "finalized" } })) as {
-      invoice_receipt?: { inverted_sequence_number?: string; sequence_number?: string };
-    } | null;
-    await this.call("PUT", `invoice_receipts/${id}/email-document.json`, {
-      message: { client: { email: req.email, save: "0" }, subject: "A sua fatura", body: "Obrigado pela visita! Segue em anexo a sua fatura-recibo." },
-    });
-    return { id: String(id), number: finalized?.invoice_receipt?.inverted_sequence_number ?? finalized?.invoice_receipt?.sequence_number ?? null };
+    try {
+      const finalized = (await this.call("PUT", `invoice_receipts/${id}/change-state.json`, { invoice_receipt: { state: "finalized" } })) as {
+        invoice_receipt?: { inverted_sequence_number?: string; sequence_number?: string };
+      } | null;
+      await this.call("PUT", `invoice_receipts/${id}/email-document.json`, {
+        message: { client: { email: req.email, save: "0" }, subject: "A sua fatura", body: "Obrigado pela visita! Segue em anexo a sua fatura-recibo." },
+      });
+      return { id: String(id), number: finalized?.invoice_receipt?.inverted_sequence_number ?? finalized?.invoice_receipt?.sequence_number ?? null };
+    } catch (err) {
+      const status = err instanceof InvoiceXpressError ? err.status : null;
+      throw new InvoiceXpressError(err instanceof Error ? err.message : String(err), status, String(id));
+    }
   }
 }

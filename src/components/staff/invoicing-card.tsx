@@ -76,9 +76,25 @@ export function InvoicingCard() {
                     {formatEur(i.amountCents - i.tipCents)} · {i.nif ? `NIF ${i.nif}` : "consumidor final"} · {i.email}
                     {i.error && i.status !== "issued" && <span className="block text-xs text-ink-soft">{i.error}</span>}
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS[i.status].className}`}>
-                    {STATUS[i.status].text}
-                    {i.status === "issued" && i.ref ? ` · ${i.ref}` : ""}
+                  <span className="flex items-center gap-2">
+                    {i.status === "failed" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="min-h-9 rounded-xl border border-line bg-card px-3 text-xs font-semibold"
+                        onClick={async () => {
+                          const r = await post({ retry: i.id });
+                          if (!r.ok) setMessage({ text: r.message ?? "Não foi possível tentar de novo.", error: true });
+                          await load();
+                        }}
+                      >
+                        Tentar de novo
+                      </button>
+                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS[i.status].className}`}>
+                      {STATUS[i.status].text}
+                      {i.status === "issued" && i.ref ? ` · ${i.ref}` : ""}
+                    </span>
                   </span>
                 </li>
               ))}

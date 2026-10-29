@@ -261,6 +261,7 @@ const en: Messages = {
     NOTHING_TO_PAY: "There's nothing to pay at this table yet.",
     PAYMENTS_DISABLED: "This restaurant doesn't take payments in the app yet. Please call a member of staff.",
     PENDING_ORDERS: "Some orders are awaiting confirmation. Please wait a moment to pay.",
+    INVOICE_OWN_NIF: "This tax number belongs to the restaurant. Enter your own or leave it blank.",
     generic: "Something went wrong. Please try again.",
   },
   order: {

@@ -3,7 +3,7 @@ import { planAllowsPayments } from "@/lib/plan";
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { Db } from "@/server/db/client";
-import { auditLogs, diningTables, establishments, orders, payments, tableSessions } from "@/server/db/schema";
+import { auditLogs, diningTables, establishments, orders, organizations, payments, tableSessions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { currentSession, isOpen, loadBill, PENDING_STATUSES, type TableBill } from "@/server/tables/table-sessions";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
@@ -16,7 +16,7 @@ export type StartPaymentResult =
   | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string; accountId?: string }
   | {
       ok: false;
-      code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID" | "INVALID_TIP";
+      code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID" | "INVALID_TIP" | "INVOICE_OWN_NIF";
       message: string;
     };
 
@@ -26,6 +26,7 @@ const MESSAGES = {
   PENDING_ORDERS: "Há pedidos à espera de confirmação. Aguarde um momento para pagar.",
   ALREADY_PAID: "A conta desta mesa já está paga.",
   INVALID_TIP: "Gorjeta inválida.",
+  INVOICE_OWN_NIF: "Este NIF é o do restaurante. Escreva o seu NIF ou deixe em branco.",
 } as const;
 
 /** Gorjeta máxima: 30% da conta e nunca mais de 100 € (protege contra enganos ao escrever). */
@@ -57,6 +58,11 @@ export async function startTablePayment(
       .where(eq(establishments.id, t.establishmentId));
     const accountId = est.stripeAccountId;
     if (!est.paymentsEnabled || !planAllowsPayments(est.plan) || !canCharge(provider, accountId)) return { ok: false, code: "PAYMENTS_DISABLED", message: MESSAGES.PAYMENTS_DISABLED };
+    if (invoice?.nif) {
+      // O programa de faturação não deixa o restaurante faturar a si próprio: avisa já o cliente.
+      const [org] = await tx.select({ nif: organizations.nif }).from(organizations).where(eq(organizations.id, t.organizationId));
+      if (org?.nif === invoice.nif) return { ok: false, code: "INVOICE_OWN_NIF", message: MESSAGES.INVOICE_OWN_NIF };
+    }
 
     const session = await currentSession(tx, t.tableId, { lock: true });
     if (!session || !isOpen(session, now)) return { ok: false, code: "NOTHING_TO_PAY", message: MESSAGES.NOTHING_TO_PAY };

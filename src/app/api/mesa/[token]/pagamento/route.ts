@@ -7,7 +7,7 @@ import { clientIpFromHeaders, hashClientIp, hitPaymentLimits } from "@/server/se
 
 export const dynamic = "force-dynamic";
 
-const STATUS = { TABLE_NOT_FOUND: 404, PAYMENTS_DISABLED: 403, NOTHING_TO_PAY: 409, PENDING_ORDERS: 409, ALREADY_PAID: 409, INVALID_TIP: 400 } as const;
+const STATUS = { TABLE_NOT_FOUND: 404, PAYMENTS_DISABLED: 403, NOTHING_TO_PAY: 409, PENDING_ORDERS: 409, ALREADY_PAID: 409, INVALID_TIP: 400, INVOICE_OWN_NIF: 400 } as const;
 
 /** Iniciar o pagamento do que falta na conta da mesa (+ gorjeta opcional). O valor é calculado no servidor. */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
