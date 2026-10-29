@@ -17,6 +17,7 @@ import { MenuEditor } from "./menu-editor";
 import { usePolling } from "../use-polling";
 import { LogoMark } from "../brand/logo";
 import { ReviewsView } from "./reviews-view";
+import { InstallPrompt } from "./install-prompt";
 
 const POLL_MS = 3000;
 
@@ -250,6 +251,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       )}
 
       {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
+
+      <InstallPrompt />
 
       <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
         {(
