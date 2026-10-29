@@ -61,7 +61,7 @@ export function SubscriptionCard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
           <span className="block font-semibold">
-            Subscrição MESVIO · {s.planLabel} · {formatEur(s.monthlyCents)}/mês
+            Subscrição MESVIO · {s.planLabel} · {formatEur(s.monthlyCents)}/mês + IVA
           </span>
           <span className="block text-ink-soft">
             {s.active

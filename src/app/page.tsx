@@ -282,7 +282,7 @@ function Pricing() {
                 <h3 className="mt-2 text-xl font-extrabold tracking-tight">{PLAN_LABEL[p]}</h3>
                 <p className="mt-5 flex items-baseline gap-1.5">
                   <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
-                  <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês</span>
+                  <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês + IVA</span>
                 </p>
                 <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>
                   {featured ? `+ ${PAYMENTS_PLAN_COMMISSION} do que se paga pela app (sem IVA)` : "sem comissões"}
