@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/server/db/client";
 import { placeOrder } from "@/server/orders/place-order";
 import { clientIpFromHeaders, hashClientIp } from "@/server/security/rate-limit";
+import { queueTableEventByToken } from "@/server/notifications/push";
 
 export const dynamic = "force-dynamic";
 // Tempo de vida da função na Vercel: a resposta sai em ≤ 4 s e o envio ao POS (até 20 s) acaba em fundo.
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
     const headers: Record<string, string> = { "Cache-Control": "no-store" };
     if (result.code === "RATE_LIMITED") headers["Retry-After"] = String(result.retryAfterSeconds);
     return NextResponse.json({ code: result.code, message: result.message }, { status: STATUS_BY_CODE[result.code], headers });
+  }
+  // Pedido novo: avisa o telemóvel do responsável da mesa. Os que esperam pagamento (camas) avisam quando pagos.
+  const tableToken = (body as { tableToken?: unknown })?.tableToken;
+  if (typeof tableToken === "string" && result.order.status !== "AWAITING_PAYMENT") {
+    queueTableEventByToken(tableToken, { kind: "order", shortCode: result.order.shortCode, totalCents: result.order.totalCents });
   }
   return NextResponse.json({ order: result.order }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }

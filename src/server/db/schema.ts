@@ -293,6 +293,25 @@ export const reviews = pgTable(
   (t) => [index("reviews_establishment_idx").on(t.establishmentId, t.createdAt), check("reviews_stars_range", sql`${t.stars} between 1 and 5`)],
 );
 
+/**
+ * Aparelhos da equipa com notificações ligadas (web push): cada telemóvel ou computador onde
+ * alguém carregou em "Ativar notificações". Apagados quando o serviço de push diz que já não existem.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    userId: uuid("user_id").notNull(),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("push_subscriptions_est_idx").on(t.establishmentId, t.userId)],
+);
+
 // ───────────────────────── Integração POS ─────────────────────────
 export const posIntegrations = pgTable("pos_integrations", {
   id: id(),

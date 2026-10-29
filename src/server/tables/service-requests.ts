@@ -9,6 +9,7 @@ import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { hitRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
 import type { StaffContext } from "@/server/staff/context";
 import { loadBills } from "./table-sessions";
+import { queueTableEvent } from "@/server/notifications/push";
 import { isWellFormedTableToken } from "./table-token";
 
 /**
@@ -164,6 +165,7 @@ export async function notifyTablePaid(
   now: Date,
 ): Promise<void> {
   await tx.insert(serviceRequests).values({ ...t, kind: "paid", detail: paidDetail(amountCents, tipCents), createdAt: now });
+  queueTableEvent(t, { kind: "paid", amountCents });
   const bill = (await loadBills(tx, [t.tableId], now)).get(t.tableId);
   if (bill && bill.dueCents === 0) {
     await tx

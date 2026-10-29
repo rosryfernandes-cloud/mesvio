@@ -3,6 +3,7 @@ import { getDb } from "@/server/db/client";
 import { clientIpFromHeaders, hashClientIp } from "@/server/security/rate-limit";
 import { createServiceRequest, getTableCalls } from "@/server/tables/service-requests";
 import { getTableBillByToken } from "@/server/tables/table-sessions";
+import { queueTableEventByToken } from "@/server/notifications/push";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +33,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     if (r.retryAfterSeconds) headers["Retry-After"] = String(r.retryAfterSeconds);
     return NextResponse.json({ code: r.code, message: r.message }, { status: STATUS[r.code], headers });
   }
+  // Notificação no telemóvel do responsável da mesa (ou da equipa), depois da resposta.
+  const { kind, detail } = body as { kind: "bill" | "waiter"; detail: string };
+  queueTableEventByToken(token, { kind, detail });
   return NextResponse.json({ calls: r.calls }, { status: 201, headers: noStore });
 }
