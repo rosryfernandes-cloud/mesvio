@@ -34,6 +34,19 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
   const [confirming, setConfirming] = useState<{ tableId: string; force: boolean; override: boolean; askPaidWith: boolean; message: string } | null>(null);
   /** Mesas por empregado (em teste): eu e os nomes da equipa; null = desligado. */
   const [assignments, setAssignments] = useState<{ me: string; staff: { userId: string; name: string }[] } | null>(null);
+  /** "Só as minhas": esconde as mesas dos colegas neste aparelho (fica guardado no browser). */
+  const [onlyMine, setOnlyMine] = useState(false);
+  useEffect(() => {
+    try {
+      setOnlyMine(localStorage.getItem("mesvio:so-as-minhas") === "1");
+    } catch {}
+  }, []);
+  function toggleOnlyMine(value: boolean) {
+    setOnlyMine(value);
+    try {
+      localStorage.setItem("mesvio:so-as-minhas", value ? "1" : "0");
+    } catch {}
+  }
 
   const load = useCallback(async () => {
     const res = await fetch("/api/painel/mesas", { cache: "no-store" }).catch(() => null);
@@ -161,7 +174,9 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       const inZone = tables.filter((t) => (t.zone ?? "Sem zona") === zone);
       return { title: zone, list: inZone.filter((t) => !mine.includes(t)), payFirst: inZone.some((t) => t.orderingMode === "pay_first") };
     }),
-  ].filter((g) => g.list.length > 0 || g.title === "As minhas mesas");
+  ]
+    .filter((g) => g.list.length > 0 || g.title === "As minhas mesas")
+    .filter((g) => !(assignments && onlyMine) || g.title === "As minhas mesas");
 
   /** Responsável da mesa: o gerente escolhe quem; um empregado fica com mesas livres ou larga as suas. */
   function ownerControl(t: TableOverview) {
@@ -260,6 +275,24 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
         </p>
       )}
 
+      {assignments && (
+        <div role="group" aria-label="Que mesas mostrar" className="flex gap-2">
+          {[
+            [false, "Todas as mesas"],
+            [true, `Só as minhas (${mine.length})`],
+          ].map(([value, label]) => (
+            <button
+              key={String(value)}
+              type="button"
+              aria-pressed={onlyMine === value}
+              onClick={() => toggleOnlyMine(value as boolean)}
+              className={`min-h-10 rounded-xl border px-3 text-sm font-semibold ${onlyMine === value ? "border-brand bg-brand text-white" : "border-line bg-card"}`}
+            >
+              {label as string}
+            </button>
+          ))}
+        </div>
+      )}
       {groups.map(({ title: zone, list, payFirst }) => (
       <section key={zone} aria-label={zone} className="grid gap-2">
         <h2 className="text-sm font-semibold tracking-wide text-ink-soft uppercase">
