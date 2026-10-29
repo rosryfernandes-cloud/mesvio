@@ -4,11 +4,12 @@ import { loadMenuTranslations, untranslated, type MenuTranslator } from "@/serve
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { and, asc, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, payments, serviceRequests, tableSessions } from "@/server/db/schema";
+import { auditLogs, diningTables, establishments, orderEvents, orderItems, orders, outbox, payments, serviceRequests, staffProfiles, tableSessions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import type { OrderStatus } from "@/server/orders/order-view";
 import type { StaffContext } from "@/server/staff/context";
 import { isWellFormedTableToken } from "./table-token";
+import { assignmentsEnabled, type PaidWith } from "./assignments";
 
 /**
  * Sessões de mesa: a "conta" de um grupo de clientes, do primeiro pedido até o staff fechar a mesa.
@@ -253,13 +254,22 @@ export interface TableOverview {
   pendingCount: number;
   /** Chamadas abertas do cliente: pede a conta e/ou chama um empregado. */
   calls: ("bill" | "waiter" | "paid")[];
+  /** Empregado responsável (mesas por empregado); null = de todos. */
+  assignedUserId: string | null;
 }
 
 /** Todas as mesas do restaurante com a conta aberta de cada uma. */
 export async function listTables(db: Db, s: Scope, now = new Date()): Promise<TableOverview[]> {
   return withTenant(db, tenantOf(s), async (tx) => {
     const tables = await tx
-      .select({ id: diningTables.id, label: diningTables.label, zone: diningTables.zone, mode: diningTables.orderingMode, plan: establishments.plan })
+      .select({
+        id: diningTables.id,
+        label: diningTables.label,
+        zone: diningTables.zone,
+        mode: diningTables.orderingMode,
+        plan: establishments.plan,
+        assignedUserId: diningTables.assignedUserId,
+      })
       .from(diningTables)
       .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
       .where(and(eq(diningTables.establishmentId, s.establishmentId), eq(diningTables.active, true)))
@@ -283,6 +293,7 @@ export async function listTables(db: Db, s: Scope, now = new Date()): Promise<Ta
         bill: open,
         pendingCount: open?.orders.filter((o) => o.pending).length ?? 0,
         calls: openCalls.filter((c) => c.tableId === t.id).map((c) => c.kind),
+        assignedUserId: t.assignedUserId,
       });
     }
     // Por zona e depois em ordem natural ("Mesa 2" antes de "Mesa 10").
@@ -295,13 +306,26 @@ export type CloseResult =
   /** `cancelled`: pedidos pendentes cancelados no fecho forçado; `checkInPos`: dos quais podem já estar no POS. */
   | { ok: true; cancelled: string[]; checkInPos: string[] }
   | { ok: false; code: "NOT_FOUND" | "ALREADY_FREE" | "PENDING_PAYMENT"; message: string }
-  | { ok: false; code: "PENDING_ORDERS"; message: string; pendingCount: number };
+  | { ok: false; code: "PENDING_ORDERS"; message: string; pendingCount: number }
+  /** Mesas por empregado: a mesa é de um colega (fecha com `override`, fica registado). */
+  | { ok: false; code: "NOT_YOURS"; message: string; assignedTo: string }
+  /** Mesas por empregado: falta pagar pela app; diga como foi pago ao balcão (`paidWith`). */
+  | { ok: false; code: "PAID_WITH_REQUIRED"; message: string; dueCents: number };
 
-/** Fecha a conta da mesa. Com pedidos por resolver, só fecha com `force` (o staff confirmou). */
-export async function closeTable(db: Db, s: Scope, tableId: string, { force = false, now = new Date() } = {}): Promise<CloseResult> {
+/**
+ * Fecha a conta da mesa. Com pedidos por resolver, só fecha com `force` (o staff confirmou).
+ * Com as mesas por empregado ligadas: a mesa de um colega só fecha com `override`, e com valor em
+ * falta só fecha dizendo como foi pago (`paidWith`), para não se fecharem contas por engano.
+ */
+export async function closeTable(
+  db: Db,
+  s: Scope & { role?: StaffContext["role"] },
+  tableId: string,
+  { force = false, override = false, paidWith = null, now = new Date() }: { force?: boolean; override?: boolean; paidWith?: PaidWith | null; now?: Date } = {},
+): Promise<CloseResult> {
   return withTenant(db, tenantOf(s), async (tx) => {
     const [table] = await tx
-      .select({ id: diningTables.id })
+      .select({ id: diningTables.id, assignedUserId: diningTables.assignedUserId })
       .from(diningTables)
       .where(and(eq(diningTables.id, tableId), eq(diningTables.establishmentId, s.establishmentId)));
     if (!table) return { ok: false, code: "NOT_FOUND", message: "Mesa não encontrada." };
@@ -321,6 +345,17 @@ export async function closeTable(db: Db, s: Scope, tableId: string, { force = fa
       };
     }
 
+    const assignments = await assignmentsEnabled(tx, s.establishmentId);
+    const notTheirs = assignments && table.assignedUserId !== null && table.assignedUserId !== s.userId;
+    if (notTheirs && s.role === "staff" && !override) {
+      const [who] = await tx
+        .select({ name: staffProfiles.displayName, email: staffProfiles.email })
+        .from(staffProfiles)
+        .where(eq(staffProfiles.userId, table.assignedUserId!));
+      const assignedTo = who?.name || who?.email || "outro empregado";
+      return { ok: false, code: "NOT_YOURS", assignedTo, message: `Esta mesa é de ${assignedTo}.` };
+    }
+
     const pending = await tx.$count(orders, and(eq(orders.tableSessionId, session.id), inArray(orders.status, PENDING_STATUSES)));
     if (pending > 0 && !force) {
       return {
@@ -330,6 +365,12 @@ export async function closeTable(db: Db, s: Scope, tableId: string, { force = fa
         message: pending === 1 ? "Há 1 pedido desta mesa ainda por resolver." : `Há ${pending} pedidos desta mesa ainda por resolver.`,
       };
     }
+    // Valor em falta (não pago pela app): com mesas por empregado, quem fecha diz como foi pago.
+    const dueCents = assignments ? ((await loadBill(tx, tableId, now))?.dueCents ?? 0) : 0;
+    if (assignments && dueCents > 0 && !paidWith) {
+      return { ok: false, code: "PAID_WITH_REQUIRED", dueCents, message: "Falta pagar pela app. Como pagaram?" };
+    }
+
     // Fecho forçado: os pedidos pendentes desta conta não podem chegar à cozinha depois de os clientes
     // saírem — cancelam-se e as tarefas de envio terminam, na mesma transação (auditoria M1).
     const pendingRows = await tx
@@ -383,7 +424,12 @@ export async function closeTable(db: Db, s: Scope, tableId: string, { force = fa
       action: "table.close",
       entityType: "table_session",
       entityId: session.id,
-      after: { tableId, pendingAtClose: pending, cancelledOrders: cancelledRows.map((r) => r.shortCode) },
+      after: {
+        tableId,
+        pendingAtClose: pending,
+        cancelledOrders: cancelledRows.map((r) => r.shortCode),
+        ...(assignments ? { dueCents, paidWith: dueCents > 0 ? paidWith : null, assignedUserId: table.assignedUserId } : {}),
+      },
       createdAt: now,
     });
     return { ok: true, cancelled: cancelledRows.map((r) => r.shortCode), checkInPos: mayBeInPos.map((r) => r.shortCode) };

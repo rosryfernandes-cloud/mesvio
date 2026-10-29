@@ -7,6 +7,7 @@ import { usePolling } from "../use-polling";
 import { SubscriptionCard } from "./subscription-card";
 import { InvoicingCard } from "./invoicing-card";
 import { StripeConnectCard } from "./stripe-connect-card";
+import { AssignmentsCard } from "./assignments-card";
 import type { TableOverview } from "@/server/tables/table-sessions";
 
 const POLL_MS = 5000;
@@ -26,8 +27,13 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
   const [message, setMessageState] = useState<{ text: string; error: boolean } | null>(null);
   const setMessage = (text: string | null, error = false) => setMessageState(text ? { text, error } : null);
   const [now, setNow] = useState(() => Date.now());
-  /** Mesa à espera de confirmação para fechar (e se é a segunda confirmação, com pedidos por resolver). */
-  const [confirming, setConfirming] = useState<{ tableId: string; force: boolean; message: string } | null>(null);
+  /**
+   * Mesa à espera de confirmação para fechar. `force`: há pedidos por resolver; `override`: é a mesa
+   * de um colega; `askPaidWith`: falta pagar e é preciso dizer como foi pago (mesas por empregado).
+   */
+  const [confirming, setConfirming] = useState<{ tableId: string; force: boolean; override: boolean; askPaidWith: boolean; message: string } | null>(null);
+  /** Mesas por empregado (em teste): eu e os nomes da equipa; null = desligado. */
+  const [assignments, setAssignments] = useState<{ me: string; staff: { userId: string; name: string }[] } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/painel/mesas", { cache: "no-store" }).catch(() => null);
@@ -36,6 +42,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       setTables(data.tables);
       setPaymentsEnabled(data.paymentsEnabled);
       setPaymentsInPlan(data.paymentsInPlan !== false);
+      setAssignments(data.assignments ?? null);
     }
     setNow(Date.now());
   }, []);
@@ -50,17 +57,20 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
     setConfirming({
       tableId: t.tableId,
       force: false,
+      override: false,
+      askPaidWith: false,
       message: `Fechar a ${t.label}? A conta (${formatEur(t.bill!.totalCents)}) fica fechada e a mesa fica livre para os próximos clientes.`,
     });
   }
 
-  async function close(t: TableOverview, force: boolean): Promise<void> {
+  async function close(t: TableOverview, opts: { force: boolean; override: boolean; paidWith?: string }): Promise<void> {
+    const { force, override } = opts;
     setBusy(t.tableId);
     setMessage(null);
     const res = await fetch(`/api/painel/mesas/${t.tableId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "close", force }),
+      body: JSON.stringify({ action: "close", force, override, paidWith: opts.paidWith }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(null);
@@ -74,17 +84,43 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       );
       setOpenId(null);
       setConfirming(null);
+    } else if (data.code === "NOT_YOURS") {
+      setConfirming({ tableId: t.tableId, force, override: true, askPaidWith: false, message: `${data.message} Fechar mesmo assim? Fica registado que foi fechada por si.` });
     } else if (data.code === "PENDING_ORDERS") {
       setConfirming({
         tableId: t.tableId,
         force: true,
+        override,
+        askPaidWith: false,
         message: `${data.message} Esses pedidos podem ainda não ter chegado à cozinha. Fechar a mesa mesmo assim?`,
+      });
+    } else if (data.code === "PAID_WITH_REQUIRED") {
+      setConfirming({
+        tableId: t.tableId,
+        force,
+        override,
+        askPaidWith: true,
+        message: `Faltam ${formatEur(data.dueCents)} que não foram pagos pela app. Como pagaram?`,
       });
     } else {
       // Inclui PENDING_PAYMENT: com dinheiro a caminho a mesa não fecha, nem forçada.
       setConfirming(null);
       setMessage(data.message ?? (res ? "Não foi possível fechar a mesa." : "Sem ligação. Tente de novo."), true);
     }
+    await load();
+  }
+
+  async function assign(t: TableOverview, userId: string | null) {
+    setBusy(t.tableId);
+    setMessage(null);
+    const res = await fetch(`/api/painel/mesas/${t.tableId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "assign", userId }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(null);
+    if (!res?.ok) setMessage(data.message ?? "Não foi possível mudar o responsável.", true);
     await load();
   }
 
@@ -116,6 +152,63 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
 
   if (!tables) return <p className="text-ink-soft">A carregar as mesas…</p>;
   const occupied = tables.filter((t) => t.bill);
+  const nameOf = (userId: string | null) => (userId ? (assignments?.staff.find((m) => m.userId === userId)?.name ?? "outro empregado") : null);
+  // Mesas por empregado: as minhas primeiro, numa secção própria; as dos colegas continuam visíveis.
+  const mine = assignments ? tables.filter((t) => t.assignedUserId === assignments.me) : [];
+  const groups: { title: string; list: TableOverview[]; payFirst: boolean }[] = [
+    ...(assignments ? [{ title: "As minhas mesas", list: mine, payFirst: false }] : []),
+    ...[...new Set(tables.map((t) => t.zone ?? "Sem zona"))].map((zone) => {
+      const inZone = tables.filter((t) => (t.zone ?? "Sem zona") === zone);
+      return { title: zone, list: inZone.filter((t) => !mine.includes(t)), payFirst: inZone.some((t) => t.orderingMode === "pay_first") };
+    }),
+  ].filter((g) => g.list.length > 0 || g.title === "As minhas mesas");
+
+  /** Responsável da mesa: o gerente escolhe quem; um empregado fica com mesas livres ou larga as suas. */
+  function ownerControl(t: TableOverview) {
+    if (!assignments) return null;
+    const name = nameOf(t.assignedUserId);
+    const isMine = t.assignedUserId === assignments.me;
+    if (canEditSettings) {
+      return (
+        <label className="mt-2 flex items-center gap-2 text-xs text-ink-soft">
+          Responsável
+          <select
+            value={t.assignedUserId ?? ""}
+            disabled={busy === t.tableId}
+            onChange={(e) => assign(t, e.target.value || null)}
+            className="min-h-9 flex-1 rounded-lg border border-line bg-paper px-2 text-sm text-ink"
+          >
+            <option value="">Ninguém</option>
+            {assignments.staff.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+    if (isMine) {
+      return (
+        <button type="button" disabled={busy === t.tableId} onClick={() => assign(t, null)} className="mt-2 min-h-9 text-left text-xs font-semibold text-ink-soft underline">
+          A minha mesa · largar
+        </button>
+      );
+    }
+    if (!t.assignedUserId) {
+      return (
+        <button
+          type="button"
+          disabled={busy === t.tableId}
+          onClick={() => assign(t, assignments.me)}
+          className="mt-2 min-h-9 rounded-lg border border-brand px-2 text-xs font-semibold text-brand"
+        >
+          Ficar com esta mesa
+        </button>
+      );
+    }
+    return <span className="mt-2 block text-xs text-ink-soft">Mesa de {name}</span>;
+  }
 
   return (
     <div className="grid gap-4">
@@ -144,6 +237,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       {canEditSettings && <SubscriptionCard />}
       {canEditSettings && paymentsInPlan && <StripeConnectCard />}
       {canEditSettings && paymentsInPlan && <InvoicingCard />}
+      {canEditSettings && <AssignmentsCard onChange={() => void load()} />}
       {canEditSettings && (
         <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
           <span>
@@ -166,17 +260,21 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
         </p>
       )}
 
-      {[...new Set(tables.map((t) => t.zone ?? "Sem zona"))].map((zone) => (
+      {groups.map(({ title: zone, list, payFirst }) => (
       <section key={zone} aria-label={zone} className="grid gap-2">
         <h2 className="text-sm font-semibold tracking-wide text-ink-soft uppercase">
           {zone}
-          {tables.some((t) => (t.zone ?? "Sem zona") === zone && t.orderingMode === "pay_first") && (
-            <span className="ml-2 font-normal normal-case">· pagam ao pedir</span>
-          )}
+          {payFirst && <span className="ml-2 font-normal normal-case">· pagam ao pedir</span>}
         </h2>
+      {list.length === 0 && (
+        <p className="rounded-2xl border border-dashed border-line px-4 py-3 text-sm text-ink-soft">
+          Ainda não tem mesas. {canEditSettings ? "Escolha o responsável de cada mesa abaixo." : "Toque em “Ficar com esta mesa” nas mesas que vai atender."}
+        </p>
+      )}
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {tables.filter((t) => (t.zone ?? "Sem zona") === zone).map((t) => {
+        {list.map((t) => {
           const selected = openId === t.tableId;
+          const colleagues = Boolean(assignments && t.assignedUserId && t.assignedUserId !== assignments.me);
           return (
             <li key={t.tableId} className={selected ? "col-span-2 sm:col-span-3 lg:col-span-5" : ""}>
               {!t.bill ? (
@@ -184,10 +282,11 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                   <span className="font-semibold">{t.label}</span>
                   <span className="text-sm">Livre</span>
                   <CallBadges calls={t.calls} />
+                  {ownerControl(t)}
                 </div>
               ) : (
                 <div
-                  className={`rounded-2xl border bg-card ${
+                  className={`rounded-2xl border bg-card ${colleagues && !selected ? "opacity-75 " : ""}${
                     t.bill.totalCents > 0 && t.bill.dueCents === 0
                       ? "border-ok ring-2 ring-ok/20"
                       : t.pendingCount > 0
@@ -223,12 +322,14 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                     <span className="text-xl font-semibold tabular-nums">{formatEur(t.bill.totalCents)}</span>
                     <span className="text-xs text-ink-soft">
                       {t.bill.orders.length} {t.bill.orders.length === 1 ? "pedido" : "pedidos"} · aberta {since(t.bill.openedAt!, now)}
+                      {colleagues && ` · ${nameOf(t.assignedUserId)}`}
                     </span>
                     <CallBadges calls={t.calls} />
                   </button>
 
                   {selected && (
                     <div className="border-t border-line px-4 py-3">
+                      {ownerControl(t)}
                       <ul className="grid gap-2 text-sm">
                         {t.bill.orders.map((o) => (
                           <li key={o.id} className={o.void ? "text-ink-soft line-through" : ""}>
@@ -281,15 +382,45 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                           </button>
                         )}
                       </div>
-                      {confirming?.tableId === t.tableId && (
-                        <ConfirmInline
-                          message={confirming.message}
-                          confirmLabel={confirming.force ? "Fechar mesmo assim" : "Sim, fechar mesa"}
-                          busy={busy === t.tableId}
-                          onConfirm={() => close(t, confirming.force)}
-                          onCancel={() => setConfirming(null)}
-                        />
-                      )}
+                      {confirming?.tableId === t.tableId &&
+                        (confirming.askPaidWith ? (
+                          <div role="alertdialog" aria-label={confirming.message} className="mt-3 rounded-xl border border-brand bg-brand-soft p-3">
+                            <p className="text-sm">{confirming.message}</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {[
+                                ["cash", "Dinheiro"],
+                                ["card", "Multibanco"],
+                                ["other", "Outro"],
+                              ].map(([value, label]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  disabled={busy === t.tableId}
+                                  onClick={() => close(t, { force: confirming.force, override: confirming.override, paidWith: value })}
+                                  className="min-h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                disabled={busy === t.tableId}
+                                onClick={() => setConfirming(null)}
+                                className="min-h-11 rounded-xl border border-line bg-card px-4 text-sm font-semibold disabled:opacity-50"
+                              >
+                                Voltar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <ConfirmInline
+                            message={confirming.message}
+                            confirmLabel={confirming.force || confirming.override ? "Fechar mesmo assim" : "Sim, fechar mesa"}
+                            busy={busy === t.tableId}
+                            onConfirm={() => close(t, { force: confirming.force, override: confirming.override })}
+                            onCancel={() => setConfirming(null)}
+                          />
+                        ))}
                     </div>
                   )}
                 </div>

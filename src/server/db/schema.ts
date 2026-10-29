@@ -117,6 +117,8 @@ export const establishments = pgTable(
     reviewsEnabled: boolean("reviews_enabled").notNull().default(false),
     /** Link "escrever avaliação" do Google do restaurante (https); null = sem botão do Google. */
     googleReviewUrl: text("google_review_url"),
+    /** Mesas por empregado (em teste): cada mesa tem um responsável e fechar com valor em falta pede como foi pago. */
+    tableAssignmentsEnabled: boolean("table_assignments_enabled").notNull().default(false),
     /** Cor própria na ementa (#rrggbb, validada para contraste AA em src/lib/brand-color.ts); null = verde MESVIO. */
     brandColor: text("brand_color"),
     /** Logótipo do restaurante na ementa (URL https); null = só o nome. */
@@ -227,6 +229,8 @@ export const diningTables = pgTable(
     /** Zona do restaurante para o staff saber onde levar (ex.: "Esplanada", "Praia"). */
     zone: text("zone"),
     orderingMode: orderingMode("ordering_mode").notNull().default("pay_later"),
+    /** Empregado responsável (mesas por empregado, em teste); null = de todos. Fica até alguém a mudar. */
+    assignedUserId: uuid("assigned_user_id"),
     createdAt: createdAt(),
   },
   (t) => [index("dining_tables_est_idx").on(t.organizationId, t.establishmentId)],
