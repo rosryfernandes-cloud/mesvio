@@ -262,6 +262,15 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span aria-hidden="true">→</span>
         </a>
       )}
+      {canEditSettings && (
+        <a href="/painel/placas" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
+          <span>
+            <span className="block font-semibold">Placas para a gráfica</span>
+            <span className="block text-sm text-ink-soft">Autocolante, placa de mesa ou de praia, com o logótipo e a cor do restaurante, em PDF.</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      )}
       <p className="text-sm text-ink-soft">
         {occupied.length === 0 ? "Todas as mesas estão livres." : `${occupied.length} de ${tables.length} mesas com conta aberta.`} Quando os clientes
         pagarem, feche a mesa para a limpar para os próximos.
