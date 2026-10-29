@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   description:
     "O empregado que não sabias que precisavas. Pedidos digitais por QR Code e NFC para restaurantes, bares de praia, hotéis e piscinas, sem instalar aplicações.",
   applicationName: "MESVIO",
+  // Instalar o painel no iPhone ("Adicionar ao ecrã principal"): ícone e abrir em ecrã inteiro.
+  appleWebApp: { capable: true, title: "MESVIO", statusBarStyle: "default" },
+  icons: { icon: "/icon.svg", apple: "/icons/apple-touch-icon.png" },
   openGraph: {
     type: "website",
     locale: "pt_PT",
