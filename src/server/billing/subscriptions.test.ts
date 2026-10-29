@@ -17,7 +17,7 @@ beforeEach(async () => {
 /** Stripe de mentira: clientes, Checkout e subscrições, com as chamadas registadas. */
 function fakeStripe() {
   const calls: { op: string; args: unknown }[] = [];
-  const subs = new Map<string, { id: string; status: string; items: { data: { id: string; current_period_end: number; price: { product: string; unit_amount: number } }[] } }>();
+  const subs = new Map<string, { id: string; status: string; metadata?: Record<string, string>; items: { data: { id: string; current_period_end: number; price: { product: string; unit_amount: number } }[] } }>();
   let sessionMeta: Record<string, string> = {};
   const stripe = {
     customers: {
@@ -41,6 +41,9 @@ function fakeStripe() {
       },
     },
     subscriptions: {
+      async list() {
+        return { data: [...subs.values()] };
+      },
       async retrieve(id: string) {
         return subs.get(id)!;
       },
@@ -64,6 +67,7 @@ describe("mensalidade MESVIO (Stripe Billing)", () => {
     expect(checkout).toMatchObject({
       mode: "subscription",
       customer: "cus_1",
+      allowed_payment_method_types: ["card"],
       metadata: { establishmentId: owner.establishmentId },
       line_items: [{ price_data: { currency: "eur", unit_amount: 5900, recurring: { interval: "month" } } }],
     });
@@ -82,6 +86,16 @@ describe("mensalidade MESVIO (Stripe Billing)", () => {
 
     f.setMeta({ establishmentId: "outro" });
     expect(await finishSubscriptionCheckout(db, owner, "cs_1", f.stripe)).toBe(false);
+  });
+
+  it("pagou mas o regresso falhou: o painel encontra a subscrição na Stripe", async () => {
+    const f = fakeStripe();
+    await startSubscriptionCheckout(db, owner, "https://x", f.stripe);
+    expect(await getBillingStatus(db, owner, f.stripe)).toMatchObject({ status: null, active: false });
+    f.subs.set("sub_9", { id: "sub_9", status: "active", metadata: { establishmentId: owner.establishmentId }, items: { data: [{ id: "si_9", current_period_end: 1_800_000_000, price: { product: "prod_1", unit_amount: 5900 } }] } });
+    expect(await getBillingStatus(db, owner, f.stripe)).toMatchObject({ status: "active", active: true });
+    const [e] = await db.select({ id: establishments.billingSubscriptionId }).from(establishments).where(eq(establishments.id, owner.establishmentId));
+    expect(e.id).toBe("sub_9");
   });
 
   it("mudar de plano muda o valor da subscrição; sem subscrição não faz nada", async () => {

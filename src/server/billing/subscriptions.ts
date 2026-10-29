@@ -71,7 +71,16 @@ export async function getBillingStatus(systemDb: Db, s: Scope, stripe: Stripe | 
   const e = await row(systemDb, s);
   let status = e.status;
   let periodEnd = e.periodEnd;
-  if (stripe && e.subscriptionId) {
+  if (stripe && !e.subscriptionId && e.customerId) {
+    // Pagou mas o regresso do Checkout não chegou ao painel: procura a subscrição na Stripe.
+    const subs = await stripe.subscriptions.list({ customer: e.customerId, status: "all", limit: 10 }).catch(() => null);
+    const sub = subs?.data.find((x) => x.metadata?.establishmentId === s.establishmentId && x.status !== "incomplete_expired");
+    if (sub) {
+      await store(systemDb, s.establishmentId, sub);
+      status = sub.status;
+      periodEnd = periodEndOf(sub);
+    }
+  } else if (stripe && e.subscriptionId) {
     const sub = await stripe.subscriptions.retrieve(e.subscriptionId).catch(() => null);
     if (sub) {
       await store(systemDb, s.establishmentId, sub);
@@ -111,6 +120,7 @@ export async function startSubscriptionCheckout(
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
+    allowed_payment_method_types: ["card"],
     line_items: [
       {
         quantity: 1,
