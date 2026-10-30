@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { json } from "@/server/staff/http";
-import { createUserDirectory } from "@/server/auth/user-directory";
+import { createUserDirectory, InviteError, inviteErrorText } from "@/server/auth/user-directory";
 import { guardPlatform } from "@/server/platform/admin-auth";
 import { inviteOwner } from "@/server/platform/platform-service";
 
@@ -18,6 +18,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return json(result, result.ok ? 201 : result.code === "NOT_FOUND" ? 404 : 400);
   } catch (err) {
     console.error("[central] convite ao dono falhou", err);
-    return json({ ok: false, message: "O convite falhou. Tente de novo." }, 502);
+    return json({ ok: false, message: err instanceof InviteError ? inviteErrorText(err.message) : "O convite falhou. Tente de novo." }, 502);
   }
 }

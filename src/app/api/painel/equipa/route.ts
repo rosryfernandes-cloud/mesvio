@@ -1,5 +1,5 @@
 import { getDb } from "@/server/db/client";
-import { createUserDirectory } from "@/server/auth/user-directory";
+import { createUserDirectory, InviteError, inviteErrorText } from "@/server/auth/user-directory";
 import { guardStaff, json } from "@/server/staff/http";
 import { inviteMember, inviteSchema, listTeam } from "@/server/staff/team-service";
 
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     return result.ok ? json({ ok: true }) : json(result, result.code === "FORBIDDEN" ? 403 : 409);
   } catch (err) {
     console.error("[equipa] convite falhou", err);
-    return json({ message: "Não foi possível enviar o convite. Tente de novo." }, 502);
+    const message = err instanceof InviteError ? inviteErrorText(err.message) : "Não foi possível enviar o convite. Tente de novo.";
+    return json({ message }, 502);
   }
 }

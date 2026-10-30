@@ -1,6 +1,6 @@
 import { getDb } from "@/server/db/client";
 import { json } from "@/server/staff/http";
-import { createUserDirectory } from "@/server/auth/user-directory";
+import { createUserDirectory, InviteError, inviteErrorText } from "@/server/auth/user-directory";
 import { guardPlatform } from "@/server/platform/admin-auth";
 import { createRestaurant } from "@/server/platform/platform-service";
 
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     return json(result, 201);
   } catch (err) {
     console.error("[central] criar restaurante falhou", err);
-    return json({ ok: false, message: "Não foi possível criar (o convite ao dono pode ter falhado). Tente de novo." }, 502);
+    const message = err instanceof InviteError ? inviteErrorText(err.message) : "Não foi possível criar (o convite ao dono pode ter falhado). Tente de novo.";
+    return json({ ok: false, message }, 502);
   }
 }
