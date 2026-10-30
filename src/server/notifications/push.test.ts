@@ -5,7 +5,8 @@ import { DEMO_USERS } from "@/server/db/seed-demo";
 import { DEMO_TABLES } from "@/server/pos/mock/demo-data";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
 import { assignTable, setAssignmentsEnabled } from "@/server/tables/assignments";
-import { messageFor, notifyMe, notifyTableEvent, removeSubscription, saveSubscription, type PushSender } from "./push";
+import { DEMO_PLATFORM_ADMIN } from "@/server/db/seed-demo";
+import { messageFor, notifyMe, notifyPlatformAdmins, notifyTableEvent, removeSubscription, saveSubscription, type PushSender } from "./push";
 
 const T1 = DEMO_TABLES[0];
 let db: Db;
@@ -79,3 +80,16 @@ describe("notificações da equipa (web push)", () => {
     expect(await notifyTableEvent(db, t1(), { kind: "bill", detail: "card" }, null)).toBe(0);
   });
 });
+
+describe("avisos para a equipa MESVIO", () => {
+  it("só os aparelhos dos administradores do painel central recebem (um aviso por aparelho)", async () => {
+    await saveSubscription(db, owner, device("dona"));
+    const admin = { organizationId: owner.organizationId, establishmentId: owner.establishmentId, userId: DEMO_PLATFORM_ADMIN.userId, p256dh: "p", auth: "a" };
+    await db.insert(pushSubscriptions).values({ ...admin, endpoint: "https://push.example/paula" });
+    const { send, received } = fakeSender();
+    const msg = { title: "Novo pedido de demonstração", body: "Joana · Bar Azul", tag: "demo-1", url: "/central/pedidos" };
+    expect(await notifyPlatformAdmins(db, msg, send)).toBe(1);
+    expect(received).toEqual([{ endpoint: "https://push.example/paula", message: msg }]);
+  });
+});
+

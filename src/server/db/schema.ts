@@ -642,9 +642,16 @@ export const demoRequests = pgTable(
     ipHash: text("ip_hash"),
     /** Quando o aviso por email foi enviado à equipa (null = ainda não / email não configurado). */
     notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    /** Quando a pessoa recebeu o email "recebemos o teu pedido". */
+    confirmationSentAt: timestamp("confirmation_sent_at", { withTimezone: true }),
+    /** Seguimento no painel central: novo → contactado → demo marcada → cliente (ou sem interesse). */
+    status: text("status", { enum: ["new", "contacted", "demo", "client", "lost"] }).notNull().default("new"),
+    /** Notas da equipa MESVIO (ex.: "ligar 3.ª de manhã"). */
+    notes: text("notes"),
+    statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index("demo_requests_created_idx").on(t.createdAt)],
+  (t) => [index("demo_requests_created_idx").on(t.createdAt), check("demo_requests_status_check", sql`${t.status} in ('new', 'contacted', 'demo', 'client', 'lost')`)],
 );
 
 // ───────────────────────── Reconciliação e comissões ─────────────────────────

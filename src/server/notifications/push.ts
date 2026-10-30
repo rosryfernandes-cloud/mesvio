@@ -4,7 +4,7 @@ import { z } from "zod";
 import webpush from "web-push";
 import { formatEur } from "@/lib/money";
 import { getDb, type Db } from "@/server/db/client";
-import { diningTables, establishments, pushSubscriptions } from "@/server/db/schema";
+import { diningTables, establishments, platformAdmins, pushSubscriptions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { keepAlive } from "@/server/runtime/keep-alive";
 import type { StaffContext } from "@/server/staff/context";
@@ -157,6 +157,28 @@ export async function notifyMe(db: Db, s: Scope, send: PushSender | null = vapid
     tx.select().from(pushSubscriptions).where(and(eq(pushSubscriptions.userId, s.userId), eq(pushSubscriptions.establishmentId, s.establishmentId))),
   );
   return deliver(db, s.organizationId, subs, { title: "MESVIO", body: "As notificações estão a funcionar. ✓", tag: "teste", url: "/painel" }, send);
+}
+
+/**
+ * Avisos para a equipa MESVIO (ex.: novo pedido de demonstração): vão para os aparelhos em que
+ * os administradores do painel central ligaram as notificações no painel. Ligação de sistema.
+ */
+export async function notifyPlatformAdmins(systemDb: Db, message: PushMessage, send: PushSender | null = vapidSender()): Promise<number> {
+  if (!send) return 0;
+  const admins = await systemDb.select({ userId: platformAdmins.userId }).from(platformAdmins);
+  if (admins.length === 0) return 0;
+  const subs = await systemDb.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, admins.map((a) => a.userId)));
+  // O mesmo aparelho pode estar ligado em vários restaurantes: uma notificação por aparelho.
+  const unique = [...new Map(subs.map((s) => [s.endpoint, s])).values()];
+  let sent = 0;
+  for (const [org, list] of Map.groupBy(unique, (s) => s.organizationId)) sent += await deliver(systemDb, org, list, message, send);
+  return sent;
+}
+
+/** Envia uma notificação qualquer depois da resposta (sem chaves VAPID não faz nada). */
+export function queuePush(job: (db: Db) => Promise<unknown>): void {
+  if (!vapidSender()) return;
+  keepAlive((async () => job(await getDb()))().catch((err) => console.error("[notificações] falhou", err)));
 }
 
 /**

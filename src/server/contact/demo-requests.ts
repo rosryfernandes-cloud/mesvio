@@ -1,9 +1,10 @@
 import "server-only";
-import { and, asc, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
 import { hitRateLimit, type RateLimitRule } from "@/server/security/rate-limit";
+import { notifyPlatformAdmins, queuePush } from "@/server/notifications/push";
 
 /** Pedidos de demonstração da landing page (potenciais clientes da MESVIO). */
 
@@ -21,18 +22,30 @@ export async function pruneDemoRequests(db: Db, now = new Date()): Promise<void>
  * Pedidos guardados cujo email não saiu (ex.: domínio ainda por verificar na Resend): volta a
  * tentar nas tarefas de fundo, até 2 dias depois. Devolve quantos foram avisados agora.
  */
-export async function retryDemoRequestEmails(db: Db, { notify = sendDemoRequestEmail, now = new Date() }: { notify?: Notifier; now?: Date } = {}): Promise<number> {
+export async function retryDemoRequestEmails(
+  db: Db,
+  { notify = sendDemoRequestEmail, confirm = sendDemoConfirmationEmail, now = new Date() }: { notify?: Notifier; confirm?: Notifier; now?: Date } = {},
+): Promise<number> {
   if (!process.env.RESEND_API_KEY || !process.env.DEMO_REQUESTS_TO || !process.env.DEMO_REQUESTS_FROM) return 0;
   const pending = await db
     .select()
     .from(demoRequests)
-    .where(and(isNull(demoRequests.notifiedAt), gt(demoRequests.createdAt, new Date(now.getTime() - 2 * 86_400_000))))
+    .where(
+      and(
+        or(isNull(demoRequests.notifiedAt), isNull(demoRequests.confirmationSentAt)),
+        gt(demoRequests.createdAt, new Date(now.getTime() - 2 * 86_400_000)),
+      ),
+    )
     .orderBy(asc(demoRequests.createdAt))
     .limit(5);
   let sent = 0;
   for (const r of pending) {
-    if (await notify(r).catch(() => false)) {
+    if (!r.notifiedAt && (await notify(r).catch(() => false))) {
       await db.update(demoRequests).set({ notifiedAt: now }).where(eq(demoRequests.id, r.id));
+      sent++;
+    }
+    if (!r.confirmationSentAt && (await confirm(r).catch(() => false))) {
+      await db.update(demoRequests).set({ confirmationSentAt: now }).where(eq(demoRequests.id, r.id));
       sent++;
     }
   }
@@ -68,7 +81,12 @@ export interface Notifier {
 export async function createDemoRequest(
   db: Db,
   input: unknown,
-  { ipHash, notify = sendDemoRequestEmail }: { ipHash: string; notify?: Notifier },
+  {
+    ipHash,
+    notify = sendDemoRequestEmail,
+    confirm = sendDemoConfirmationEmail,
+    alert = queueDemoRequestPush,
+  }: { ipHash: string; notify?: Notifier; confirm?: Notifier; alert?: (r: typeof demoRequests.$inferSelect) => void },
 ): Promise<DemoRequestResult> {
   const parsed = demoRequestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
@@ -92,9 +110,17 @@ export async function createDemoRequest(
     })
     .returning();
 
-  // O pedido já está guardado: uma falha no email não o perde (fica com notified_at a null).
-  const notified = await notify(row).catch(() => false);
-  if (notified) await db.update(demoRequests).set({ notifiedAt: new Date() }).where(eq(demoRequests.id, row.id));
+  // O pedido já está guardado: uma falha no email não o perde (fica com notified_at a null e
+  // volta a tentar-se nas tarefas de fundo).
+  const [notified, confirmed] = await Promise.all([notify(row).catch(() => false), confirm(row).catch(() => false)]);
+  if (notified || confirmed) {
+    await db
+      .update(demoRequests)
+      .set({ ...(notified ? { notifiedAt: new Date() } : {}), ...(confirmed ? { confirmationSentAt: new Date() } : {}) })
+      .where(eq(demoRequests.id, row.id));
+  }
+  // Aviso no telemóvel da equipa MESVIO (depois da resposta; nunca falha o pedido).
+  alert(row);
   return { ok: true, notified };
 }
 
@@ -143,4 +169,79 @@ export async function sendDemoRequestEmail(r: typeof demoRequests.$inferSelect):
   // O motivo da Resend fica nos registos da Vercel (ex.: remetente de um domínio por verificar).
   if (!res.ok) console.error("[demonstração] email recusado pela Resend", res.status, (await res.text().catch(() => "")).slice(0, 300));
   return res.ok;
+}
+
+/**
+ * Email à pessoa que pediu a demonstração: "recebemos o teu pedido". As respostas vão para o email
+ * da equipa (DEMO_REQUESTS_TO), não para o remetente automático.
+ */
+export async function sendDemoConfirmationEmail(r: typeof demoRequests.$inferSelect): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY;
+  const team = process.env.DEMO_REQUESTS_TO;
+  const from = process.env.DEMO_REQUESTS_FROM;
+  if (!key || !team || !from) return false;
+  const first = escapeHtml(r.name.split(/\s+/)[0] ?? r.name);
+  const business = escapeHtml(r.business);
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1c1917">
+  <p style="font-size:20px;font-weight:bold;color:#143d33;margin:0 0 24px">mesvio.</p>
+  <p style="font-size:16px;margin:0 0 16px">Olá ${first}!</p>
+  <p style="font-size:16px;margin:0 0 16px">Recebemos o teu pedido de demonstração para o <strong>${business}</strong>. Vamos entrar em contacto nas próximas 24 horas úteis para combinar um dia e mostrar-te a MESVIO a funcionar no teu espaço.</p>
+  <p style="font-size:16px;margin:0 0 24px">Entretanto, podes ver a ementa de demonstração em <a href="https://mesvio.pt/demo" style="color:#143d33;font-weight:bold">mesvio.pt/demo</a>.</p>
+  <p style="font-size:14px;color:#57534e;margin:0 0 8px">Até já,<br>Equipa MESVIO</p>
+  <p style="font-size:12px;color:#a8a29e;margin:24px 0 0">Tens alguma dúvida? Responde a este email.</p>
+</div>`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: [r.email],
+      reply_to: team.split(",").map((s) => s.trim()),
+      subject: "Recebemos o teu pedido de demonstração · MESVIO",
+      html,
+      text: `Olá ${r.name.split(/\s+/)[0]}!\n\nRecebemos o teu pedido de demonstração para o ${r.business}. Vamos entrar em contacto nas próximas 24 horas úteis para combinar um dia e mostrar-te a MESVIO a funcionar no teu espaço.\n\nEntretanto, podes ver a ementa de demonstração em https://mesvio.pt/demo\n\nAté já,\nEquipa MESVIO`,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) console.error("[demonstração] confirmação recusada pela Resend", res.status, (await res.text().catch(() => "")).slice(0, 300));
+  return res.ok;
+}
+
+/** Aviso no telemóvel da equipa MESVIO (administradores do painel central com notificações ligadas). */
+function queueDemoRequestPush(r: typeof demoRequests.$inferSelect): void {
+  queuePush((db) =>
+    notifyPlatformAdmins(db, { title: "Novo pedido de demonstração", body: `${r.name} · ${r.business}`, tag: `demo-${r.id}`, url: "/central/pedidos" }),
+  );
+}
+
+// ─────────────────────────── Seguimento (painel central) ───────────────────────────
+
+export const DEMO_STATUSES = ["new", "contacted", "demo", "client", "lost"] as const;
+export type DemoStatus = (typeof DEMO_STATUSES)[number];
+
+/** Pedidos ainda novos ou em curso (não clientes nem sem interesse). */
+export async function countOpenDemoRequests(db: Db): Promise<number> {
+  return db.$count(demoRequests, inArray(demoRequests.status, ["new", "contacted", "demo"]));
+}
+
+export async function listDemoRequests(db: Db, { limit = 200 }: { limit?: number } = {}) {
+  return db.select().from(demoRequests).orderBy(desc(demoRequests.createdAt)).limit(limit);
+}
+
+export const demoFollowUpSchema = z.object({
+  status: z.enum(DEMO_STATUSES).optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+/** Muda o estado e/ou as notas de um pedido. Devolve false se não existir. */
+export async function updateDemoRequest(db: Db, id: string, raw: unknown, now = new Date()): Promise<boolean> {
+  const parsed = demoFollowUpSchema.safeParse(raw);
+  if (!parsed.success) return false;
+  const { status, notes } = parsed.data;
+  const updated = await db
+    .update(demoRequests)
+    .set({ ...(status ? { status, statusChangedAt: now } : {}), ...(notes !== undefined ? { notes: notes || null } : {}) })
+    .where(eq(demoRequests.id, id))
+    .returning({ id: demoRequests.id });
+  return updated.length > 0;
 }

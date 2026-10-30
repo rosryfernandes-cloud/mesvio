@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
-import { createDemoRequest, DEMO_REQUEST_LIMIT, pruneDemoRequests, retryDemoRequestEmails, sendDemoRequestEmail } from "./demo-requests";
+import {
+  countOpenDemoRequests,
+  createDemoRequest,
+  DEMO_REQUEST_LIMIT,
+  listDemoRequests,
+  pruneDemoRequests,
+  retryDemoRequestEmails,
+  sendDemoConfirmationEmail,
+  sendDemoRequestEmail,
+  updateDemoRequest,
+} from "./demo-requests";
 
 let db: Db;
 beforeEach(async () => {
@@ -78,10 +88,55 @@ describe("pedidos de demonstração por avisar", () => {
     vi.stubEnv("DEMO_REQUESTS_FROM", "MESVIO <nao-responder@exemplo.pt>");
     await db.insert(demoRequests).values({ name: "Ana", business: "Bar", email: "ana@exemplo.pt", ipHash: "x" });
     const seen: string[] = [];
-    expect(await retryDemoRequestEmails(db, { notify: async (r) => (seen.push(r.business), true) })).toBe(1);
+    const confirmed: string[] = [];
+    const confirm = async (r: { email: string }) => (confirmed.push(r.email), true);
+    expect(await retryDemoRequestEmails(db, { notify: async (r) => (seen.push(r.business), true), confirm })).toBe(2);
     expect(seen).toEqual(["Bar"]);
-    // Já avisado: não repete.
-    expect(await retryDemoRequestEmails(db, { notify: async () => true })).toBe(0);
+    expect(confirmed).toEqual(["ana@exemplo.pt"]);
+    // Já avisado e confirmado: não repete.
+    expect(await retryDemoRequestEmails(db, { notify: async () => true, confirm })).toBe(0);
     vi.unstubAllEnvs();
   });
 });
+
+describe("resposta automática e seguimento", () => {
+  it("a pessoa recebe o email de confirmação (respostas vão para a equipa) e a equipa é avisada no telemóvel", async () => {
+    const confirm = vi.fn(async () => true);
+    const alert = vi.fn();
+    await createDemoRequest(db, valid, { ipHash: "ip1", notify: async () => true, confirm, alert });
+    const [row] = await db.select().from(demoRequests);
+    expect(row.confirmationSentAt).not.toBeNull();
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ email: "joana@exemplo.pt" }));
+    expect(alert).toHaveBeenCalledWith(expect.objectContaining({ business: "Bar da Praia Azul" }));
+  });
+
+  it("o email de confirmação vai para a pessoa, responde para a equipa e não deixa passar HTML", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    vi.stubEnv("DEMO_REQUESTS_TO", "eu@exemplo.pt");
+    vi.stubEnv("DEMO_REQUESTS_FROM", "MESVIO <nao-responder@exemplo.pt>");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const [row] = await db.insert(demoRequests).values({ name: "Rui <b>Costa</b>", business: "Bar <script>", email: "rui@exemplo.pt" }).returning();
+    expect(await sendDemoConfirmationEmail(row)).toBe(true);
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body).toMatchObject({ to: ["rui@exemplo.pt"], reply_to: ["eu@exemplo.pt"] });
+    expect(body.html).not.toContain("<script>");
+    expect(body.html).toContain("Bar &lt;script&gt;");
+    fetchSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it("no painel central: estado e notas de cada pedido, e quantos estão por tratar", async () => {
+    await createDemoRequest(db, valid, { ipHash: "ip1", notify: async () => true, confirm: async () => true, alert: () => {} });
+    await createDemoRequest(db, { ...valid, business: "Hotel Mar" }, { ipHash: "ip2", notify: async () => true, confirm: async () => true, alert: () => {} });
+    expect(await countOpenDemoRequests(db)).toBe(2);
+    const [a, b] = await listDemoRequests(db);
+    expect(await updateDemoRequest(db, a.id, { status: "client", notes: "Assinou plano 3" })).toBe(true);
+    expect(await updateDemoRequest(db, b.id, { status: "contacted" })).toBe(true);
+    expect(await updateDemoRequest(db, b.id, { status: "inventado" })).toBe(false);
+    expect(await countOpenDemoRequests(db)).toBe(1);
+    const after = await listDemoRequests(db);
+    expect(after.find((r) => r.id === a.id)).toMatchObject({ status: "client", notes: "Assinou plano 3" });
+    expect(after.find((r) => r.id === a.id)!.statusChangedAt).not.toBeNull();
+  });
+});
+

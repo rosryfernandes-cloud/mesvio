@@ -5,6 +5,7 @@ import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getPlatformOverview } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
 import { formatEur } from "@/lib/money";
+import { countOpenDemoRequests } from "@/server/contact/demo-requests";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,8 @@ const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-5
 
 export default async function CentralOverviewPage() {
   const admin = await requirePlatformAdmin();
-  const o = await getPlatformOverview(await getDb());
+  const db = await getDb();
+  const [o, openDemos] = await Promise.all([getPlatformOverview(db), countOpenDemoRequests(db)]);
   const month = new Date(o.periodStart).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
   const kpis = [
     { label: "Restaurantes", value: String(o.totals.restaurants) },
@@ -45,6 +47,18 @@ export default async function CentralOverviewPage() {
           </li>
         ))}
       </ul>
+
+      {openDemos > 0 && (
+        <a
+          href="/central/pedidos"
+          className="mt-6 flex items-center justify-between rounded-3xl border-2 border-amber-500 bg-amber-50 px-5 py-4 font-semibold text-amber-900 hover:bg-amber-100"
+        >
+          <span>
+            📩 {openDemos} {openDemos === 1 ? "pedido de demonstração por tratar" : "pedidos de demonstração por tratar"}
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      )}
 
       <section aria-labelledby="alertas" className="mt-8">
         <h2 id="alertas" className="text-lg">

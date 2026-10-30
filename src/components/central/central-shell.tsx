@@ -21,6 +21,9 @@ export function CentralShell({ adminName, children }: { adminName: string; child
             <a href="/central" className="rounded-lg px-3 py-2 text-white/85 hover:text-white">
               Visão geral
             </a>
+            <a href="/central/pedidos" className="rounded-lg px-3 py-2 text-white/85 hover:text-white">
+              Pedidos de demo
+            </a>
             <a href="/central/seguranca" className="rounded-lg px-3 py-2 text-white/85 hover:text-white">
               Segurança
             </a>
