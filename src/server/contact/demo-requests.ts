@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
@@ -15,6 +15,28 @@ export const DEMO_REQUEST_RETENTION_DAYS = 365;
 /** Apaga pedidos de demonstração mais antigos do que o prazo de conservação. Chamado pelo worker/cron. */
 export async function pruneDemoRequests(db: Db, now = new Date()): Promise<void> {
   await db.delete(demoRequests).where(lt(demoRequests.createdAt, new Date(now.getTime() - DEMO_REQUEST_RETENTION_DAYS * 86_400_000)));
+}
+
+/**
+ * Pedidos guardados cujo email não saiu (ex.: domínio ainda por verificar na Resend): volta a
+ * tentar nas tarefas de fundo, até 2 dias depois. Devolve quantos foram avisados agora.
+ */
+export async function retryDemoRequestEmails(db: Db, { notify = sendDemoRequestEmail, now = new Date() }: { notify?: Notifier; now?: Date } = {}): Promise<number> {
+  if (!process.env.RESEND_API_KEY || !process.env.DEMO_REQUESTS_TO || !process.env.DEMO_REQUESTS_FROM) return 0;
+  const pending = await db
+    .select()
+    .from(demoRequests)
+    .where(and(isNull(demoRequests.notifiedAt), gt(demoRequests.createdAt, new Date(now.getTime() - 2 * 86_400_000))))
+    .orderBy(asc(demoRequests.createdAt))
+    .limit(5);
+  let sent = 0;
+  for (const r of pending) {
+    if (await notify(r).catch(() => false)) {
+      await db.update(demoRequests).set({ notifiedAt: now }).where(eq(demoRequests.id, r.id));
+      sent++;
+    }
+  }
+  return sent;
 }
 
 export const VENUE_TYPES = ["Restaurante", "Bar de praia", "Hotel", "Piscina", "Outro"] as const;
@@ -118,5 +140,7 @@ export async function sendDemoRequestEmail(r: typeof demoRequests.$inferSelect):
     }),
     signal: AbortSignal.timeout(8000),
   });
+  // O motivo da Resend fica nos registos da Vercel (ex.: remetente de um domínio por verificar).
+  if (!res.ok) console.error("[demonstração] email recusado pela Resend", res.status, (await res.text().catch(() => "")).slice(0, 300));
   return res.ok;
 }

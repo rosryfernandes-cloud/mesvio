@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { demoRequests } from "@/server/db/schema";
-import { createDemoRequest, DEMO_REQUEST_LIMIT, pruneDemoRequests, sendDemoRequestEmail } from "./demo-requests";
+import { createDemoRequest, DEMO_REQUEST_LIMIT, pruneDemoRequests, retryDemoRequestEmails, sendDemoRequestEmail } from "./demo-requests";
 
 let db: Db;
 beforeEach(async () => {
@@ -67,5 +67,21 @@ describe("conservação dos pedidos de demonstração", () => {
     ]);
     await pruneDemoRequests(db, now);
     expect((await db.select().from(demoRequests)).map((r) => r.name)).toEqual(["Recente"]);
+  });
+});
+
+describe("pedidos de demonstração por avisar", () => {
+  it("volta a tentar o email dos pedidos que ficaram por avisar", async () => {
+    const db = await createTestDb();
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    vi.stubEnv("DEMO_REQUESTS_TO", "eu@exemplo.pt");
+    vi.stubEnv("DEMO_REQUESTS_FROM", "MESVIO <nao-responder@exemplo.pt>");
+    await db.insert(demoRequests).values({ name: "Ana", business: "Bar", email: "ana@exemplo.pt", ipHash: "x" });
+    const seen: string[] = [];
+    expect(await retryDemoRequestEmails(db, { notify: async (r) => (seen.push(r.business), true) })).toBe(1);
+    expect(seen).toEqual(["Bar"]);
+    // Já avisado: não repete.
+    expect(await retryDemoRequestEmails(db, { notify: async () => true })).toBe(0);
+    vi.unstubAllEnvs();
   });
 });

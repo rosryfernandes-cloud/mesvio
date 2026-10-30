@@ -1,7 +1,7 @@
 import "server-only";
 import type { Db } from "@/server/db/client";
 import { runOutboxOnce } from "@/server/orders/outbox-worker";
-import { pruneDemoRequests } from "@/server/contact/demo-requests";
+import { pruneDemoRequests, retryDemoRequestEmails } from "@/server/contact/demo-requests";
 import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
 import { hitRateLimit, pruneRateLimits } from "@/server/security/rate-limit";
@@ -24,6 +24,8 @@ export async function runMaintenance(db: Db) {
   });
   await pruneRateLimits(db);
   await pruneDemoRequests(db);
+  // Pedidos de demonstração cujo email não saiu à primeira.
+  await retryDemoRequestEmails(db).catch(() => 0);
   return { processed, payments, invoices };
 }
 
