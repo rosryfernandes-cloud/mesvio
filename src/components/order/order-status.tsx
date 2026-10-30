@@ -169,6 +169,10 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
         paying && <MockPaySheet amountCents={paying.amountCents} onPay={finishMock} onClose={() => setPaying(null)} />
       )}
 
+      {order.invoice && order.status !== "AWAITING_PAYMENT" && order.status !== "CANCELLED" && (
+        <InvoiceAfterPay tableToken={tableToken} orderId={order.id} status={order.invoice.status} onDone={reload} />
+      )}
+
       <h2 className="mt-8 text-sm font-semibold tracking-wide text-ink-soft uppercase">{t.order.summary}</h2>
       <ul className="mt-2 divide-y divide-line rounded-2xl border border-line bg-card px-4">
         {order.lines.map((l, i) => (
@@ -216,3 +220,80 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
     </main>
   );
 }
+
+/** Pago ao pedir: pedir a fatura (NIF opcional e email) depois de pagar. */
+function InvoiceAfterPay({ tableToken, orderId, status, onDone }: { tableToken: string; orderId: string; status: string | null; onDone: () => Promise<void> }) {
+  const { locale, t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [nif, setNif] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (status === "issued") return <p className="mt-4 rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">{t.order.invoiceIssued}</p>;
+  if (status) return <p className="mt-4 rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">{t.order.invoiceRequested}</p>;
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    const nifDigits = nif.replace(/\s/g, "");
+    if ((nifDigits && !/^\d{9}$/.test(nifDigits)) || !/^\S+@\S+\.\S+$/.test(email.trim())) return setError(t.bill.invoiceInvalid);
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/mesa/${tableToken}/pedidos/${orderId}/fatura`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nif: nifDigits, email: email.trim() }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res?.ok) return setError(res ? apiErrorText(t, locale, data, t.apiError.generic) : t.pay.offline);
+    await onDone();
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-line bg-card p-4">
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center justify-between text-sm font-semibold">
+          <span>🧾 {t.order.invoiceAsk}</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      ) : (
+        <form onSubmit={send} className="grid gap-2">
+          <p className="text-sm font-semibold">🧾 {t.order.invoiceAsk}</p>
+          <label className="text-sm">
+            {t.bill.invoiceNif}
+            <input
+              className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5 tabular-nums"
+              value={nif}
+              onChange={(e) => setNif(e.target.value.replace(/[^\d ]/g, "").slice(0, 11))}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+          </label>
+          <label className="text-sm">
+            {t.bill.invoiceEmail}
+            <input
+              className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              required
+            />
+          </label>
+          <p className="text-xs text-ink-soft">{t.bill.invoiceHint}</p>
+          {error && (
+            <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={busy} className="min-h-12 rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+            {busy ? t.order.preparing : t.order.invoiceSend}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+

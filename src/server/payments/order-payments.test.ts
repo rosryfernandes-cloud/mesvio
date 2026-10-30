@@ -176,3 +176,38 @@ describe("espreguiçadeiras: pagar ao pedir", () => {
     expect(r).toMatchObject({ ok: false, code: "ORDERING_DISABLED" });
   });
 });
+
+describe("fatura depois de pagar (camas)", () => {
+  it("o cliente pede a fatura depois de pagar; sai com os artigos desse pedido e só uma vez", async () => {
+    const { saveInvoicingSettings, requestOrderInvoice, issuePendingInvoices } = await import("@/server/invoicing/invoices");
+    const owner = (await resolveStaffContext(db, DEMO_USERS[0].userId))!;
+    const bodies: unknown[] = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      if (init.body) bodies.push(JSON.parse(String(init.body)));
+      if (url.includes("/invoice_receipts.json")) return Response.json({ invoice_receipt: { id: 7 } });
+      return Response.json({});
+    }) as unknown as typeof fetch;
+    await saveInvoicingSettings(db, owner, { account: "swara", apiKey: "chave-de-teste-123" }, { fetchImpl });
+
+    const o = await placed();
+    // Antes de pagar não há nada para faturar.
+    expect(await requestOrderInvoice(db, SUNBED.publicToken, o.id, { email: "c@x.pt" })).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    expect((await getOrderForTable(db, SUNBED.publicToken, o.id))!.invoice).toBeUndefined();
+    await pay(o.id);
+    expect((await getOrderForTable(db, SUNBED.publicToken, o.id))!.invoice).toEqual({ status: null });
+
+    expect(await requestOrderInvoice(db, SUNBED.publicToken, o.id, { nif: "123456789", email: "c@x.pt" })).toEqual({ ok: true });
+    expect(await requestOrderInvoice(db, SUNBED.publicToken, o.id, { email: "outro@x.pt" })).toMatchObject({ ok: false });
+    // Outro lugar não pode pedir a fatura deste pedido.
+    expect(await requestOrderInvoice(db, SUNBED_2.publicToken, o.id, { email: "c@x.pt" })).toMatchObject({ ok: false });
+    expect((await getOrderForTable(db, SUNBED.publicToken, o.id))!.invoice).toEqual({ status: "pending" });
+
+    expect(await issuePendingInvoices(db, { fetchImpl })).toEqual({ checked: 1, issued: 1 });
+    const created = bodies.find((b) => (b as { invoice_receipt?: unknown }).invoice_receipt && (b as { invoice_receipt: { items?: unknown } }).invoice_receipt.items) as {
+      invoice_receipt: { client: { fiscal_id: string }; items: { quantity: string }[] };
+    };
+    expect(created.invoice_receipt.client.fiscal_id).toBe("123456789");
+    expect(created.invoice_receipt.items).toHaveLength(2);
+    expect((await getOrderForTable(db, SUNBED.publicToken, o.id))!.invoice).toEqual({ status: "issued" });
+  });
+});

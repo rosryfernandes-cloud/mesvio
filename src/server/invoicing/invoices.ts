@@ -2,7 +2,8 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { withTenant } from "@/server/db/tenant";
+import { resolveTableToken, withTenant } from "@/server/db/tenant";
+import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { auditLogs, establishments, orderItems, orders, payments } from "@/server/db/schema";
 import { isValidNif } from "@/lib/nif";
 import { open, seal } from "@/server/security/secret-box";
@@ -32,6 +33,33 @@ export const invoiceRequestSchema = z.object({
   email: z.email().max(200).transform((e) => e.trim().toLowerCase()),
 });
 export type InvoiceRequestInput = z.input<typeof invoiceRequestSchema>;
+
+/**
+ * Pedido pago ao pedir (camas): o cliente pede a fatura depois de pagar. Marca o pagamento confirmado
+ * desse pedido para emissão (uma vez só). Devolve false se não houver nada a faturar.
+ */
+export async function requestOrderInvoice(db: Db, token: string, orderId: string, raw: unknown): Promise<{ ok: true } | { ok: false; code: "INVALID" | "NOT_FOUND"; message: string }> {
+  const parsed = invoiceRequestSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: "Confirme o NIF e o email da fatura." };
+  const notFound = { ok: false as const, code: "NOT_FOUND" as const, message: "Não há pagamento para faturar neste pedido." };
+  if (!isWellFormedTableToken(token) || !z.uuid().safeParse(orderId).success) return notFound;
+  const t = await resolveTableToken(db, token);
+  if (!t) return notFound;
+  return withTenant(db, { organizationId: t.organizationId }, async (tx) => {
+    const [o] = await tx
+      .select({ id: orders.id, account: establishments.invoicingAccount, key: establishments.invoicingApiKeyCiphertext })
+      .from(orders)
+      .innerJoin(establishments, eq(establishments.id, orders.establishmentId))
+      .where(and(eq(orders.id, orderId), eq(orders.tableId, t.tableId)));
+    if (!o?.account || !o.key) return notFound;
+    const updated = await tx
+      .update(payments)
+      .set({ invoiceNif: parsed.data.nif, invoiceEmail: parsed.data.email, invoiceStatus: "pending" })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, "SUCCEEDED"), isNull(payments.invoiceStatus)))
+      .returning({ id: payments.id });
+    return updated.length ? { ok: true as const } : notFound;
+  });
+}
 
 // ─────────────────────────── Configuração (painel) ───────────────────────────
 
