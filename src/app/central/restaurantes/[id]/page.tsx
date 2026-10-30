@@ -42,9 +42,9 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
 
   return (
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
-      <a href="/central" className="text-sm text-ink-soft underline">
+      <Link prefetch={false} href="/central" className="text-sm text-ink-soft underline">
         ← Visão geral
-      </a>
+      </Link>
       {criado && (
         <p role="status" className="mt-4 rounded-2xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">
           Restaurante criado e dono convidado. Próximo passo: imprimir os QR Codes.

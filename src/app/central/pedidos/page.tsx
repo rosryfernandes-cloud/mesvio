@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { getDb } from "@/server/db/client";
 import { maybeRunMaintenance } from "@/server/runtime/maintenance";
@@ -19,9 +20,9 @@ export default async function DemoRequestsPage() {
   const rows = await listDemoRequests(db);
   return (
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
-      <a href="/central" className="text-sm text-ink-soft underline">
+      <Link prefetch={false} href="/central" className="text-sm text-ink-soft underline">
         ← Visão geral
-      </a>
+      </Link>
       <h1 className="mt-3 text-3xl tracking-tight">Pedidos de demonstração</h1>
       <p className="mt-1 mb-6 max-w-2xl text-sm text-ink-soft">
         Quem pediu uma demonstração no site. Cada pessoa recebe logo um email a dizer que vamos entrar em contacto; marque aqui em que ponto

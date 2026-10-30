@@ -53,7 +53,8 @@ export default async function CentralOverviewPage() {
       </ul>
 
       {openDemos > 0 && (
-        <a
+        <Link
+          prefetch={false}
           href="/central/pedidos"
           className="mt-6 flex items-center justify-between rounded-3xl border-2 border-amber-500 bg-amber-50 px-5 py-4 font-semibold text-amber-900 hover:bg-amber-100"
         >
@@ -61,7 +62,7 @@ export default async function CentralOverviewPage() {
             📩 {openDemos} {openDemos === 1 ? "pedido de demonstração por tratar" : "pedidos de demonstração por tratar"}
           </span>
           <span aria-hidden="true">→</span>
-        </a>
+        </Link>
       )}
 
       <section aria-labelledby="alertas" className="mt-8">
