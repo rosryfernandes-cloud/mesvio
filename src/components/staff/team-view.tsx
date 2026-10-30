@@ -45,10 +45,19 @@ export function TeamView({ manageableRoles }: { manageableRoles: StaffRole[] }) 
     setBusy(true);
     setError(null);
     setInfo(null);
-    const err = await call("/api/painel/equipa", "POST", { email, displayName: displayName || undefined, role });
+    const res = await fetch("/api/painel/equipa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, displayName: displayName || undefined, role }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
-    if (err) return setError(err);
-    setInfo(`Convite enviado para ${email}. A pessoa entra no painel com o código que recebe por email.`);
+    if (!res?.ok) return setError(res ? (data.message ?? "Não foi possível concluir.") : "Sem ligação. Tente de novo.");
+    setInfo(
+      data.invited === false
+        ? `${email} já tinha conta MESVIO e foi adicionado à equipa (não é enviado email de convite). Basta entrar em mesvio.pt/painel com este email e pedir o código.`
+        : `Convite enviado para ${email}. A pessoa entra no painel com o código que recebe por email.`,
+    );
     setEmail("");
     setDisplayName("");
     await load();

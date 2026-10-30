@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const db = await getDb();
   try {
     const result = await inviteMember(db, ctx, parsed.data, createUserDirectory(db));
-    return result.ok ? json({ ok: true }) : json(result, result.code === "FORBIDDEN" ? 403 : 409);
+    return result.ok ? json({ ok: true, invited: result.invited }) : json(result, result.code === "FORBIDDEN" ? 403 : 409);
   } catch (err) {
     console.error("[equipa] convite falhou", err);
     const message = err instanceof InviteError ? inviteErrorText(err.message) : "Não foi possível enviar o convite. Tente de novo.";

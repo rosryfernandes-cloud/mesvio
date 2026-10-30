@@ -82,7 +82,7 @@ describe("contas e perfis", () => {
 
 describe("equipa", () => {
   it("o dono convida um gerente; a nova pessoa entra com o perfil certo", async () => {
-    expect(await inviteMember(db, ownerCtx, { email: "novo@example.com", role: "manager" }, users)).toEqual({ ok: true });
+    expect(await inviteMember(db, ownerCtx, { email: "novo@example.com", role: "manager" }, users)).toMatchObject({ ok: true });
     const ctx = await resolveStaffContext(db, ids.get("novo@example.com")!);
     expect(ctx?.role).toBe("manager");
     expect((await listTeam(db, ownerCtx)).map((m) => m.email)).toContain("novo@example.com");
@@ -90,7 +90,7 @@ describe("equipa", () => {
 
   it("o gerente só gere staff", async () => {
     expect(await inviteMember(db, managerCtx, { email: "x@example.com", role: "manager" }, users)).toMatchObject({ code: "FORBIDDEN" });
-    expect(await inviteMember(db, managerCtx, { email: "y@example.com", role: "staff" }, users)).toEqual({ ok: true });
+    expect(await inviteMember(db, managerCtx, { email: "y@example.com", role: "staff" }, users)).toMatchObject({ ok: true });
     const team = await listTeam(db, managerCtx);
     const owner = team.find((m) => m.role === "owner")!;
     expect(owner.manageable).toBe(false);

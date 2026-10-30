@@ -60,13 +60,15 @@ export const inviteSchema = z.object({
 });
 
 export type TeamResult = { ok: true } | { ok: false; code: "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "LAST_OWNER"; message: string };
+/** `invited`: foi enviado email de convite (false = a pessoa já tinha conta e só foi adicionada). */
+export type InviteResult = { ok: true; invited: boolean } | Exclude<TeamResult, { ok: true }>;
 
-const forbidden: TeamResult = { ok: false, code: "FORBIDDEN", message: "O seu perfil não permite esta alteração." };
+const forbidden: Exclude<TeamResult, { ok: true }> = { ok: false, code: "FORBIDDEN", message: "O seu perfil não permite esta alteração." };
 
-export async function inviteMember(db: Db, s: Scope, input: z.infer<typeof inviteSchema>, users: UserDirectory): Promise<TeamResult> {
+export async function inviteMember(db: Db, s: Scope, input: z.infer<typeof inviteSchema>, users: UserDirectory): Promise<InviteResult> {
   if (!manageableRoles(s.role).includes(input.role)) return forbidden;
-  const { userId } = await users.ensureUser(input.email);
-  return withTenant(db, tenantOf(s), async (tx) => {
+  const { userId, invited } = await users.ensureUser(input.email);
+  return withTenant(db, tenantOf(s), async (tx): Promise<InviteResult> => {
     // Donos ficam com acesso à organização toda; os restantes só a este restaurante.
     const establishmentId = input.role === "owner" ? null : s.establishmentId;
     const existing = await tx
@@ -85,7 +87,7 @@ export async function inviteMember(db: Db, s: Scope, input: z.infer<typeof invit
     // Perfil global (o utilizador pode trabalhar em vários restaurantes): só se cria se ainda não existir.
     await tx.insert(staffProfiles).values({ userId, email: input.email, displayName: input.displayName || null }).onConflictDoNothing();
     await audit(tx, s, "team.invite", userId, { role: input.role });
-    return { ok: true };
+    return { ok: true, invited };
   });
 }
 
