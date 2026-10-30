@@ -12,9 +12,11 @@ export async function getCurrentUserId(): Promise<string | null> {
   const mode = authMode();
   if (mode === "supabase") {
     const supabase = await createSupabaseServerClient();
-    // getUser() valida o token junto da Supabase (ao contrário de getSession(), que só lê o cookie).
-    const { data } = await supabase.auth.getUser();
-    return data.user?.id ?? null;
+    // getClaims() verifica a assinatura do token com a chave pública da Supabase (guardada em
+    // memória): sem ida à rede em cada pedido, ao contrário de getUser(). getSession() sozinho não
+    // verificava nada.
+    const { data } = await supabase.auth.getClaims();
+    return typeof data?.claims.sub === "string" ? data.claims.sub : null;
   }
   if (mode === "dev") {
     const data = decodeSigned((await cookies()).get(DEV_USER_COOKIE)?.value);

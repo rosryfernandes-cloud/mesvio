@@ -21,7 +21,8 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  // Renova o token se estiver a expirar; a verificação é local (chave pública), sem ida à rede.
+  await supabase.auth.getClaims();
   return response;
 }
 
