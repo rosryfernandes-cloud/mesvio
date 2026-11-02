@@ -33,8 +33,14 @@ async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
   if (url) {
     const [{ drizzle }, { default: postgres }] = await Promise.all([import("drizzle-orm/postgres-js"), import("postgres")]);
-    // prepare:false é necessário com o pooler de transações do Supabase.
-    const db = drizzle(postgres(url, { prepare: false, max: Number(process.env.DB_POOL_MAX ?? 10) }), { schema }) as unknown as Db;
+    // prepare:false é necessário com o pooler de transações do Supabase. Na Vercel a mesma instância
+    // serve pedidos durante minutos (Fluid) e fica parada entre eles: ligações paradas fecham-se cedo
+    // (idle_timeout) e nenhuma vive para sempre (max_lifetime), para não se usar um socket que o pooler
+    // já cortou (o pedido ficava pendurado até ao timeout); connect_timeout falha depressa em vez de esperar.
+    const db = drizzle(
+      postgres(url, { prepare: false, max: Number(process.env.DB_POOL_MAX ?? 10), idle_timeout: 20, max_lifetime: 5 * 60, connect_timeout: 10 }),
+      { schema },
+    ) as unknown as Db;
     // Só numa base desta máquina (dev/teste de carga): criar os dados de demonstração.
     if (process.env.SEED_DEMO === "1" && isLocalDatabaseUrl(url)) await (await import("./seed-demo")).seedDemo(db);
     return db;
