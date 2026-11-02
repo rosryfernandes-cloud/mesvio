@@ -301,11 +301,22 @@ async function commissionRates(db: Db, today: string): Promise<Map<string, numbe
   return map;
 }
 
+/**
+ * Corre as consultas uma a uma, não em paralelo. São pequenas (poucos ms cada), e muitas em
+ * simultâneo sobre o pooler de transações da Supabase falhavam de vez em quando e penduravam a
+ * página do painel central.
+ */
+async function inOrder<const T extends readonly (() => Promise<unknown>)[]>(fns: T): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
+  const out: unknown[] = [];
+  for (const fn of fns) out.push(await fn());
+  return out as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
+}
+
 export async function getPlatformOverview(db: Db, now = new Date()): Promise<PlatformOverview> {
   const from = monthStart(now);
   const today = now.toISOString().slice(0, 10);
-  const [ests, tableCounts, ownerCounts, monthly, attention, lastOrders, dead, rates] = await Promise.all([
-    db
+  const [ests, tableCounts, ownerCounts, monthly, attention, lastOrders, dead, rates] = await inOrder([
+    () => db
       .select({
         id: establishments.id,
         organizationId: establishments.organizationId,
@@ -321,29 +332,29 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
       .leftJoin(posIntegrations, eq(posIntegrations.establishmentId, establishments.id))
       .orderBy(asc(establishments.name)),
-    db.select({ est: diningTables.establishmentId, n: count() }).from(diningTables).where(eq(diningTables.active, true)).groupBy(diningTables.establishmentId),
-    db
+    () => db.select({ est: diningTables.establishmentId, n: count() }).from(diningTables).where(eq(diningTables.active, true)).groupBy(diningTables.establishmentId),
+    () => db
       .select({ org: memberships.organizationId, n: count() })
       .from(memberships)
       .where(eq(memberships.role, "owner"))
       .groupBy(memberships.organizationId),
-    db
+    () => db
       .select({ est: orders.establishmentId, n: count(), net: sum(orders.totalNetCents), gross: sum(orders.totalGrossCents) })
       .from(orders)
       .where(and(gte(orders.createdAt, from), inArray(orders.status, [...BILLABLE_STATUSES])))
       .groupBy(orders.establishmentId),
-    db
+    () => db
       .select({ est: orders.establishmentId, n: count() })
       .from(orders)
       .where(and(eq(orders.status, "NEEDS_ATTENTION"), gte(orders.createdAt, new Date(now.getTime() - 24 * 3600_000))))
       .groupBy(orders.establishmentId),
-    db.select({ est: orders.establishmentId, at: sql<Date>`max(${orders.createdAt})` }).from(orders).groupBy(orders.establishmentId),
-    db
+    () => db.select({ est: orders.establishmentId, at: sql<Date>`max(${orders.createdAt})` }).from(orders).groupBy(orders.establishmentId),
+    () => db
       .select({ org: outbox.organizationId, n: count() })
       .from(outbox)
       .where(and(eq(outbox.status, "DEAD"), gte(outbox.createdAt, new Date(now.getTime() - 7 * 24 * 3600_000))))
       .groupBy(outbox.organizationId),
-    commissionRates(db, today),
+    () => commissionRates(db, today),
   ]);
 
   const byEst = <T extends { est: string }>(rows: T[]) => new Map(rows.map((r) => [r.est, r]));
@@ -427,13 +438,13 @@ export async function getEstablishmentDetail(db: Db, establishmentId: string, no
   const overview = await getPlatformOverview(db, now);
   const summary = overview.establishments.find((e) => e.id === establishmentId);
   if (!summary) return null;
-  const [[est], tables, owners, recent] = await Promise.all([
-    db
+  const [[est], tables, owners, recent] = await inOrder([
+    () => db
       .select({ slug: establishments.slug, address: establishments.address, billingEmail: organizations.billingEmail, nif: organizations.nif })
       .from(establishments)
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
       .where(eq(establishments.id, establishmentId)),
-    db
+    () => db
       .select({
         id: diningTables.id,
         label: diningTables.label,
@@ -446,12 +457,12 @@ export async function getEstablishmentDetail(db: Db, establishmentId: string, no
       .from(diningTables)
       .where(eq(diningTables.establishmentId, establishmentId))
       .orderBy(asc(diningTables.label)),
-    db
+    () => db
       .select({ userId: memberships.userId, email: staffProfiles.email, displayName: staffProfiles.displayName })
       .from(memberships)
       .innerJoin(staffProfiles, eq(staffProfiles.userId, memberships.userId))
       .where(and(eq(memberships.organizationId, summary.organizationId), eq(memberships.role, "owner"))),
-    db
+    () => db
       .select({
         id: orders.id,
         shortCode: orders.shortCode,

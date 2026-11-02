@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
+import { readWithRetry } from "@/server/db/read-retry";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getEstablishmentDetail } from "@/server/platform/platform-service";
 import { QrSheet } from "@/components/qr/qr-sheet";
@@ -14,7 +15,8 @@ export default async function EstablishmentQrPage({ params }: { params: Promise<
   await requirePlatformAdmin();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
-  const d = await getEstablishmentDetail(await getDb(), id);
+  const db = await getDb();
+  const d = await readWithRetry(() => getEstablishmentDetail(db, id));
   if (!d) notFound();
   return (
     <QrSheet

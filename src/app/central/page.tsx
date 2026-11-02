@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PLAN_LABEL } from "@/lib/plan";
 import { getDb } from "@/server/db/client";
+import { readWithRetry } from "@/server/db/read-retry";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getPlatformOverview } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
@@ -22,7 +23,8 @@ const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-5
 export default async function CentralOverviewPage() {
   const admin = await requirePlatformAdmin();
   const db = await getDb();
-  const [o, openDemos] = await Promise.all([getPlatformOverview(db), countOpenDemoRequests(db)]);
+  const o = await readWithRetry(() => getPlatformOverview(db));
+  const openDemos = await readWithRetry(() => countOpenDemoRequests(db));
   const month = new Date(o.periodStart).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
   const kpis = [
     { label: "Restaurantes", value: String(o.totals.restaurants) },
