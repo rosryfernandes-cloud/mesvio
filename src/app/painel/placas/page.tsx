@@ -30,6 +30,10 @@ const FORMATS = {
   balcao: { label: "Placa de balcão", size: "21 × 10 cm", w: 210, h: 100, qr: 64, who: "todos" },
   a4: { label: "Placa de entrada", size: "A4 · 21 × 29,7 cm", w: 210, h: 297, qr: 100, who: "todos" },
   autocolante: { label: "Autocolante redondo", size: "Ø 8 cm", w: 80, h: 80, qr: 42, who: "todos" },
+  // Placa igual para todos os lugares, com um quadrado vazio onde se cola o autocolante do QR (troca-se o
+  // QR sem refazer a placa: ver "Trocar QR" nos lugares). Com ?demo=1 sai sem a marca do restaurante.
+  base: { label: "Placa base sem QR", size: "A6, quadrado de 5 cm", w: 105, h: 148, qr: 50, who: "todos" },
+  autocolantes: { label: "Folha de autocolantes QR", size: "A4, 20 de 4,8 cm", w: 210, h: 297, qr: 48, who: "todos" },
 } as const;
 type Format = keyof typeof FORMATS;
 
@@ -136,7 +140,7 @@ function QrBox({ svg, box, s }: { svg: string; box: number; s: number }) {
   );
 }
 
-export default async function SignsPage({ searchParams }: { searchParams: Promise<{ formato?: string; lugares?: string }> }) {
+export default async function SignsPage({ searchParams }: { searchParams: Promise<{ formato?: string; lugares?: string; demo?: string }> }) {
   const ctx = await getStaffContext();
   if (!ctx) redirect("/painel/entrar");
   if (!can(ctx, "settings.edit")) notFound();
@@ -144,6 +148,7 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
   const format: Format = sp.formato && sp.formato in FORMATS ? (sp.formato as Format) : "a6";
   const f = FORMATS[format];
   const who: Who = sp.lugares && sp.lugares in WHO ? (sp.lugares as Who) : f.who;
+  const demo = format === "base" && sp.demo === "1";
 
   const { est, tables } = await withTenant(await getDb(), { organizationId: ctx.organizationId, userId: ctx.userId }, async (tx) => {
     const [est] = await tx
@@ -161,20 +166,24 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
   const h = await headers();
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
   const natural = new Intl.Collator("pt", { numeric: true });
-  const brand = est.brandColor ?? DEFAULT_BRAND;
+  const brand = demo ? DEFAULT_BRAND : (est.brandColor ?? DEFAULT_BRAND);
   const active = tables.filter((t) => t.active).map((t) => ({ ...t, payFirst: effectiveOrderingMode(est.plan, t.mode) === "pay_first" }));
   // Folha de palmeira só em quem tem camas (praia); num restaurante de cidade fica só a onda.
   const beach = active.some((t) => t.payFirst);
   const payments = planAllowsPayments(est.plan);
-  const places = await Promise.all(
+  const perPlace = await Promise.all(
     active
       .filter((t) => who === "todos" || (who === "camas" ? t.payFirst : !t.payFirst))
       .sort((a, b) => natural.compare(a.label, b.label))
       .map(async (t) => ({ ...t, svg: await qrSvg(tableUrl(base, t.publicToken)), cta: callToAction(est.plan, t.payFirst) })),
   );
+  // A placa base é uma só (o lugar vai no autocolante); a folha de autocolantes leva 20 por página A4.
+  const places = format === "base" ? [{ id: "base", label: "", svg: "", cta: demo ? { pt: "Pede aqui", en: "Order here" } : callToAction(est.plan, false) }] : perPlace;
+  const sheets = Array.from({ length: Math.ceil(perPlace.length / 20) }, (_, i) => perPlace.slice(i * 20, i * 20 + 20));
 
-  const href = (next: Partial<{ formato: Format; lugares: Who }>) => {
+  const href = (next: Partial<{ formato: Format; lugares: Who; demo: boolean }>) => {
     const p = new URLSearchParams({ formato: next.formato ?? format, lugares: next.lugares ?? who });
+    if (next.demo ?? (demo && !next.formato)) p.set("demo", "1");
     return `/painel/placas?${p}`;
   };
   // Tamanhos em mm, à escala da placa A6 (s = 1): cada lugar numa página do tamanho da placa.
@@ -238,6 +247,10 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
           arredondados de 8 mm. Não use alumínio: bloqueia o NFC.
           {format === "etiqueta" && " Os dois círculos no topo marcam os furos de 5 mm."}
           {(format === "balcao" || format === "a4") && " Para o balcão ou a entrada, crie um lugar com esse nome (ex.: Balcão) e imprima só esse."}
+          {format === "base" &&
+            " Uma só placa para todos os lugares: o quadrado branco recebe o autocolante do QR (Folha de autocolantes QR), que se troca se alguém pedir de fora."}
+          {format === "autocolantes" &&
+            " Vinil branco com laminação mate, corte em quadrados de 48 mm (cantos de 3 mm). Peça uns 20% a mais para substituições."}
         </p>
         {isLocalOnlyUrl(base) && (
           <p role="alert" className="mt-4 max-w-2xl rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm">
@@ -256,7 +269,21 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Lugares">
+        {format === "base" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Marca">
+            {[false, true].map((d) => (
+              <Link
+                key={String(d)}
+                href={href({ demo: d })}
+                aria-current={d === demo ? "page" : undefined}
+                className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${d === demo ? "border-brand text-brand" : "border-line bg-card text-ink-soft"}`}
+              >
+                {d ? "Sem marca (para demonstrações)" : "Com a marca do restaurante"}
+              </Link>
+            ))}
+          </div>
+        )}
+        <div className={`mt-3 flex flex-wrap items-center gap-2 ${format === "base" ? "hidden" : ""}`} role="group" aria-label="Lugares">
           {(Object.keys(WHO) as Who[]).map((k) => (
             <Link
               key={k}
@@ -268,7 +295,9 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
           <span className="ml-2 text-sm text-ink-soft">
-            {places.length} {places.length === 1 ? "placa" : "placas"}
+            {format === "autocolantes"
+              ? `${perPlace.length} autocolantes em ${sheets.length} ${sheets.length === 1 ? "folha" : "folhas"}`
+              : `${places.length} ${places.length === 1 ? "placa" : "placas"}`}
           </span>
         </div>
         <div className="mt-6">
@@ -277,117 +306,143 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
         {places.length === 0 && <p className="mt-6 text-ink-soft">Não há lugares deste tipo.</p>}
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-6 print:mt-0 print:block">
-        {places.map((t) => (
-          <section
-            key={t.id}
-            aria-label={t.label}
-            className="placa relative flex shrink-0 overflow-hidden text-white shadow-lg print:shadow-none"
-            style={{
-              width: `${f.w}mm`,
-              height: `${f.h}mm`,
-              background: brand,
-              borderRadius: format === "autocolante" ? "50%" : "8mm",
-              flexDirection: format === "balcao" ? "row" : "column",
-              alignItems: "center",
-              justifyContent: format === "autocolante" ? "center" : undefined,
-              padding: `${pad}mm`,
-              boxSizing: "border-box",
-              printColorAdjust: "exact",
-              WebkitPrintColorAdjust: "exact",
-            }}
-          >
-            {beach && format !== "autocolante" && <Palm size={format === "balcao" ? "40mm" : u(34)} />}
+      {format === "autocolantes" ? (
+        <div className="mt-8 flex flex-wrap gap-6 print:mt-0 print:block">
+          {sheets.map((sheet, i) => (
+            <section
+              key={i}
+              aria-label={`Folha ${i + 1}`}
+              className="placa grid shrink-0 bg-white shadow-lg print:shadow-none"
+              style={{ width: "210mm", height: "297mm", padding: "14mm 6mm", boxSizing: "border-box", gridTemplateColumns: "repeat(4, 48mm)", gridAutoRows: "48mm", gap: "2mm", alignContent: "start" }}
+            >
+              {sheet.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-col items-center justify-center"
+                  style={{ width: "48mm", height: "48mm", borderRadius: "3mm", outline: "0.1mm solid #d4d4d4", outlineOffset: "-0.05mm", color: INK, gap: "1.4mm" }}
+                >
+                  <div className="[&_svg]:h-full [&_svg]:w-full" style={{ width: "35mm", height: "35mm" }} dangerouslySetInnerHTML={{ __html: t.svg }} />
+                  <p className="m-0 leading-none font-extrabold whitespace-nowrap uppercase" style={{ fontSize: "4.2mm", letterSpacing: "0.02em" }}>
+                    {t.label}
+                  </p>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-8 flex flex-wrap gap-6 print:mt-0 print:block">
+          {places.map((t) => (
+            <section
+              key={t.id}
+              aria-label={t.label || f.label}
+              className="placa relative flex shrink-0 overflow-hidden text-white shadow-lg print:shadow-none"
+              style={{
+                width: `${f.w}mm`,
+                height: `${f.h}mm`,
+                background: brand,
+                borderRadius: format === "autocolante" ? "50%" : "8mm",
+                flexDirection: format === "balcao" ? "row" : "column",
+                alignItems: "center",
+                justifyContent: format === "autocolante" ? "center" : undefined,
+                padding: `${pad}mm`,
+                boxSizing: "border-box",
+                printColorAdjust: "exact",
+                WebkitPrintColorAdjust: "exact",
+              }}
+            >
+              {beach && format !== "autocolante" && <Palm size={format === "balcao" ? "40mm" : u(34)} />}
 
-            {format === "autocolante" ? (
-              <div className="flex flex-col items-center text-center" style={{ gap: "1.3mm" }}>
-                <Brand />
-                <QrBox svg={t.svg} box={f.qr} s={s} />
-                <Pill label={t.label} size={5} />
-                <p className="m-0 leading-tight font-extrabold" style={{ fontSize: "2.5mm" }}>
-                  {t.cta.pt} <span className="font-medium italic opacity-90">· {t.cta.en}</span>
-                </p>
-                <Wordmark height="2.2mm" />
-              </div>
-            ) : format === "balcao" ? (
-              <>
-                <QrBox svg={t.svg} box={f.qr} s={s} />
-                <div className="relative z-10 flex min-w-0 flex-col items-start" style={{ marginLeft: "9mm", gap: "2.2mm", alignSelf: "stretch", justifyContent: "center", paddingBottom: "6mm" }}>
+              {format === "autocolante" ? (
+                <div className="flex flex-col items-center text-center" style={{ gap: "1.3mm" }}>
                   <Brand />
-                  <Pill label={t.label} size={4.4} />
-                  <div>
-                    <p className="m-0 leading-none font-extrabold" style={{ fontSize: `${headline(t.cta.pt, 11)}mm` }}>
-                      {t.cta.pt}
-                    </p>
-                    {t.cta.sub && (
-                      <p className="m-0 font-bold" style={{ fontSize: "5mm", marginTop: "1.2mm" }}>
-                        {t.cta.sub}
-                      </p>
-                    )}
-                    <p className="m-0 italic opacity-90" style={{ fontSize: "4.4mm", marginTop: "1.4mm" }}>
-                      {t.cta.en}
-                    </p>
-                  </div>
-                  <Nfc size={3.2} />
-                  {payments && (
-                    <p className="m-0 font-semibold opacity-85" style={{ fontSize: "2.8mm" }}>
-                      Apple Pay · MB WAY · cartão
-                    </p>
-                  )}
-                </div>
-                <div className="absolute inset-x-0 bottom-0" style={{ paddingBottom: "4mm" }}>
-                  <Wave height="7mm" />
-                  <div className="flex justify-end" style={{ paddingRight: "10mm", marginTop: "0.6mm" }}>
-                    <Signature size={3} />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {format === "etiqueta" && (
-                  <div className="flex w-full justify-around" style={{ height: u(9), paddingInline: "18mm", boxSizing: "border-box" }} aria-hidden>
-                    {[0, 1].map((i) => (
-                      <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${MINT}`, opacity: 0.7, marginTop: "-1mm" }} />
-                    ))}
-                  </div>
-                )}
-                <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center text-center" style={{ gap: u(2.8) }}>
-                  <Brand />
-                  <Pill label={t.label} size={4.6} />
-                  <div>
-                    <p className="m-0 leading-none font-extrabold" style={{ fontSize: u(headline(t.cta.pt, 10)) }}>
-                      {t.cta.pt}
-                    </p>
-                    {t.cta.sub && (
-                      <p className="m-0 font-bold" style={{ fontSize: u(5), marginTop: u(1.2) }}>
-                        {t.cta.sub}
-                      </p>
-                    )}
-                    <p className="m-0 italic opacity-90" style={{ fontSize: u(4.4), marginTop: u(1.4) }}>
-                      {t.cta.en}
-                    </p>
-                  </div>
                   <QrBox svg={t.svg} box={f.qr} s={s} />
-                  <div className="flex flex-col items-center" style={{ gap: u(1.2) }}>
-                    <Nfc size={3.1} />
+                  <Pill label={t.label} size={5} />
+                  <p className="m-0 leading-tight font-extrabold" style={{ fontSize: "2.5mm" }}>
+                    {t.cta.pt} <span className="font-medium italic opacity-90">· {t.cta.en}</span>
+                  </p>
+                  <Wordmark height="2.2mm" />
+                </div>
+              ) : format === "balcao" ? (
+                <>
+                  <QrBox svg={t.svg} box={f.qr} s={s} />
+                  <div className="relative z-10 flex min-w-0 flex-col items-start" style={{ marginLeft: "9mm", gap: "2.2mm", alignSelf: "stretch", justifyContent: "center", paddingBottom: "6mm" }}>
+                    <Brand />
+                    <Pill label={t.label} size={4.4} />
+                    <div>
+                      <p className="m-0 leading-none font-extrabold" style={{ fontSize: `${headline(t.cta.pt, 11)}mm` }}>
+                        {t.cta.pt}
+                      </p>
+                      {t.cta.sub && (
+                        <p className="m-0 font-bold" style={{ fontSize: "5mm", marginTop: "1.2mm" }}>
+                          {t.cta.sub}
+                        </p>
+                      )}
+                      <p className="m-0 italic opacity-90" style={{ fontSize: "4.4mm", marginTop: "1.4mm" }}>
+                        {t.cta.en}
+                      </p>
+                    </div>
+                    <Nfc size={3.2} />
                     {payments && (
-                      <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
+                      <p className="m-0 font-semibold opacity-85" style={{ fontSize: "2.8mm" }}>
                         Apple Pay · MB WAY · cartão
                       </p>
                     )}
                   </div>
-                </div>
-                <div className="w-full" style={{ marginInline: `-${pad}mm`, width: `${f.w}mm`, marginBottom: `-${pad - 4}mm` }}>
-                  <Wave height={u(6)} />
-                  <div style={{ marginTop: u(1.2) }}>
-                    <Signature size={3.1} />
+                  <div className="absolute inset-x-0 bottom-0" style={{ paddingBottom: "4mm" }}>
+                    <Wave height="7mm" />
+                    <div className="flex justify-end" style={{ paddingRight: "10mm", marginTop: "0.6mm" }}>
+                      <Signature size={3} />
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
-          </section>
-        ))}
-      </div>
+                </>
+              ) : (
+                <>
+                  {format === "etiqueta" && (
+                    <div className="flex w-full justify-around" style={{ height: u(9), paddingInline: "18mm", boxSizing: "border-box" }} aria-hidden>
+                      {[0, 1].map((i) => (
+                        <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${MINT}`, opacity: 0.7, marginTop: "-1mm" }} />
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center text-center" style={{ gap: u(2.8) }}>
+                    {!demo && <Brand />}
+                    {t.label && <Pill label={t.label} size={4.6} />}
+                    <div>
+                      <p className="m-0 leading-none font-extrabold" style={{ fontSize: u(headline(t.cta.pt, 10)) }}>
+                        {t.cta.pt}
+                      </p>
+                      {t.cta.sub && (
+                        <p className="m-0 font-bold" style={{ fontSize: u(5), marginTop: u(1.2) }}>
+                          {t.cta.sub}
+                        </p>
+                      )}
+                      <p className="m-0 italic opacity-90" style={{ fontSize: u(4.4), marginTop: u(1.4) }}>
+                        {t.cta.en}
+                      </p>
+                    </div>
+                    <QrBox svg={t.svg} box={f.qr} s={s} />
+                    <div className="flex flex-col items-center" style={{ gap: u(1.2) }}>
+                      <Nfc size={3.1} />
+                      {payments && (
+                        <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
+                          Apple Pay · MB WAY · cartão
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="w-full" style={{ marginInline: `-${pad}mm`, width: `${f.w}mm`, marginBottom: `-${pad - 4}mm` }}>
+                    <Wave height={u(6)} />
+                    <div style={{ marginTop: u(1.2) }}>
+                      <Signature size={3.1} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
