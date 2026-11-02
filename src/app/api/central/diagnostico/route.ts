@@ -1,50 +1,82 @@
+import { cookies } from "next/headers";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { json } from "@/server/staff/http";
-import { guardPlatform } from "@/server/platform/admin-auth";
+import { getCurrentUserId } from "@/server/auth/current-user";
+import { findPlatformAdmin, PLATFORM_COOKIE } from "@/server/platform/admin-auth";
+import { countPasskeys } from "@/server/platform/passkeys";
+import { decodeSigned } from "@/server/staff/session";
 import { getPlatformOverview } from "@/server/platform/platform-service";
 import { countOpenDemoRequests } from "@/server/contact/demo-requests";
 import { runMaintenance } from "@/server/runtime/maintenance";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 // Momento em que esta instância da função arrancou: diz se o pedido apanhou um arranque a frio.
 const BOOTED_AT = Date.now();
 let requests = 0;
 
+const STEP_LIMIT_MS = 15_000;
+
 /**
- * Painel central: quanto demora cada passo de abrir a visão geral, medido no servidor (ms).
- * Serve para separar lentidão do servidor (autenticação, base de dados) da rede de quem abre.
+ * Painel central: quanto demora cada passo de abrir a visão geral, medido no servidor e escrito
+ * à medida que acontece (uma linha por passo). Se um passo pendurar, ao fim de 15 s aparece
+ * "PRESO" e segue para o seguinte, para se ver exatamente onde fica.
  */
-export async function GET(request: Request) {
+export async function GET() {
   const t0 = performance.now();
-  const lap = (from: number) => Math.round(performance.now() - from);
-  const admin = await guardPlatform(request, { mutating: false });
-  if (admin instanceof Response) return admin;
-  const auth = lap(t0);
+  const userId = await getCurrentUserId().catch(() => null);
+  const claimsMs = Math.round(performance.now() - t0);
+  if (!userId) return Response.json({ code: "NOT_FOUND" }, { status: 404 });
+  const enc = new TextEncoder();
+  const first = requests++ === 0;
 
-  let t = performance.now();
-  const db = await getDb();
-  await db.execute(sql`select 1`);
-  const firstQuery = lap(t);
+  const body = new ReadableStream({
+    async start(controller) {
+      const write = (line: string) => controller.enqueue(enc.encode(line + "\n"));
+      // O Safari só mostra texto em streaming depois do primeiro ~1 KB.
+      write(" ".repeat(1024));
+      write(`instancia: arranqueAFrio=${first} vivaHa=${Math.round((Date.now() - BOOTED_AT) / 1000)}s regiao=${process.env.VERCEL_REGION ?? "local"} outboxWorker=${process.env.OUTBOX_WORKER ?? "on"}`);
+      const step = async <T,>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+        const t = performance.now();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const out = await Promise.race([
+            fn(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("PRESO (mais de 15 s)")), STEP_LIMIT_MS);
+            }),
+          ]);
+          write(`${name}: ${Math.round(performance.now() - t)} ms`);
+          return out;
+        } catch (err) {
+          write(`${name}: ${err instanceof Error ? err.message : String(err)} (${Math.round(performance.now() - t)} ms)`);
+          return undefined;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
 
-  t = performance.now();
-  await db.execute(sql`select 1`);
-  const secondQuery = lap(t);
-
-  t = performance.now();
-  await Promise.all([getPlatformOverview(db), countOpenDemoRequests(db)]);
-  const overview = lap(t);
-
-  // As tarefas de fundo (o que o cron corre a cada minuto), com limite de 20 s para não pendurar.
-  t = performance.now();
-  const maintenance = await Promise.race([
-    runMaintenance(db).then(() => lap(t)),
-    new Promise<string>((resolve) => setTimeout(() => resolve("mais de 20 s"), 20_000)),
-  ]).catch((err: unknown) => `erro: ${err instanceof Error ? err.message : String(err)}`);
-
-  return json({
-    ms: { autenticacao: auth, primeiraQuery: firstQuery, segundaQuery: secondQuery, visaoGeral: overview, tarefasDeFundo: maintenance, total: lap(t0) },
-    instancia: { arranqueAFrio: requests++ === 0, vivaHaSegundos: Math.round((Date.now() - BOOTED_AT) / 1000), regiao: process.env.VERCEL_REGION ?? "local", outboxWorker: process.env.OUTBOX_WORKER ?? "on" },
+      write(`sessao (getClaims): ${claimsMs} ms`);
+      const db = await step("ligar a base de dados", () => getDb());
+      if (db) {
+        const admin = await step("administrador", () => findPlatformAdmin(db, userId));
+        if (!admin) {
+          write("sem acesso");
+          controller.close();
+          return;
+        }
+        await step("chaves de acesso", () => countPasskeys(db, userId));
+        const session = decodeSigned((await cookies()).get(PLATFORM_COOKIE)?.value);
+        write(`2FA desta sessao: ${session?.u === userId ? "verificado" : "por verificar"}`);
+        await step("select 1", () => db.execute(sql`select 1`));
+        await step("select 1 (de novo)", () => db.execute(sql`select 1`));
+        await step("visao geral", () => Promise.all([getPlatformOverview(db), countOpenDemoRequests(db)]));
+        await step("tarefas de fundo", () => runMaintenance(db));
+      }
+      write("fim");
+      controller.close();
+    },
   });
+  return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
