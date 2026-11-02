@@ -58,9 +58,14 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
             {d.address && ` · ${d.address}`}
           </p>
         </div>
-        <Link href={`/central/restaurantes/${id}/qr`} className="min-h-11 rounded-xl bg-brand px-5 py-2.5 font-semibold text-white">
-          Imprimir QR Codes
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link prefetch={false} href={`/central/restaurantes/${id}/placas`} className="min-h-11 rounded-xl border border-brand px-5 py-2.5 font-semibold text-brand">
+            Placas para a gráfica
+          </Link>
+          <Link href={`/central/restaurantes/${id}/qr`} className="min-h-11 rounded-xl bg-brand px-5 py-2.5 font-semibold text-white">
+            Imprimir QR Codes
+          </Link>
+        </div>
       </div>
 
       <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

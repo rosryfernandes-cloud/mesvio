@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { asc, eq } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import QRCode from "qrcode";
+import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { withTenant } from "@/server/db/tenant";
 import { diningTables, establishments } from "@/server/db/schema";
-import { can } from "@/server/staff/context";
-import { getStaffContext } from "@/server/staff/http";
+import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { tableUrl } from "@/server/tables/table-token";
 import { isLocalOnlyUrl, resolvePublicBaseUrl } from "@/server/tables/table-qr";
 import { effectiveOrderingMode, planAllowsOrdering, planAllowsPayments, type Plan } from "@/lib/plan";
@@ -18,7 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Placas para imprimir", robots: { index: false, follow: false } };
 
 /**
- * Placas para a gráfica (dono/gerente): uma página por lugar, no tamanho exato do formato, com o QR
+ * Placas para a gráfica (só no painel central: a MESVIO trata das placas de cada cliente): uma página por lugar, no tamanho exato do formato, com o QR
  * desse lugar, o logótipo e a cor do restaurante, faixa menta com o nome do lugar, onda e "com
  * mesvio." no fundo (folha de palmeira se houver camas). "Imprimir" → "Guardar como PDF" e envia-se
  * o PDF à gráfica (impressão com dados variáveis: cada página é uma placa). Medidas pensadas para
@@ -31,7 +30,7 @@ const FORMATS = {
   a4: { label: "Placa de entrada", size: "A4 · 21 × 29,7 cm", w: 210, h: 297, qr: 100, who: "todos" },
   autocolante: { label: "Autocolante redondo", size: "Ø 8 cm", w: 80, h: 80, qr: 42, who: "todos" },
   // Placa igual para todos os lugares, com um quadrado vazio onde se cola o autocolante do QR (troca-se o
-  // QR sem refazer a placa: ver "Trocar QR" nos lugares). Com ?demo=1 sai sem a marca do restaurante.
+  // QR sem refazer a placa: ver "Novo QR Code" nos QR Codes do restaurante). Com ?demo=1 sai sem a marca do restaurante.
   base: { label: "Placa base sem QR", size: "A6, quadrado de 5 cm", w: 105, h: 148, qr: 50, who: "todos" },
   autocolantes: { label: "Folha de autocolantes QR", size: "A4, 20 de 4,8 cm", w: 210, h: 297, qr: 48, who: "todos" },
 } as const;
@@ -140,10 +139,15 @@ function QrBox({ svg, box, s }: { svg: string; box: number; s: number }) {
   );
 }
 
-export default async function SignsPage({ searchParams }: { searchParams: Promise<{ formato?: string; lugares?: string; demo?: string; nfc?: string }> }) {
-  const ctx = await getStaffContext();
-  if (!ctx) redirect("/painel/entrar");
-  if (!can(ctx, "settings.edit")) notFound();
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ formato?: string; lugares?: string; demo?: string; nfc?: string }>;
+};
+
+export default async function SignsPage({ params, searchParams }: Props) {
+  await requirePlatformAdmin();
+  const { id } = await params;
+  if (!z.uuid().safeParse(id).success) notFound();
   const sp = await searchParams;
   const format: Format = sp.formato && sp.formato in FORMATS ? (sp.formato as Format) : "a6";
   const f = FORMATS[format];
@@ -152,18 +156,17 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
   // Sem etiqueta NFC colada atrás, a placa não pode prometer "Aproxima o telemóvel".
   const nfc = sp.nfc !== "0";
 
-  const { est, tables } = await withTenant(await getDb(), { organizationId: ctx.organizationId, userId: ctx.userId }, async (tx) => {
-    const [est] = await tx
-      .select({ name: establishments.name, plan: establishments.plan, brandColor: establishments.brandColor, logo: establishments.brandLogoUrl })
-      .from(establishments)
-      .where(eq(establishments.id, ctx.establishmentId));
-    const tables = await tx
-      .select({ id: diningTables.id, label: diningTables.label, publicToken: diningTables.publicToken, active: diningTables.active, mode: diningTables.orderingMode })
-      .from(diningTables)
-      .where(eq(diningTables.establishmentId, ctx.establishmentId))
-      .orderBy(asc(diningTables.label));
-    return { est, tables };
-  });
+  const db = await getDb();
+  const [est] = await db
+    .select({ name: establishments.name, plan: establishments.plan, brandColor: establishments.brandColor, logo: establishments.brandLogoUrl })
+    .from(establishments)
+    .where(eq(establishments.id, id));
+  if (!est) notFound();
+  const tables = await db
+    .select({ id: diningTables.id, label: diningTables.label, publicToken: diningTables.publicToken, active: diningTables.active, mode: diningTables.orderingMode })
+    .from(diningTables)
+    .where(eq(diningTables.establishmentId, id))
+    .orderBy(asc(diningTables.label));
 
   const h = await headers();
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
@@ -187,7 +190,7 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
     const p = new URLSearchParams({ formato: next.formato ?? format, lugares: next.lugares ?? who });
     if (next.demo ?? (demo && !next.formato)) p.set("demo", "1");
     if (!(next.nfc ?? nfc)) p.set("nfc", "0");
-    return `/painel/placas?${p}`;
+    return `/central/restaurantes/${id}/placas?${p}`;
   };
   // Tamanhos em mm, à escala da placa A6 (s = 1): cada lugar numa página do tamanho da placa.
   const s = format === "balcao" ? 1 : format === "autocolante" ? 0.62 : f.w / 105;
@@ -236,14 +239,14 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
     <main className="mx-auto max-w-6xl px-4 py-10 print:m-0 print:max-w-none print:p-0">
       <style>{`@page { size: ${f.w}mm ${f.h}mm; margin: 0 } @media print { html, body { background: #fff } .placa { break-after: page; box-shadow: none !important; margin: 0 !important } }`}</style>
       <div className="print:hidden">
-        <Link href="/painel" className="text-sm text-ink-soft underline">
-          ← Painel
+        <Link prefetch={false} href={`/central/restaurantes/${id}`} className="text-sm text-ink-soft underline">
+          ← {est.name}
         </Link>
-        <h1 className="mt-3 text-3xl tracking-tight">Placas para imprimir</h1>
+        <h1 className="mt-3 text-3xl tracking-tight">Placas · {est.name}</h1>
         <p className="mt-2 max-w-2xl text-sm text-ink-soft">
           Uma página por lugar, no tamanho exato, com o QR de cada um, o logótipo e a cor do restaurante (separador Aparência). Carregue em
           Imprimir, escolha <strong>Guardar como PDF</strong> e envie o PDF à gráfica. Para NFC, grave em cada etiqueta o link do lugar (ver QR Codes
-          dos lugares).
+          deste restaurante).
         </p>
         <p className="mt-2 max-w-2xl text-sm text-ink-soft">
           Para a gráfica: acrílico (5 mm; a etiqueta 3 mm) com impressão UV <strong>no verso</strong>, camada de branco e acabamento mate, cantos
@@ -252,7 +255,7 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
           {format === "etiqueta" && " Os dois círculos no topo marcam os furos de 5 mm."}
           {(format === "balcao" || format === "a4") && " Para o balcão ou a entrada, crie um lugar com esse nome (ex.: Balcão) e imprima só esse."}
           {format === "base" &&
-            " Uma só placa para todos os lugares: o quadrado branco recebe o autocolante do QR (Folha de autocolantes QR), que se troca se alguém pedir de fora."}
+            " Uma só placa para todos os lugares: o quadrado branco recebe o autocolante do QR (Folha de autocolantes QR), que se troca se alguém pedir de fora (\"Novo QR Code\" em Imprimir QR Codes)."}
           {format === "autocolantes" &&
             " Vinil branco com laminação mate, corte em quadrados de 48 mm (cantos de 3 mm). Peça uns 20% a mais para substituições."}
         </p>
