@@ -13,7 +13,7 @@ export const maxDuration = 60;
  * `Authorization: Bearer $CRON_SECRET` (a Vercel envia-o sozinha, ver vercel.json). Sem
  * CRON_SECRET definido, a rota não existe. Os pedidos novos seguem logo para o POS ao serem
  * feitos; o cron trata reenvios, pagamentos por confirmar, pedidos não pagos e limpezas.
- * No plano Hobby corre uma vez por dia; durante o serviço, o painel aberto faz o mesmo a cada minuto.
+ * Corre a cada minuto (plano Pro); o painel aberto faz o mesmo como reforço.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -22,7 +22,9 @@ export async function GET(request: Request) {
   }
   const db = await getDb();
   const result = await runMaintenance(db);
-  // Uma vez por dia chega: estado das mensalidades (cartão recusado, cancelamentos).
-  const subscriptions = process.env.STRIPE_SECRET_KEY ? await syncAllSubscriptions(db, stripeClient()).catch(() => null) : null;
+  // Uma vez por hora chega (no minuto 0; se essa execução falhar, a da hora seguinte apanha):
+  // estado das mensalidades (cartão recusado, cancelamentos).
+  const hourly = new Date().getUTCMinutes() === 0;
+  const subscriptions = hourly && process.env.STRIPE_SECRET_KEY ? await syncAllSubscriptions(db, stripeClient()).catch(() => null) : null;
   return NextResponse.json({ ...result, subscriptions }, { headers: { "Cache-Control": "no-store" } });
 }
