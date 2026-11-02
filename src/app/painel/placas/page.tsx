@@ -140,7 +140,7 @@ function QrBox({ svg, box, s }: { svg: string; box: number; s: number }) {
   );
 }
 
-export default async function SignsPage({ searchParams }: { searchParams: Promise<{ formato?: string; lugares?: string; demo?: string }> }) {
+export default async function SignsPage({ searchParams }: { searchParams: Promise<{ formato?: string; lugares?: string; demo?: string; nfc?: string }> }) {
   const ctx = await getStaffContext();
   if (!ctx) redirect("/painel/entrar");
   if (!can(ctx, "settings.edit")) notFound();
@@ -149,6 +149,8 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
   const f = FORMATS[format];
   const who: Who = sp.lugares && sp.lugares in WHO ? (sp.lugares as Who) : f.who;
   const demo = format === "base" && sp.demo === "1";
+  // Sem etiqueta NFC colada atrás, a placa não pode prometer "Aproxima o telemóvel".
+  const nfc = sp.nfc !== "0";
 
   const { est, tables } = await withTenant(await getDb(), { organizationId: ctx.organizationId, userId: ctx.userId }, async (tx) => {
     const [est] = await tx
@@ -181,9 +183,10 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
   const places = format === "base" ? [{ id: "base", label: "", svg: "", cta: demo ? { pt: "Pede aqui", en: "Order here" } : callToAction(est.plan, false) }] : perPlace;
   const sheets = Array.from({ length: Math.ceil(perPlace.length / 20) }, (_, i) => perPlace.slice(i * 20, i * 20 + 20));
 
-  const href = (next: Partial<{ formato: Format; lugares: Who; demo: boolean }>) => {
+  const href = (next: Partial<{ formato: Format; lugares: Who; demo: boolean; nfc: boolean }>) => {
     const p = new URLSearchParams({ formato: next.formato ?? format, lugares: next.lugares ?? who });
     if (next.demo ?? (demo && !next.formato)) p.set("demo", "1");
+    if (!(next.nfc ?? nfc)) p.set("nfc", "0");
     return `/painel/placas?${p}`;
   };
   // Tamanhos em mm, à escala da placa A6 (s = 1): cada lugar numa página do tamanho da placa.
@@ -244,7 +247,8 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
         </p>
         <p className="mt-2 max-w-2xl text-sm text-ink-soft">
           Para a gráfica: acrílico (5 mm; a etiqueta 3 mm) com impressão UV <strong>no verso</strong>, camada de branco e acabamento mate, cantos
-          arredondados de 8 mm. Não use alumínio: bloqueia o NFC.
+          arredondados de 8 mm.
+          {nfc && " Com NFC, não use alumínio: bloqueia a etiqueta colada atrás."}
           {format === "etiqueta" && " Os dois círculos no topo marcam os furos de 5 mm."}
           {(format === "balcao" || format === "a4") && " Para o balcão ou a entrada, crie um lugar com esse nome (ex.: Balcão) e imprima só esse."}
           {format === "base" &&
@@ -269,6 +273,20 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+        {format !== "autocolante" && format !== "autocolantes" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="NFC">
+            {[true, false].map((v) => (
+              <Link
+                key={String(v)}
+                href={href({ nfc: v })}
+                aria-current={v === nfc ? "page" : undefined}
+                className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${v === nfc ? "border-brand text-brand" : "border-line bg-card text-ink-soft"}`}
+              >
+                {v ? "Com NFC" : "Só QR (sem NFC)"}
+              </Link>
+            ))}
+          </div>
+        )}
         {format === "base" && (
           <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Marca">
             {[false, true].map((d) => (
@@ -382,7 +400,7 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
                         {t.cta.en}
                       </p>
                     </div>
-                    <Nfc size={3.2} />
+                    {nfc && <Nfc size={3.2} />}
                     {payments && (
                       <p className="m-0 font-semibold opacity-85" style={{ fontSize: "2.8mm" }}>
                         Apple Pay · MB WAY · cartão
@@ -423,7 +441,7 @@ export default async function SignsPage({ searchParams }: { searchParams: Promis
                     </div>
                     <QrBox svg={t.svg} box={f.qr} s={s} />
                     <div className="flex flex-col items-center" style={{ gap: u(1.2) }}>
-                      <Nfc size={3.1} />
+                      {nfc && <Nfc size={3.1} />}
                       {payments && (
                         <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
                           Apple Pay · MB WAY · cartão
