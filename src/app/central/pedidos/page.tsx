@@ -1,8 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getDb } from "@/server/db/client";
-import { maybeRunMaintenance } from "@/server/runtime/maintenance";
-import { keepAlive } from "@/server/runtime/keep-alive";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { listDemoRequests } from "@/server/contact/demo-requests";
 import { CentralShell } from "@/components/central/central-shell";
@@ -15,8 +13,6 @@ export default async function DemoRequestsPage() {
   const admin = await requirePlatformAdmin();
   const db = await getDb();
   // Sem cron a cada minuto (plano Hobby): abrir o painel central também põe as tarefas de fundo a
-  // correr (ex.: emails de pedidos de demonstração por enviar).
-  if (process.env.OUTBOX_WORKER === "off") keepAlive(maybeRunMaintenance(db));
   const rows = await listDemoRequests(db);
   return (
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>

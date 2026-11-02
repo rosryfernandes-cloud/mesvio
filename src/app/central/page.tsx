@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { PLAN_LABEL } from "@/lib/plan";
 import { getDb } from "@/server/db/client";
-import { maybeRunMaintenance } from "@/server/runtime/maintenance";
-import { keepAlive } from "@/server/runtime/keep-alive";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getPlatformOverview } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
@@ -24,8 +22,6 @@ const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-5
 export default async function CentralOverviewPage() {
   const admin = await requirePlatformAdmin();
   const db = await getDb();
-  // Sem cron a cada minuto (plano Hobby): abrir o painel central também corre as tarefas de fundo.
-  if (process.env.OUTBOX_WORKER === "off") keepAlive(maybeRunMaintenance(db));
   const [o, openDemos] = await Promise.all([getPlatformOverview(db), countOpenDemoRequests(db)]);
   const month = new Date(o.periodStart).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
   const kpis = [
