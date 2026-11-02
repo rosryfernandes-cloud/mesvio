@@ -50,7 +50,10 @@ export async function GET() {
           write(`${name}: ${Math.round(performance.now() - t)} ms`);
           return out;
         } catch (err) {
-          write(`${name}: ${err instanceof Error ? err.message : String(err)} (${Math.round(performance.now() - t)} ms)`);
+          // O erro da base de dados (código e mensagem do Postgres/pooler) vem em `cause`.
+          const cause = err instanceof Error ? (err.cause as { code?: string; message?: string } | undefined) : undefined;
+          const why = cause ? `${cause.code ?? ""} ${cause.message ?? ""}`.trim() : err instanceof Error ? err.message.split("\n")[0] : String(err);
+          write(`${name}: FALHOU: ${why} (${Math.round(performance.now() - t)} ms)`);
           return undefined;
         } finally {
           clearTimeout(timer);
