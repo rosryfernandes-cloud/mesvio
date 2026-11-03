@@ -191,7 +191,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
             value={t.assignedUserId ?? ""}
             disabled={busy === t.tableId}
             onChange={(e) => assign(t, e.target.value || null)}
-            className="min-h-9 flex-1 rounded-lg border border-line bg-paper px-2 text-sm text-ink"
+            className="min-h-9 min-w-0 flex-1 truncate rounded-lg border border-line bg-paper px-2 text-sm text-ink"
           >
             <option value="">Ninguém</option>
             {assignments.staff.map((m) => (
