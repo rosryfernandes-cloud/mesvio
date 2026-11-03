@@ -9,6 +9,7 @@ import type { BoardCall } from "@/server/tables/service-requests";
 import type { StaffRole } from "@/server/staff/context";
 import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
+import { SummaryView } from "./summary-view";
 import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
 import { TranslationsView } from "./translations-view";
@@ -22,7 +23,7 @@ import { NotificationsCard } from "./notifications-card";
 
 const POLL_MS = 3000;
 
-type Tab = "pedidos" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
+type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
 export interface PanelUser {
   displayName: string;
@@ -260,6 +261,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         {(
           [
             "pedidos",
+            ...(me.canEditSettings ? (["resumo"] as const) : []),
             "mesas",
             "esgotados",
             ...(me.canViewTeam ? (["equipa"] as const) : []),
@@ -275,7 +277,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês", avaliacoes: "Avaliações" }[t]}
+            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Inglês", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -314,6 +316,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
           canEditSettings={me.canEditSettings}
         />
       )}
+      {tab === "resumo" && <SummaryView />}
       {tab === "mesas" && <TablesView canEditSettings={me.canEditSettings} />}
       {tab === "esgotados" && <SoldOutView />}
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
