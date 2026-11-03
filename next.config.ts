@@ -16,26 +16,28 @@ const httpsSite = (process.env.NEXT_PUBLIC_APP_URL ?? "").startsWith("https://")
 // Stripe (formulário de pagamento): script, iframes do Payment Element / 3-D Secure e a API.
 const STRIPE = { script: "https://js.stripe.com https://*.js.stripe.com", frame: "https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com", connect: "https://api.stripe.com" };
 
-const csp = [
+const csp = (frameAncestors: string) => [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' ${STRIPE.script}${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self'",
   `connect-src 'self' ${STRIPE.connect}${isDev ? " ws: wss:" : ""}`,
-  `frame-src ${STRIPE.frame}`,
-  "frame-ancestors 'none'",
+  `frame-src 'self' ${STRIPE.frame}`,
+  `frame-ancestors ${frameAncestors}`,
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
   ...(httpsSite ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
-const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
+// Por omissão nenhuma página pode ser embebida (clickjacking). Exceção: o talão do painel, que o
+// próprio painel abre num iframe escondido para imprimir ("Talão" e impressão automática).
+const securityHeaders = (embeddableBySelf = false) => [
+  { key: "Content-Security-Policy", value: csp(embeddableBySelf ? "'self'" : "'none'") },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Frame-Options", value: embeddableBySelf ? "SAMEORIGIN" : "DENY" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self)" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   // 2 anos; sem "preload" por agora (difícil de desfazer se o domínio mudar).
@@ -47,7 +49,10 @@ const nextConfig: NextConfig = {
   // PGlite carrega ficheiros .wasm/.data a partir do pacote: não o empacotar.
   serverExternalPackages: ["@electric-sql/pglite"],
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/((?!painel/talao/).*)", headers: securityHeaders() },
+      { source: "/painel/talao/:path*", headers: securityHeaders(true) },
+    ];
   },
 };
 
