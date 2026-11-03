@@ -60,6 +60,10 @@ export async function GET() {
         }
       };
 
+      // Emails dos pedidos de demonstração: o que está definido neste servidor (nunca os valores secretos).
+      const to = (process.env.DEMO_REQUESTS_TO ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      const from = process.env.DEMO_REQUESTS_FROM ?? "";
+      write(`emails: RESEND_API_KEY=${process.env.RESEND_API_KEY ? "definida" : "FALTA"} DEMO_REQUESTS_FROM=${from ? `dominio ${from.split("@")[1]?.replace(">", "") ?? "invalido"}` : "FALTA"} DEMO_REQUESTS_TO=${to.length ? to.map((x) => x.split("@")[1] ?? "invalido").join(" + ") : "FALTA"}`);
       write(`sessao (getClaims): ${claimsMs} ms`);
       const db = await step("ligar a base de dados", () => getDb());
       if (db) {
