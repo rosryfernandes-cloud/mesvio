@@ -35,7 +35,7 @@ export const PLAN_MONTHLY_CENTS: Record<Plan, number> = { menu: 25_00, orders: 5
 
 /** O que cada plano inclui (página de preços). Cada plano inclui também tudo o do anterior. */
 export const PLAN_FEATURES: Record<Plan, string[]> = {
-  menu: ["QR Code e NFC em cada lugar", "Ementa com fotos, alergénios e inglês", "Esgotados e preços mudados num minuto", "Cores e logótipo do restaurante"],
+  menu: ["QR Code em cada lugar", "Ementa com fotos, alergénios e inglês", "Esgotados e preços mudados num minuto", "Cores e logótipo do restaurante"],
   orders: ["Pedidos na mesa, sem esperar", "Talão na cozinha e no bar", "\"Pedir a conta\" e \"Chamar empregado\"", "Painel da equipa em tempo real"],
   payments: ["Pagar no telemóvel: Apple Pay, MB WAY, cartão", "Gorjetas para a equipa", "Camas e espreguiçadeiras pagam ao pedir", "Dinheiro direto na conta do restaurante"],
 };

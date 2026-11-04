@@ -1,4 +1,4 @@
-import { PAYMENTS_PLAN_COMMISSION, PLAN_FEATURES, PLAN_LABEL, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
+import { PLAN_FEATURES, PLAN_LABEL, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
@@ -11,7 +11,6 @@ import {
   IconGrid,
   IconMenu,
   IconNoApp,
-  IconPlug,
   IconPulse,
   IconScan,
   IconSend,
@@ -28,9 +27,9 @@ export const metadata: Metadata = {
 const DEMO_HREF = "#contacto";
 
 const STEPS = [
-  { icon: IconScan, title: "Aproxima ou lê", text: "O cliente aproxima o telemóvel do NFC ou lê o QR Code da mesa." },
+  { icon: IconScan, title: "Lê o QR Code", text: "O cliente lê o QR Code da mesa com a câmara do telemóvel." },
   { icon: IconMenu, title: "Escolhe e pede", text: "Consulta a ementa digital e faz o pedido, sem instalar nada." },
-  { icon: IconSend, title: "Chega ao sistema", text: "O pedido é enviado para o sistema do restaurante." },
+  { icon: IconSend, title: "Chega à equipa", text: "O pedido aparece no painel, com a mesa e o que foi pedido." },
   { icon: IconTray, title: "A equipa entrega", text: "A equipa prepara e entrega, focada no serviço." },
 ];
 
@@ -38,7 +37,7 @@ const BENEFITS = [
   { icon: IconNoApp, title: "Pedidos sem aplicação", text: "Abre no navegador do telemóvel, em segundos." },
   { icon: IconClock, title: "Menos tempo a recolher pedidos", text: "A equipa deixa de andar de mesa em mesa só para anotar." },
   { icon: IconGrid, title: "Gestão centralizada", text: "Pedidos, mesas, esgotados e equipa num só painel." },
-  { icon: IconPlug, title: "Integração com POS compatíveis", text: "Os pedidos seguem para o sistema que o espaço já usa." },
+  { icon: IconMenu, title: "Ementa sempre certa", text: "Um prato esgotado ou um preço novo mudam-se num minuto, sem voltar a imprimir." },
   { icon: IconPulse, title: "Acompanhamento de pedidos", text: "O cliente vê o estado do pedido; a equipa vê tudo em tempo real." },
   { icon: IconSmile, title: "Simples para os clientes", text: "Fotografias, alergénios, extras e conta da mesa, claros e legíveis." },
 ];
@@ -46,7 +45,7 @@ const BENEFITS = [
 const SOLUTIONS = [
   { title: "Restaurantes", text: "Esplanada e sala, com conta da mesa partilhada." },
   { title: "Bares de praia", text: "Picos de verão sem filas no balcão." },
-  { title: "Espreguiçadeiras", text: "Pedir e pagar, entregue na cama." },
+  { title: "Espreguiçadeiras", text: "Pedir sem se levantar, entregue na cama." },
   { title: "Hotéis", text: "Bar, lounge e serviço nos espaços comuns." },
   { title: "Piscinas", text: "Pedidos sem sair da água por muito tempo." },
   { title: "Outros espaços", text: "Rooftops, clubes, eventos e hotelaria." },
@@ -111,7 +110,7 @@ function Hero() {
             O empregado que não sabias que precisavas<span className="text-mint">.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/80">
-            Transforma a experiência dos teus clientes com pedidos digitais por QR Code e NFC. Menos espera, operações mais
+            Transforma a experiência dos teus clientes com pedidos digitais por QR Code. Menos espera, operações mais
             simples e uma equipa focada no serviço.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -219,7 +218,7 @@ function Benefits() {
         <SectionTitle
           eyebrow="Vantagens"
           title="Os teus clientes pedem. A tua equipa entrega. O teu negócio cresce."
-          text="Uma camada digital por cima do serviço que já tens: sem trocar de sistema, sem formar clientes."
+          text="Uma camada digital por cima do serviço que já tens: a tua equipa continua a servir, e os clientes não têm nada para aprender."
         />
         <ul className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {BENEFITS.map((b) => (
@@ -265,11 +264,12 @@ function Pricing() {
         <SectionTitle
           eyebrow="Preços"
           title="Começa pela ementa. Sobe quando quiseres."
-          text="Três planos, sem fidelização. Cada um inclui tudo o do anterior."
+          text="Sem fidelização. O plano de pedidos inclui tudo o da ementa, e os pagamentos pelo telemóvel chegam em breve."
         />
         <ul className="mt-12 grid gap-4 lg:grid-cols-3">
           {PLANS.map((p, i) => {
-            const featured = p === "payments";
+            const featured = p === "orders";
+            const soon = p === "payments";
             return (
               <li
                 key={p}
@@ -277,27 +277,36 @@ function Pricing() {
               >
                 <p className={`text-sm font-semibold tracking-wide uppercase ${featured ? "text-mint" : "text-brand"}`}>
                   Plano {i + 1}
-                  {featured && " · o mais completo"}
+                  {featured && " · o mais indicado"}
                 </p>
                 <h3 className="mt-2 text-xl font-extrabold tracking-tight">{PLAN_LABEL[p]}</h3>
-                <p className="mt-5 flex items-baseline gap-1.5">
-                  <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
-                  <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês + IVA</span>
-                </p>
-                <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>
-                  {featured ? `+ ${PAYMENTS_PLAN_COMMISSION} do que se paga pela app (sem IVA)` : "sem comissões"}
-                </p>
-                <ul className={`mt-7 grid gap-3 ${featured ? "text-white/90" : ""}`}>
-                  {PLAN_FEATURES[p].map((t) => (
-                    <li key={t} className="flex items-start gap-3">
-                      <IconCheck className={`mt-0.5 size-5 shrink-0 ${featured ? "text-mint" : "text-brand"}`} />
-                      {t}
-                    </li>
-                  ))}
-                </ul>
+                {soon ? (
+                  <>
+                    <p className="mt-5 text-4xl font-extrabold tracking-tight">Brevemente</p>
+                    <p className="mt-7 mb-8 leading-relaxed text-ink-soft">
+                      Pagar pelo telemóvel e deixar gorjeta. Por agora, os clientes pagam no restaurante, como sempre.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-5 flex items-baseline gap-1.5">
+                      <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
+                      <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês + IVA</span>
+                    </p>
+                    <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>sem comissões</p>
+                    <ul className={`mt-7 mb-8 grid gap-3 ${featured ? "text-white/90" : ""}`}>
+                      {PLAN_FEATURES[p].map((t) => (
+                        <li key={t} className="flex items-start gap-3">
+                          <IconCheck className={`mt-0.5 size-5 shrink-0 ${featured ? "text-mint" : "text-brand"}`} />
+                          {t}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
                 <a
                   href={DEMO_HREF}
-                  className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-2xl px-5 font-semibold ${
+                  className={`mt-auto inline-flex min-h-12 items-center justify-center rounded-2xl px-5 font-semibold ${
                     featured ? "bg-mint text-brand hover:bg-white" : "border border-brand text-brand hover:bg-brand-soft"
                   }`}
                 >
@@ -308,7 +317,7 @@ function Pricing() {
           })}
         </ul>
         <p className="mt-8 max-w-3xl text-sm leading-relaxed text-ink-soft">
-          Preços sem IVA. Instalação opcional (placas com QR e NFC e ementa configurada por nós) e planos de época para bares de praia: falamos na
+          Preços sem IVA. Instalação opcional (placas com QR e ementa configurada por nós) e planos de época para bares de praia: falamos na
           demonstração. A ligação ao sistema POS do restaurante está em validação.
         </p>
       </div>

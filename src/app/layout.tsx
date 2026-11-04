@@ -7,9 +7,9 @@ const manrope = Manrope({ subsets: ["latin", "latin-ext"], variable: "--font-man
 
 export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL) : undefined,
-  title: { default: "MESVIO — pedidos digitais por QR Code e NFC", template: "%s · MESVIO" },
+  title: { default: "MESVIO — pedidos digitais por QR Code", template: "%s · MESVIO" },
   description:
-    "O empregado que não sabias que precisavas. Pedidos digitais por QR Code e NFC para restaurantes, bares de praia, hotéis e piscinas, sem instalar aplicações.",
+    "O empregado que não sabias que precisavas. Pedidos digitais por QR Code para restaurantes, bares de praia, hotéis e piscinas, sem instalar aplicações.",
   applicationName: "MESVIO",
   // Instalar o painel no iPhone ("Adicionar ao ecrã principal"): ícone e abrir em ecrã inteiro.
   appleWebApp: { capable: true, title: "MESVIO", statusBarStyle: "default" },
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     locale: "pt_PT",
     siteName: "MESVIO",
     title: "MESVIO — O empregado que não sabias que precisavas.",
-    description: "Pedidos digitais por QR Code e NFC. Menos espera. Mais serviço.",
+    description: "Pedidos digitais por QR Code. Menos espera. Mais serviço.",
   },
 };
 
