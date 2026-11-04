@@ -4,14 +4,15 @@ import { useEffect, useRef } from "react";
 
 /**
  * Pergunta periodicamente ao servidor, com três regras para aguentar dias cheios:
- * - pausa enquanto o separador está escondido (ecrã bloqueado, outra app) e atualiza logo ao voltar;
+ * - pausa enquanto o separador está escondido (ecrã bloqueado, outra app) e atualiza logo ao voltar,
+ *   ou, com `hiddenIntervalMs`, continua mais devagar (o painel tem de tocar com outro separador à frente);
  * - o intervalo depende do tempo decorrido (`intervalFor`), para espaçar quando nada muda;
  * - `intervalFor` devolve null para parar de vez.
  * Antes, cada telemóvel com a página aberta perguntava a cada 3 s para sempre (teste de carga).
  */
 export function usePolling(
   fn: () => Promise<unknown> | unknown,
-  { enabled, intervalFor }: { enabled: boolean; intervalFor: (elapsedMs: number) => number | null },
+  { enabled, intervalFor, hiddenIntervalMs }: { enabled: boolean; intervalFor: (elapsedMs: number) => number | null; hiddenIntervalMs?: number },
 ): void {
   const fnRef = useRef(fn);
   const intervalRef = useRef(intervalFor);
@@ -26,12 +27,12 @@ export function usePolling(
 
     const schedule = () => {
       if (stopped) return;
-      const delay = intervalRef.current(Date.now() - startedAt);
+      const delay = document.visibilityState === "hidden" && hiddenIntervalMs ? hiddenIntervalMs : intervalRef.current(Date.now() - startedAt);
       if (delay === null) return;
       timer = setTimeout(tick, delay);
     };
     const tick = async () => {
-      if (document.visibilityState === "hidden") return; // retoma no visibilitychange
+      if (document.visibilityState === "hidden" && !hiddenIntervalMs) return; // retoma no visibilitychange
       try {
         await fnRef.current();
       } finally {
@@ -51,7 +52,7 @@ export function usePolling(
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled]);
+  }, [enabled, hiddenIntervalMs]);
 }
 
 /** Intervalos que vão espaçando: [até ms, intervalo ms]…; depois do último, para (null) ou `then`. */

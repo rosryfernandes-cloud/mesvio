@@ -23,6 +23,8 @@ import { NotificationsCard } from "./notifications-card";
 import { FirstSteps } from "./first-steps";
 
 const POLL_MS = 3000;
+/** Com outro separador à frente, continua a ver pedidos para tocar (o browser pode espaçar mais). */
+const POLL_HIDDEN_MS = 10_000;
 
 type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
@@ -65,7 +67,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 
   // "Tempo real": a cada 3 s com o painel à vista; parado com o ecrã do tablet desligado, e
   // atualiza logo ao voltar.
-  usePolling(refresh, { enabled: true, intervalFor: () => POLL_MS });
+  usePolling(refresh, { enabled: true, intervalFor: () => POLL_MS, hiddenIntervalMs: POLL_HIDDEN_MS });
 
   const urgent = board.orders.filter((o) => o.status === "NEEDS_ATTENTION" || o.awaitingApproval);
   const urgentCount = urgent.length;
@@ -960,6 +962,7 @@ function useAlertSound() {
     try {
       ctx.current ??= new AudioContext();
       const c = ctx.current;
+      void c.resume();
       for (const [i, freq] of [880, 660, 880].entries()) {
         const osc = c.createOscillator();
         const gain = c.createGain();

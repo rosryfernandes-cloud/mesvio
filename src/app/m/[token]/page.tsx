@@ -69,7 +69,7 @@ export default async function TableMenuPage({ params }: Props) {
         {menu.establishment.address && <p className="mt-1 text-sm text-ink-soft">{menu.establishment.address}</p>}
       </header>
 
-      {menu.plan !== "menu" && <CallStaff tableToken={token} payFirst={payFirst} />}
+      {menu.plan !== "menu" && <CallStaff tableToken={token} action="waiter" />}
 
       {menu.ordering.enabled && payFirst && (
         <div className="mx-4 mt-4 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm">

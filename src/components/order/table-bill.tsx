@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CallStaff } from "./call-staff";
 import { MockPaySheet } from "./mock-pay-sheet";
 import { StripePaySheet, waitForPayment } from "./stripe-pay-sheet";
 import { backoffSchedule, usePolling } from "../use-polling";
@@ -157,6 +158,8 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
               <strong>{t.bill.due(formatEur(bill.dueCents))}</strong>
             </p>
           )}
+
+          {!fullyPaid && bill.dueCents > 0 && <CallStaff tableToken={tableToken} action="bill" />}
 
           {fullyPaid ? (
             <>
