@@ -19,7 +19,7 @@ export default function DemoPage() {
       <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Experimente como um cliente</h1>
       <p className="mt-3 max-w-xl leading-relaxed text-ink-soft">
         Escolha um lugar do <strong className="text-ink">{DEMO_ESTABLISHMENT.name}</strong> para abrir a ementa como se tivesse
-        lido o QR Code ou aproximado o telemóvel do NFC.
+        lido o QR Code.
       </p>
 
       {zones.map((zone) => {
@@ -55,17 +55,13 @@ export default function DemoPage() {
           <span className="mt-1 block text-sm text-white/75">Pedidos em tempo real, mesas, esgotados e equipa.</span>
         </Link>
         <Link href="/painel/qr" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand">
-          <span className="block font-bold">QR Codes e NFC →</span>
-          <span className="mt-1 block text-sm text-ink-soft">No painel (com login): folha para imprimir e URLs para gravar nas etiquetas.</span>
-        </Link>
-        <Link href="/central" className="rounded-2xl border border-line bg-card p-5 transition hover:border-brand sm:col-span-2">
-          <span className="block font-bold">Painel central MESVIO →</span>
-          <span className="mt-1 block text-sm text-ink-soft">Gestão da plataforma: restaurantes, mesas, QR Codes, pedidos e comissões. Com 2FA.</span>
+          <span className="block font-bold">QR Codes →</span>
+          <span className="mt-1 block text-sm text-ink-soft">No painel (com login): folha para imprimir.</span>
         </Link>
       </div>
 
       <p className="mt-10 text-xs text-ink-soft">
-        Dados simulados pelo MockPOS. A integração ZoneSoft aguarda documentação oficial; os pagamentos usam um fornecedor simulado.
+        Restaurante e dados de demonstração.
       </p>
     </main>
   );

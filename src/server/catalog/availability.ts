@@ -50,7 +50,9 @@ export async function cachedPosCatalog(pos: PosAdapter, establishmentId: string,
   const entry = byEst.get(establishmentId) ?? { fetchedAt: 0 };
   byEst.set(establishmentId, entry);
 
-  if (entry.catalog && now - entry.fetchedAt < CATALOG_TTL_MS) return entry.catalog;
+  // A ementa MESVIO vive na nossa base de dados: o dono muda o preço e o cliente tem de o ver logo.
+  const ttl = pos.provider === "mesvio" ? 0 : CATALOG_TTL_MS;
+  if (entry.catalog && now - entry.fetchedAt < ttl) return entry.catalog;
   entry.inflight ??= pos
     .fetchCatalog()
     .then((catalog) => {

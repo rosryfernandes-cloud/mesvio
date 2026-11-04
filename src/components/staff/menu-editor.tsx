@@ -203,7 +203,7 @@ export function MenuEditor() {
             <button
               type="button"
               className={secondary}
-              onClick={() => setEditing({ categoryId: c.id, name: "", description: "", price: "", vatRateBps: 1300, allergens: [], tags: "", available: true, groups: [] })}
+              onClick={() => setEditing({ categoryId: c.id, name: "", description: "", price: "", vatRateBps: c.products.at(-1)?.vatRateBps ?? 1300, allergens: [], tags: "", available: true, groups: [] })}
             >
               + Prato
             </button>
