@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 const field = "mt-1 block w-full rounded-xl border border-line bg-card px-4 py-3 text-base";
 const primary = "min-h-12 rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50";
 
-async function post(url: string, body: unknown): Promise<{ ok: boolean; message?: string }> {
+async function post(url: string, body: unknown): Promise<{ ok: boolean; message?: string; destination?: string }> {
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, message: data.message };
+    return { ok: res.ok, message: data.message, destination: data.destination };
   } catch {
     return { ok: false, message: "Sem ligação. Verifique a rede." };
   }
@@ -52,7 +52,8 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
       return setError(r.message ?? "Código inválido.");
     }
     // Carregamento completo: a sessão nova entra sem reaproveitar páginas guardadas pelo router.
-    window.location.assign(redirectTo);
+    // No painel, a resposta diz para onde vai esta conta; a entrada da central já sabe o destino.
+    window.location.assign(redirectTo === "/painel" && r.destination ? r.destination : redirectTo);
   }
 
   return step === "email" ? (

@@ -34,6 +34,7 @@ export interface PanelUser {
   canEditSettings: boolean;
   canViewTeam: boolean;
   manageableRoles: StaffRole[];
+  isPlatformAdmin: boolean;
 }
 
 export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: PanelUser }) {
@@ -226,6 +227,11 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
           >
             {sound.enabled ? "🔔 Som ligado" : "🔕 Ligar som"}
           </button>
+          {me.isPlatformAdmin && (
+            <a href="/central" className="inline-flex min-h-10 items-center rounded-full bg-brand px-4 text-sm font-semibold text-white">
+              Central
+            </a>
+          )}
           <button type="button" onClick={logout} className="min-h-10 rounded-full border border-line bg-card px-4 text-sm">
             Sair
           </button>

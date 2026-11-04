@@ -32,9 +32,11 @@ export async function POST(request: Request) {
 
   // Conta válida mas sem nenhum restaurante (ex.: foi removida da equipa) nem acesso ao painel
   // central: não fica com sessão.
-  if (!(await resolveStaffContext(db, data.user.id)) && !(await findPlatformAdmin(db, data.user.id))) {
+  const admin = await findPlatformAdmin(db, data.user.id);
+  if (!admin && !(await resolveStaffContext(db, data.user.id))) {
     await supabase.auth.signOut();
     return NextResponse.json({ message: "Esta conta não tem acesso a nenhum restaurante." }, { status: 403 });
   }
-  return NextResponse.json({ ok: true });
+  // A equipa MESVIO entra na central (com o 2FA de sempre), mesmo que também pertença a um restaurante.
+  return NextResponse.json({ ok: true, destination: admin ? "/central/entrar" : "/painel" });
 }

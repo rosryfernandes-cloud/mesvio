@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getDb } from "@/server/db/client";
 import { authMode } from "@/server/auth/config";
+import { getCurrentUserId } from "@/server/auth/current-user";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { listDevUsers } from "@/server/auth/dev-users";
 import { getStaffContext } from "@/server/staff/http";
 import { DevLogin, EmailCodeLogin } from "@/components/staff/login-form";
@@ -11,6 +13,9 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Entrar no painel", robots: { index: false, follow: false } };
 
 export default async function StaffLoginPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
+  // Já com sessão: a equipa MESVIO vai para a central; quem é só do restaurante, para o painel.
+  const userId = await getCurrentUserId();
+  if (userId && (await findPlatformAdmin(await getDb(), userId))) redirect("/central/entrar");
   if (await getStaffContext()) redirect("/painel");
   const { erro } = await searchParams;
   const mode = authMode();

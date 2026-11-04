@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getDb } from "@/server/db/client";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { can, manageableRoles } from "@/server/staff/context";
 import { getStaffContext } from "@/server/staff/http";
 import { getBoard } from "@/server/staff/staff-service";
@@ -12,10 +13,12 @@ export const metadata: Metadata = { title: "Painel", robots: { index: false, fol
 export default async function StaffPanelPage() {
   const ctx = await getStaffContext();
   if (!ctx) redirect("/painel/entrar");
+  const db = await getDb();
   return (
     <StaffPanel
-      initialBoard={await getBoard(await getDb(), ctx)}
+      initialBoard={await getBoard(db, ctx)}
       me={{
+        isPlatformAdmin: (await findPlatformAdmin(db, ctx.userId)) !== null,
         displayName: ctx.displayName,
         role: ctx.role,
         establishmentId: ctx.establishmentId,
