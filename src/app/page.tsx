@@ -233,6 +233,9 @@ function Benefits() {
             </li>
           ))}
         </ul>
+        <p className="mt-12 rounded-2xl border border-line bg-paper p-5 leading-relaxed text-ink-soft">
+          <strong className="text-ink">Integração com POS, em desenvolvimento.</strong> Diz-nos que sistema usas e vemos como o podemos ligar.
+        </p>
       </div>
     </section>
   );
@@ -318,7 +321,7 @@ function Pricing() {
         </ul>
         <p className="mt-8 max-w-3xl text-sm leading-relaxed text-ink-soft">
           Preços sem IVA. Instalação opcional (placas com QR e ementa configurada por nós) e planos de época para bares de praia: falamos na
-          demonstração. A ligação ao sistema POS do restaurante está em validação.
+          demonstração.
         </p>
       </div>
     </section>
