@@ -4,15 +4,6 @@ import { formatEur } from "@/lib/money";
 import type { MenuProductView } from "@/server/menu/get-table-menu";
 import { useI18n } from "../i18n/i18n-provider";
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter((w) => w.length > 2)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-}
-
 export function ProductCard({
   product,
   onSelect,
@@ -82,17 +73,12 @@ export function ProductCard({
         </p>
       </div>
 
-      <div
-        aria-hidden="true"
-        className="flex size-20 shrink-0 items-center justify-center self-start rounded-xl bg-gradient-to-br from-brand-soft to-[#f5e6d3] font-[family-name:var(--font-display)] text-2xl text-brand"
-      >
-        {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.imageUrl} alt="" className="size-full rounded-xl object-cover" loading="lazy" />
-        ) : (
-          initials(product.name)
-        )}
-      </div>
+      {product.imageUrl && (
+        <div aria-hidden="true" className="size-20 shrink-0 self-start overflow-hidden rounded-xl bg-brand-soft">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={product.imageUrl} alt="" className="size-full object-cover" loading="lazy" />
+        </div>
+      )}
     </article>
   );
 }
