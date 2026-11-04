@@ -20,6 +20,7 @@ import { LogoMark } from "../brand/logo";
 import { ReviewsView } from "./reviews-view";
 import { InstallPrompt } from "./install-prompt";
 import { NotificationsCard } from "./notifications-card";
+import { FirstSteps } from "./first-steps";
 
 const POLL_MS = 3000;
 
@@ -267,6 +268,9 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 
       {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
 
+      {me.canEditSettings && me.canViewTeam && (
+        <FirstSteps establishmentId={me.establishmentId} hasOrders={board.orders.length > 0} refreshKey={tab} onGo={setTab} />
+      )}
       <InstallPrompt />
       <NotificationsCard />
 
