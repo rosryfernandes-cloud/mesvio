@@ -3,11 +3,13 @@ import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
 import { getPaymentsSetting, setApprovalThreshold, setManualAcceptance, setPaymentsEnabled } from "@/server/staff/staff-service";
 import { getConnectStatus } from "@/server/payments/stripe-connect";
+import { setMenuPhotosEnabled } from "@/server/menu/menu-images";
 
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
   manualAcceptance: z.boolean().optional(),
+  menuPhotosEnabled: z.boolean().optional(),
   paymentsEnabled: z.boolean().optional(),
   /** Cêntimos, ou null para desligar. */
   approvalThresholdCents: z.int().min(500).max(10_000_000).nullable().optional(),
@@ -19,6 +21,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ message: "Pedido inválido." }, 400);
   const db = await getDb();
+  if (parsed.data.menuPhotosEnabled !== undefined) await setMenuPhotosEnabled(db, ctx, parsed.data.menuPhotosEnabled);
   if (parsed.data.manualAcceptance !== undefined) await setManualAcceptance(db, ctx, parsed.data.manualAcceptance);
   if (parsed.data.paymentsEnabled !== undefined) {
     if (parsed.data.paymentsEnabled && !(await getPaymentsSetting(db, ctx)).planAllows) {

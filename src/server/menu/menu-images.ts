@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { withTenant } from "@/server/db/tenant";
-import { auditLogs, menuImages } from "@/server/db/schema";
+import { auditLogs, establishments, menuImages } from "@/server/db/schema";
 import type { StaffContext } from "@/server/staff/context";
 
 type Scope = Pick<StaffContext, "userId" | "organizationId" | "establishmentId">;
@@ -91,6 +91,32 @@ export async function productImageUrls(db: Db, organizationId: string, establish
       .where(eq(menuImages.establishmentId, establishmentId)),
   );
   return new Map(rows.map((r) => [r.ref, imageUrl(r.id, r.sha)]));
+}
+
+/** O dono pode esconder as fotos da ementa sem as apagar. */
+export async function menuPhotosEnabled(db: Db, organizationId: string, establishmentId: string): Promise<boolean> {
+  const [row] = await withTenant(db, { organizationId }, (tx) =>
+    tx.select({ enabled: establishments.menuPhotosEnabled }).from(establishments).where(eq(establishments.id, establishmentId)),
+  );
+  return row?.enabled ?? true;
+}
+
+export async function setMenuPhotosEnabled(db: Db, s: Scope, enabled: boolean): Promise<void> {
+  await withTenant(db, tenantOf(s), async (tx) => {
+    await tx
+      .update(establishments)
+      .set({ menuPhotosEnabled: enabled, updatedAt: new Date() })
+      .where(and(eq(establishments.id, s.establishmentId), eq(establishments.organizationId, s.organizationId)));
+    await tx.insert(auditLogs).values({
+      organizationId: s.organizationId,
+      actorType: "user",
+      actorId: s.userId,
+      action: "establishment.menu_photos",
+      entityType: "establishment",
+      entityId: s.establishmentId,
+      after: { enabled },
+    });
+  });
 }
 
 /**

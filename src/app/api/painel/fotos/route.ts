@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
 import { getStaffCatalog } from "@/server/staff/staff-service";
-import { deleteProductImage, MAX_IMAGE_BYTES, productImageUrls, saveProductImage } from "@/server/menu/menu-images";
+import { deleteProductImage, MAX_IMAGE_BYTES, menuPhotosEnabled, productImageUrls, saveProductImage } from "@/server/menu/menu-images";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +11,13 @@ export async function GET(request: Request) {
   const ctx = await guardStaff(request, { mutating: false, permission: "settings.edit" });
   if (ctx instanceof Response) return ctx;
   const db = await getDb();
-  const [sections, urls] = await Promise.all([getStaffCatalog(db, ctx), productImageUrls(db, ctx.organizationId, ctx.establishmentId)]);
+  const [sections, urls, photosEnabled] = await Promise.all([
+    getStaffCatalog(db, ctx),
+    productImageUrls(db, ctx.organizationId, ctx.establishmentId),
+    menuPhotosEnabled(db, ctx.organizationId, ctx.establishmentId),
+  ]);
   return json({
+    photosEnabled,
     sections: sections.map((s) => ({
       section: s.section,
       categories: s.categories.map((c) => ({

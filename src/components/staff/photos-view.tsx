@@ -47,6 +47,7 @@ async function uploadPhoto(ref: string, file: File): Promise<void> {
 /** Fotos dos pratos na ementa (dono/gerente): uma a uma, em massa, ou em sessão com a câmara. */
 export function PhotosView() {
   const [sections, setSections] = useState<Section[] | null>(null);
+  const [photosEnabled, setPhotosEnabled] = useState(true);
   const [query, setQuery] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +61,9 @@ export function PhotosView() {
 
   const load = useCallback(async () => {
     const res = await fetch("/api/painel/fotos", { cache: "no-store" }).catch(() => null);
-    setSections(res?.ok ? (await res.json()).sections : []);
+    const data = res?.ok ? await res.json() : null;
+    setSections(data?.sections ?? []);
+    if (data) setPhotosEnabled(data.photosEnabled !== false);
   }, []);
   useEffect(() => {
     void load();
@@ -101,6 +104,21 @@ export function PhotosView() {
     setBusy(null);
     if (!res?.ok) return setMessage({ text: "Não foi possível remover.", error: true });
     await load();
+  }
+
+  async function togglePhotos(enabled: boolean) {
+    setPhotosEnabled(enabled);
+    setMessage(null);
+    const res = await fetch("/api/painel/definicoes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ menuPhotosEnabled: enabled }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setPhotosEnabled(!enabled);
+      return setMessage({ text: "Não foi possível guardar. Tente de novo.", error: true });
+    }
+    setMessage({ text: enabled ? "As fotos voltaram a aparecer na ementa." : "As fotos deixaram de aparecer na ementa. Continuam guardadas aqui.", error: false });
   }
 
   function startBulk(files: FileList | File[] | null | undefined) {
@@ -161,6 +179,21 @@ export function PhotosView() {
           {sections && `${withPhoto} de ${all.length} artigos com foto.`}
         </p>
       </div>
+
+      <label className="flex items-start gap-3 rounded-2xl border border-line bg-card p-4">
+        <input
+          type="checkbox"
+          checked={photosEnabled}
+          onChange={(e) => void togglePhotos(e.target.checked)}
+          className="mt-1 size-5 accent-[var(--color-brand)]"
+        />
+        <span>
+          <span className="font-semibold">Mostrar fotos na ementa</span>
+          <span className="block text-sm text-ink-soft">
+            {photosEnabled ? "Desligue para a ementa ficar só com texto. As fotos não são apagadas." : "Desligado: a ementa está só com texto. As fotos continuam guardadas."}
+          </span>
+        </span>
+      </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <button

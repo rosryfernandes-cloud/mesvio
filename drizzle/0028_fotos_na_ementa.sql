@@ -1,0 +1,1 @@
+ALTER TABLE "establishments" ADD COLUMN "menu_photos_enabled" boolean DEFAULT true NOT NULL;

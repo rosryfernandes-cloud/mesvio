@@ -97,6 +97,8 @@ export const establishments = pgTable(
      * serviço; o dono/gerente liga-o no painel se precisar.
      */
     approvalThresholdCents: integer("approval_threshold_cents"),
+    /** Mostrar as fotos dos pratos na ementa. Desligar esconde-as sem as apagar. */
+    menuPhotosEnabled: boolean("menu_photos_enabled").notNull().default(true),
     /** Clientes podem pagar a conta da mesa no telemóvel. */
     paymentsEnabled: boolean("payments_enabled").notNull().default(false),
     /** Conta Stripe Connect do restaurante (acct_…): o dinheiro vai diretamente para ela. */
