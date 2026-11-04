@@ -73,13 +73,15 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
   const alertCount = alertIds.length;
 
   // Alerta sonoro e no título do separador quando aparece um pedido urgente ou uma chamada nova.
-  const seenAlerts = useRef(new Set(alertIds));
+  // Pedidos novos também tocam (menos os que ainda estão a ser pagos, que tocam quando seguem para a cozinha).
+  const soundIds = [...alertIds, ...board.orders.filter((o) => o.status !== "AWAITING_PAYMENT").map((o) => o.id)];
+  const seenAlerts = useRef(new Set(soundIds));
   useEffect(() => {
-    const fresh = alertIds.filter((id) => !seenAlerts.current.has(id));
+    const fresh = soundIds.filter((id) => !seenAlerts.current.has(id));
     if (fresh.length > 0) sound.play();
-    seenAlerts.current = new Set(alertIds);
+    seenAlerts.current = new Set(soundIds);
     document.title = alertCount > 0 ? `(${alertCount}) Painel · ${board.establishmentName}` : `Painel · ${board.establishmentName}`;
-  }, [alertIds.join(), alertCount, board.establishmentName, sound]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [soundIds.join(), alertCount, board.establishmentName, sound]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Impressão automática dos talões (por aparelho: ligada só no computador da cozinha/bar).
   // "all" = talão completo; "kitchen"/"bar" = só os artigos desse posto.
@@ -252,6 +254,17 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         </button>
       )}
 
+      {sound.needsTap && (
+        <button
+          type="button"
+          onClick={sound.test}
+          className="mb-4 flex w-full items-center gap-3 rounded-2xl border-2 border-amber-500 bg-amber-50 px-5 py-4 text-left font-semibold text-ink"
+        >
+          <span aria-hidden="true" className="text-2xl">🔔</span>
+          Toque aqui para ouvir os pedidos novos neste aparelho
+        </button>
+      )}
+
       {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
 
       <InstallPrompt />
@@ -283,7 +296,15 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       </nav>
 
       {tab === "pedidos" && (
-        <div className="mb-4 rounded-2xl border border-line bg-card px-4 py-3">
+        <OrdersView
+          board={board}
+          now={now}
+          onAction={act}
+          onToggleManual={toggleManual}
+          onSaveThreshold={saveThreshold}
+          canEditSettings={me.canEditSettings}
+          printSettings={
+        <div className="rounded-2xl border border-line bg-card px-4 py-3">
           <p className="font-semibold">🖨 Talões automáticos neste aparelho</p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Talões automáticos neste aparelho">
             {PRINT_MODES.map((m) => (
@@ -301,19 +322,10 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
           </div>
           <p className="mt-2 text-sm text-ink-soft">
             Escolha no computador ou tablet ligado a cada impressora: na cozinha &quot;Só cozinha&quot;, no bar &quot;Só bar&quot; (o posto de cada
-            categoria escolhe-se no separador Ementa). Para imprimir sem a janela de impressão, abra o painel no Chrome com a opção de
-            impressão silenciosa (ver guia).
+            categoria escolhe-se no separador Ementa). Para imprimir sem a janela de impressão, fale com a equipa MESVIO.
           </p>
         </div>
-      )}
-      {tab === "pedidos" && (
-        <OrdersView
-          board={board}
-          now={now}
-          onAction={act}
-          onToggleManual={toggleManual}
-          onSaveThreshold={saveThreshold}
-          canEditSettings={me.canEditSettings}
+          }
         />
       )}
       {tab === "resumo" && <SummaryView />}
@@ -477,6 +489,7 @@ function OrdersView({
   onToggleManual,
   onSaveThreshold,
   canEditSettings,
+  printSettings,
 }: {
   board: Board;
   now: number;
@@ -484,6 +497,7 @@ function OrdersView({
   onToggleManual: (v: boolean) => void;
   onSaveThreshold: (cents: number | null) => void;
   canEditSettings: boolean;
+  printSettings: React.ReactNode;
 }) {
   const groups = useMemo(() => {
     const by = (f: (o: BoardOrder) => boolean) => board.orders.filter(f);
@@ -501,24 +515,6 @@ function OrdersView({
 
   return (
     <div className="grid gap-8">
-      <label className="flex items-start gap-3 rounded-2xl border border-line bg-card p-4">
-        <input
-          type="checkbox"
-          checked={board.manualAcceptance}
-          disabled={!canEditSettings}
-          onChange={(e) => onToggleManual(e.target.checked)}
-          className="mt-1 size-5 accent-[var(--color-brand)]"
-        />
-        <span>
-          <span className="font-semibold">Aprovar cada pedido antes de seguir para a cozinha</span>
-          {!canEditSettings && <span className="ml-2 text-xs text-ink-soft">(só o dono ou o gerente podem mudar)</span>}
-          <span className="block text-sm text-ink-soft">
-            Só se suspeitar de pedidos falsos: atrasa o serviço. Os clientes veem “a aguardar confirmação” até aprovar.
-          </span>
-        </span>
-      </label>
-      <ThresholdSetting value={board.approvalThresholdCents} onSave={onSaveThreshold} disabled={!canEditSettings || board.manualAcceptance} />
-
       <div id="urgentes" className="grid gap-8">
         <Group title="Precisa de atenção" tone="red" orders={groups.attention} now={now} onAction={onAction}
           hint="O POS não recebeu estes pedidos. Tente de novo ou lance-os à mão no POS." />
@@ -537,6 +533,35 @@ function OrdersView({
           Ainda não há pedidos hoje. Os novos pedidos aparecem aqui automaticamente.
         </p>
       )}
+
+      <details className="rounded-2xl border border-line bg-card/50 p-4">
+        <summary className="min-h-8 cursor-pointer font-semibold">
+          Definições dos pedidos e dos talões
+          {(board.manualAcceptance || board.approvalThresholdCents !== null) && (
+            <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">aprovação ligada</span>
+          )}
+        </summary>
+        <div className="mt-4 grid gap-4">
+          {printSettings}
+      <label className="flex items-start gap-3 rounded-2xl border border-line bg-card p-4">
+        <input
+          type="checkbox"
+          checked={board.manualAcceptance}
+          disabled={!canEditSettings}
+          onChange={(e) => onToggleManual(e.target.checked)}
+          className="mt-1 size-5 accent-[var(--color-brand)]"
+        />
+        <span>
+          <span className="font-semibold">Aprovar cada pedido antes de seguir para a cozinha</span>
+          {!canEditSettings && <span className="ml-2 text-xs text-ink-soft">(só o dono ou o gerente podem mudar)</span>}
+          <span className="block text-sm text-ink-soft">
+            Só se suspeitar de pedidos falsos: atrasa o serviço. Os clientes veem “a aguardar confirmação” até aprovar.
+          </span>
+        </span>
+      </label>
+      <ThresholdSetting value={board.approvalThresholdCents} onSave={onSaveThreshold} disabled={!canEditSettings || board.manualAcceptance} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -553,7 +578,7 @@ function ThresholdSetting({ value, onSave, disabled }: { value: number | null; o
     onSave(on && Number.isFinite(n) && n >= 500 ? n : on ? 15_000 : null);
   };
   return (
-    <div className="-mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card p-4">
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card p-4">
       <label className="flex items-center gap-3">
         <input
           type="checkbox"
@@ -890,14 +915,35 @@ function SoldOutView() {
 
 /** Bip curto via Web Audio. Os browsers só deixam tocar som depois de um toque do utilizador. */
 function useAlertSound() {
-  const [enabled, setEnabled] = useState(false);
+  // Ligado por omissão: um pedido que passa em silêncio é pior do que um som a mais.
+  const [enabled, setEnabled] = useState(true);
+  const [unlocked, setUnlocked] = useState(false);
   const ctx = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     try {
-      setEnabled(localStorage.getItem("painel:som") === "1");
+      setEnabled(localStorage.getItem("painel:som") !== "0");
     } catch {}
   }, []);
+
+  const unlock = useCallback(() => {
+    try {
+      ctx.current ??= new AudioContext();
+      void ctx.current.resume();
+      setUnlocked(true);
+    } catch {}
+  }, []);
+
+  // O browser só deixa tocar depois de a pessoa tocar na página: o primeiro toque em qualquer sítio chega.
+  useEffect(() => {
+    if (!enabled || unlocked) return;
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [enabled, unlocked, unlock]);
 
   const play = useCallback(() => {
     if (!enabled) return;
@@ -926,10 +972,16 @@ function useAlertSound() {
       if (next) {
         ctx.current ??= new AudioContext();
         void ctx.current.resume();
+        setUnlocked(true);
       }
       return next;
     });
   }, []);
 
-  return useMemo(() => ({ enabled, play, toggle }), [enabled, play, toggle]);
+  const test = useCallback(() => {
+    unlock();
+    play();
+  }, [unlock, play]);
+
+  return useMemo(() => ({ enabled, play, toggle, test, needsTap: enabled && !unlocked }), [enabled, play, toggle, test, unlocked]);
 }

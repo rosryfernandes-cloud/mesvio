@@ -121,7 +121,7 @@ export function CreateRestaurantForm() {
         </label>
         <label className={`${label} sm:col-span-2`}>
           Plano
-          <select name="plan" defaultValue="payments" className={field}>
+          <select name="plan" defaultValue="orders" className={field}>
             {PLANS.map((p, i) => (
               <option key={p} value={p}>
                 {i + 1}. {PLAN_LABEL[p]}

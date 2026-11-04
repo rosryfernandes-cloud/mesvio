@@ -7,6 +7,21 @@ import { PoweredBy } from "../brand/logo";
 /** Sugestões que passam o contraste AA (texto branco nos botões). */
 const SUGGESTIONS = ["#062d25", "#1d3557", "#7c2d12", "#9f1239", "#4c1d95", "#0f5257", "#1f2937"];
 
+/** Reduz o logótipo no aparelho, mantendo o fundo transparente. O servidor aceita até 1 MB. */
+async function prepareLogo(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  for (const side of [800, 500, 300]) {
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+    if (blob && blob.size <= 1024 * 1024) return blob;
+  }
+  throw new Error("too large");
+}
+
 /** Cor e logótipo do restaurante na ementa do cliente (dono/gerente). */
 export function BrandingView({ establishmentName }: { establishmentName: string }) {
   const [loaded, setLoaded] = useState(false);
@@ -49,6 +64,36 @@ export function BrandingView({ establishmentName }: { establishmentName: string 
     setColor(data.brandColor ?? "");
     setLogoUrl(data.brandLogoUrl ?? "");
     setMessage({ text: "Guardado. Os clientes veem a nova aparência ao abrir a ementa.", error: false });
+  }
+
+  async function uploadLogo(file: File) {
+    setBusy(true);
+    setMessage(null);
+    setLogoBroken(false);
+    const form = new FormData();
+    try {
+      form.append("file", await prepareLogo(file));
+    } catch {
+      setBusy(false);
+      return setMessage({ text: "Não foi possível ler esta imagem. Use um ficheiro PNG, JPG ou WebP.", error: true });
+    }
+    const res = await fetch("/api/painel/marca/logotipo", { method: "POST", body: form }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res?.ok) return setMessage({ text: data.message ?? "Sem ligação. Tente de novo.", error: true });
+    setLogoUrl(data.brandLogoUrl);
+    setMessage({ text: "Logótipo guardado. Os clientes veem-no ao abrir a ementa.", error: false });
+  }
+
+  async function removeLogo() {
+    setBusy(true);
+    setMessage(null);
+    const res = await fetch("/api/painel/marca/logotipo", { method: "DELETE" }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) return setMessage({ text: "Sem ligação. Tente de novo.", error: true });
+    setLogoUrl("");
+    setLogoBroken(false);
+    setMessage({ text: "Logótipo removido. A ementa mostra só o nome.", error: false });
   }
 
   if (!loaded) return <p className="text-ink-soft">A carregar…</p>;
@@ -116,17 +161,43 @@ export function BrandingView({ establishmentName }: { establishmentName: string 
 
         <fieldset className="grid gap-3 rounded-2xl border border-line bg-card p-4">
           <legend className="px-1 font-semibold">Logótipo</legend>
-          <input
-            type="url"
-            aria-label="Endereço do logótipo"
-            placeholder="https://o-seu-site.pt/logotipo.png"
-            value={logoUrl}
-            onChange={(e) => {
-              setLogoUrl(e.target.value);
-              setLogoBroken(false);
-            }}
-            className="min-h-11 rounded-xl border border-line bg-card px-3"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className={`inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-brand px-4 font-semibold text-brand ${busy ? "pointer-events-none opacity-50" : ""}`}>
+              {logoUrl ? "Trocar logótipo" : "Enviar logótipo"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={busy}
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void uploadLogo(file);
+                }}
+              />
+            </label>
+            {logoUrl && (
+              <button type="button" disabled={busy} onClick={() => void removeLogo()} className="min-h-11 rounded-xl px-3 text-sm text-ink-soft underline">
+                Remover
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-ink-soft">PNG, JPG ou WebP. De preferência com fundo transparente. Fica guardado logo, e reduzimos o tamanho por si.</p>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-ink-soft">Prefiro colar o endereço de uma imagem</summary>
+            <input
+              type="url"
+              aria-label="Endereço do logótipo"
+              placeholder="https://o-seu-site.pt/logotipo.png"
+              value={logoUrl}
+              onChange={(e) => {
+                setLogoUrl(e.target.value);
+                setLogoBroken(false);
+              }}
+              className="mt-2 min-h-11 w-full rounded-xl border border-line bg-card px-3"
+            />
+            <p className="mt-1 text-xs text-ink-soft">Depois de colar, carregue em Guardar aparência.</p>
+          </details>
           {!logoValid && (
             <p role="alert" className="text-sm text-danger">
               Use um endereço que comece por https://.
@@ -134,12 +205,9 @@ export function BrandingView({ establishmentName }: { establishmentName: string 
           )}
           {logoValid && logoUrl && logoBroken && (
             <p role="alert" className="text-sm text-danger">
-              Não foi possível abrir esta imagem. Confirme o endereço.
+              Não foi possível abrir esta imagem. Envie o ficheiro ou confirme o endereço.
             </p>
           )}
-          <p className="text-xs text-ink-soft">
-            Endereço público de uma imagem PNG, SVG ou JPG (por exemplo do site do restaurante). De preferência com fundo transparente.
-          </p>
         </fieldset>
 
         {message && (
@@ -183,7 +251,6 @@ export function BrandingView({ establishmentName }: { establishmentName: string 
             <span className="rounded-full bg-brand px-3 py-1.5 text-white">Comida</span>
             <span className="rounded-full bg-card px-3 py-1.5 text-ink-soft">Bebidas</span>
           </div>
-          <div className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-xs text-brand">Aqui paga ao pedir.</div>
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white">
             <span>Ver pedido · 2</span>
             <span>23,50 €</span>

@@ -109,7 +109,7 @@ export function TranslationsView() {
         <h2 className="text-xl">Ementa em inglês</h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
           Clientes com o telemóvel noutra língua veem a ementa em inglês (e podem mudar para português). Botões, alergénios e avisos
-          já estão traduzidos; aqui traduz os nomes e descrições do seu POS. O que ficar por traduzir aparece em português.
+          já estão traduzidos; aqui traduz os nomes e descrições da sua ementa. O que ficar por traduzir aparece em português.
         </p>
       </div>
 
