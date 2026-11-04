@@ -164,7 +164,7 @@ export function MenuEditor() {
 
       {menu.categories.length === 0 && (
         <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-ink-soft">
-          A ementa está vazia. Comece por criar uma categoria (ex.: Entradas, Bebidas) e depois os pratos.
+          A ementa está vazia. Comece por criar uma categoria, que é um grupo como Entradas ou Bebidas. Os pratos e os preços vêm a seguir.
         </p>
       )}
 
@@ -280,7 +280,7 @@ export function MenuEditor() {
             className={primary}
             disabled={busy || !catDraft.name.trim()}
             onClick={async () => {
-              if (await run({ action: "save_category", category: { ...catDraft, station: catDraft.station ?? guessStation(catDraft.name, catDraft.section) } }, "Categoria guardada.")) setCatDraft(null);
+              if (await run({ action: "save_category", category: { ...catDraft, station: catDraft.station ?? guessStation(catDraft.name, catDraft.section) } }, "Categoria guardada. Agora carregue em + Prato para acrescentar os pratos e os preços.")) setCatDraft(null);
             }}
           >
             Guardar
