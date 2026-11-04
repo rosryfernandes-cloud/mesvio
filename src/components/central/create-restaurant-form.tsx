@@ -142,7 +142,7 @@ export function CreateRestaurantForm() {
         <label className={label}>
           Comissão (%)
           <input name="commission" required defaultValue="1" inputMode="decimal" pattern="\d{1,2}([.,]\d{1,2})?" className={field} />
-          <span className={hint}>Sobre o valor sem IVA dos pedidos confirmados.</span>
+          <span className={hint}>Só se cobra no plano com pagamentos, sobre o valor sem IVA do que se paga pela app.</span>
         </label>
       </fieldset>
 
@@ -164,7 +164,7 @@ export function CreateRestaurantForm() {
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className={label}>
-            Espreguiçadeiras <span className="font-normal text-ink-soft">(pagam ao pedir)</span>
+            Espreguiçadeiras
             <input name="bedsCount" type="number" min={0} max={300} defaultValue={0} className={field} />
           </label>
           <label className={label}>
@@ -177,7 +177,7 @@ export function CreateRestaurantForm() {
           </label>
         </div>
         <p className="text-xs text-ink-soft">
-          Pode acrescentar mais depois. As espreguiçadeiras só aceitam pedidos quando os pagamentos no telemóvel estiverem ligados.
+          Pode acrescentar mais depois. No plano com pagamentos, as espreguiçadeiras pagam ao pedir; nos outros, pedem como uma mesa e pagam no restaurante.
         </p>
       </fieldset>
 
