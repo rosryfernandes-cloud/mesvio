@@ -309,9 +309,7 @@ function Pricing() {
                 )}
                 <a
                   href={DEMO_HREF}
-                  className={`mt-auto inline-flex min-h-12 items-center justify-center rounded-2xl px-5 font-semibold ${
-                    featured ? "bg-mint text-brand hover:bg-white" : "border border-brand text-brand hover:bg-brand-soft"
-                  }`}
+                  className="mt-auto inline-flex min-h-12 items-center justify-center rounded-2xl bg-mint px-5 font-semibold text-brand hover:bg-brand-soft"
                 >
                   Pedir demonstração
                 </a>
