@@ -28,9 +28,6 @@ export function CentralShell({ adminName, children }: { adminName: string; child
             <Link prefetch={false} href="/central/seguranca" className="rounded-lg px-3 py-2 text-white/85 hover:text-white">
               Segurança
             </Link>
-            <a href="/painel" className="rounded-lg px-3 py-2 text-white/85 hover:text-white">
-              Painel do restaurante
-            </a>
             <Link href="/central/restaurantes/novo" className="rounded-full bg-mint px-4 py-2 font-semibold text-brand hover:bg-white">
               Novo restaurante
             </Link>
