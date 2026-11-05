@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, request.headers.get("host"), request.headers.get("x-forwarded-proto"));
   const ctx = await getStaffContext();
   if (!ctx) return NextResponse.redirect(`${base}/painel/entrar`);
-  if (ctx.role !== "owner" || !process.env.STRIPE_SECRET_KEY) return NextResponse.redirect(`${base}/painel?stripe=sem-acesso`);
+  if (ctx.role !== "owner" || ctx.support || !process.env.STRIPE_SECRET_KEY) return NextResponse.redirect(`${base}/painel?stripe=sem-acesso`);
   try {
     return NextResponse.redirect(await startOnboarding(await getDb(), ctx, base));
   } catch (err) {

@@ -11,5 +11,5 @@ export async function GET(request: Request) {
   if (ctx instanceof Response) return ctx;
   const stripe = process.env.STRIPE_SECRET_KEY ? stripeClient() : null;
   const status = await getBillingStatus(await getDb(), ctx, stripe);
-  return json({ ...status, available: Boolean(stripe), canManage: ctx.role === "owner" });
+  return json({ ...status, available: Boolean(stripe), canManage: ctx.role === "owner" && !ctx.support });
 }

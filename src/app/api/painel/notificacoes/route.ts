@@ -13,7 +13,7 @@ const schema = z.union([
 
 /** Notificações neste aparelho: ligar ({ subscription }), desligar ({ endpoint }) ou enviar um teste. */
 export async function POST(request: Request) {
-  const ctx = await guardStaff(request, { mutating: true, permission: "orders.act" });
+  const ctx = await guardStaff(request, { mutating: true, permission: "orders.act", blockSupport: true });
   if (ctx instanceof Response) return ctx;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ message: "Pedido inválido." }, 400);

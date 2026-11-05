@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await guardStaff(request, { mutating: true, permission: "team.view" });
+  const ctx = await guardStaff(request, { mutating: true, permission: "team.view", blockSupport: true });
   if (ctx instanceof Response) return ctx;
   const parsed = inviteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ message: "Verifique o email e o perfil." }, 400);

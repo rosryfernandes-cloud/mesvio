@@ -115,3 +115,30 @@ export function InviteOwnerForm({ establishmentId }: { establishmentId: string }
     </form>
   );
 }
+
+/** Abre o painel deste restaurante em modo suporte (recarrega a página para o painel ler o novo cookie). */
+export function OpenPanelButton({ establishmentId }: { establishmentId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function open() {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/suporte`, { method: "POST" }).catch(() => null);
+    if (res?.ok) return window.location.assign("/painel");
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    setError(data.message ?? "Não foi possível abrir o painel. Tente de novo.");
+  }
+  return (
+    <>
+      <button type="button" onClick={open} disabled={busy} className="min-h-11 rounded-xl border border-brand px-5 py-2.5 font-semibold text-brand disabled:opacity-60">
+        {busy ? "A abrir..." : "Abrir painel"}
+      </button>
+      {error && (
+        <p role="alert" className="w-full rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}

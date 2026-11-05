@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     // O domínio por onde os clientes abrem a ementa (o mesmo dos QR Codes).
     const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, request.headers.get("host"), request.headers.get("x-forwarded-proto"));
     const status = await getConnectStatus(await getDb(), ctx, undefined, { domain: new URL(base).hostname });
-    return json({ ...status, canConnect: ctx.role === "owner" });
+    return json({ ...status, canConnect: ctx.role === "owner" && !ctx.support });
   } catch (err) {
     console.error("[stripe] estado da conta falhou", err);
     return json({ message: "Não foi possível falar com a Stripe." }, 502);

@@ -9,7 +9,7 @@ const STATUS: Record<Exclude<TeamResult, { ok: true }>["code"], number> = { FORB
 const reply = (r: TeamResult) => (r.ok ? json({ ok: true }) : json(r, STATUS[r.code]));
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await guardStaff(request, { mutating: true, permission: "team.view" });
+  const ctx = await guardStaff(request, { mutating: true, permission: "team.view", blockSupport: true });
   if (ctx instanceof Response) return ctx;
   const { id } = await params;
   const parsed = z.object({ role: z.enum(["owner", "manager", "staff"]) }).safeParse(await request.json().catch(() => null));
@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await guardStaff(request, { mutating: true, permission: "team.view" });
+  const ctx = await guardStaff(request, { mutating: true, permission: "team.view", blockSupport: true });
   if (ctx instanceof Response) return ctx;
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return json({ message: "Pedido inválido." }, 400);

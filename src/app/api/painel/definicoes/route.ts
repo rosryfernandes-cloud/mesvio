@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { guardStaff, json } from "@/server/staff/http";
+import { guardStaff, json, supportBlocked } from "@/server/staff/http";
 import { getPaymentsSetting, setApprovalThreshold, setManualAcceptance, setPaymentsEnabled } from "@/server/staff/staff-service";
 import { getConnectStatus } from "@/server/payments/stripe-connect";
 import { setMenuPhotosEnabled } from "@/server/menu/menu-images";
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   if (ctx instanceof Response) return ctx;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ message: "Pedido inválido." }, 400);
+  if (ctx.support && parsed.data.paymentsEnabled !== undefined) return supportBlocked();
   const db = await getDb();
   if (parsed.data.menuPhotosEnabled !== undefined) await setMenuPhotosEnabled(db, ctx, parsed.data.menuPhotosEnabled);
   if (parsed.data.manualAcceptance !== undefined) await setManualAcceptance(db, ctx, parsed.data.manualAcceptance);

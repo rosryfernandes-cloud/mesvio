@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, request.headers.get("host"), request.headers.get("x-forwarded-proto"));
   const ctx = await getStaffContext();
   if (!ctx) return NextResponse.redirect(`${base}/painel/entrar`);
+  if (ctx.support) return NextResponse.redirect(`${base}/painel?stripe=sem-acesso`);
   try {
     const status = await finishOnboarding(await getDb(), ctx, new URL(base).hostname);
     return NextResponse.redirect(`${base}/painel?stripe=${status.chargesEnabled ? "ok" : "pendente"}`);

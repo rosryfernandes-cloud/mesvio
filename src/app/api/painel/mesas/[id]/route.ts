@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success || !z.uuid().safeParse(id).success) return json({ message: "Pedido inválido." }, 400);
 
   if (parsed.data.action === "refund_overpaid") {
-    const ctx = await guardStaff(request, { mutating: true, permission: "settings.edit" });
+    const ctx = await guardStaff(request, { mutating: true, permission: "settings.edit", blockSupport: true });
     if (ctx instanceof Response) return ctx;
     const provider = activePaymentProvider();
     if (!provider) return json({ message: "Pagamentos indisponíveis." }, 503);

@@ -7,7 +7,7 @@ import { readWithRetry } from "@/server/db/read-retry";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getEstablishmentDetail } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
-import { AddTablesForm, InviteOwnerForm } from "@/components/central/establishment-actions";
+import { AddTablesForm, InviteOwnerForm, OpenPanelButton } from "@/components/central/establishment-actions";
 import { formatEur } from "@/lib/money";
 import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
 import { PlanPicker } from "@/components/central/plan-picker";
@@ -61,6 +61,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <OpenPanelButton establishmentId={id} />
           <Link prefetch={false} href={`/central/restaurantes/${id}/placas`} className="min-h-11 rounded-xl border border-brand px-5 py-2.5 font-semibold text-brand">
             Placas para a gráfica
           </Link>

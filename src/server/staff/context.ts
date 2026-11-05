@@ -17,6 +17,8 @@ export interface StaffContext {
   displayName: string;
   /** Restaurantes a que este utilizador tem acesso (para trocar no painel). */
   establishments: { id: string; name: string; role: StaffRole }[];
+  /** Equipa MESVIO em modo suporte, sem pertencer à equipa do restaurante (ver platform/support.ts). */
+  support?: boolean;
 }
 
 /**

@@ -25,7 +25,7 @@ export default async function StaffPanelPage() {
         establishments: ctx.establishments,
         canEditSettings: can(ctx, "settings.edit"),
         canViewTeam: can(ctx, "team.view"),
-        manageableRoles: manageableRoles(ctx.role),
+        manageableRoles: ctx.support ? [] : manageableRoles(ctx.role),
       }}
     />
   );
