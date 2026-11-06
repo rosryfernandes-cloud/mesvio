@@ -1,5 +1,5 @@
 import "server-only";
-import { PLANS, planAllowsPayments, type Plan } from "@/lib/plan";
+import { PLAN_MONTHLY_CENTS, PLANS, planAllowsOrdering, planAllowsPayments, type Plan } from "@/lib/plan";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
@@ -271,6 +271,11 @@ export interface EstablishmentSummary {
   stripeConnected: boolean;
   /** Plano contratado (o que a app deixa fazer). */
   plan: Plan;
+  /** Estado da mensalidade na Stripe (active, trialing, past_due…); null = ainda sem subscrição. */
+  billingStatus: string | null;
+  billingPeriodEnd: string | null;
+  /** Dias sem pedidos, se já tiver recebido algum; null = nunca recebeu. */
+  daysSinceLastOrder: number | null;
 }
 
 export interface PlatformAlert {
@@ -281,7 +286,7 @@ export interface PlatformAlert {
 
 export interface PlatformOverview {
   periodStart: string;
-  totals: { restaurants: number; ordersThisMonth: number; netCentsThisMonth: number; commissionCentsThisMonth: number };
+  totals: { restaurants: number; ordersThisMonth: number; netCentsThisMonth: number; commissionCentsThisMonth: number; mrrCents: number };
   establishments: EstablishmentSummary[];
   alerts: PlatformAlert[];
 }
@@ -312,6 +317,10 @@ async function inOrder<const T extends readonly (() => Promise<unknown>)[]>(fns:
   return out as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
 }
 
+const DAY_MS = 24 * 3600_000;
+/** Dias sem pedidos a partir dos quais a central avisa que o restaurante pode ter parado de usar a app. */
+const IDLE_ALERT_DAYS = 7;
+
 export async function getPlatformOverview(db: Db, now = new Date()): Promise<PlatformOverview> {
   const from = monthStart(now);
   const today = now.toISOString().slice(0, 10);
@@ -327,6 +336,8 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
         posStatus: posIntegrations.status,
         stripeAccountId: establishments.stripeAccountId,
         plan: establishments.plan,
+        billingStatus: establishments.billingStatus,
+        billingPeriodEnd: establishments.billingPeriodEnd,
       })
       .from(establishments)
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
@@ -389,6 +400,9 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       lastOrderAt: last ? new Date(last).toISOString() : null,
       stripeConnected: !!e.stripeAccountId,
       plan: e.plan,
+      billingStatus: e.billingStatus,
+      billingPeriodEnd: e.billingPeriodEnd ? e.billingPeriodEnd.toISOString() : null,
+      daysSinceLastOrder: last ? Math.floor((now.getTime() - new Date(last).getTime()) / DAY_MS) : null,
     };
   });
 
@@ -402,6 +416,10 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       alerts.push({ level: "info", establishmentId: e.id, text: `${e.name}: POS por configurar (a ementa ainda não recebe pedidos).` });
     if (e.owners === 0) alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: sem dono com acesso ao painel.` });
     if (e.tables === 0) alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: ainda sem mesas nem QR Codes.` });
+    if (e.billingStatus === "past_due" || e.billingStatus === "unpaid")
+      alerts.push({ level: "danger", establishmentId: e.id, text: `${e.name}: mensalidade em atraso.` });
+    if (planAllowsOrdering(e.plan) && e.daysSinceLastOrder !== null && e.daysSinceLastOrder >= IDLE_ALERT_DAYS)
+      alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: sem pedidos há ${e.daysSinceLastOrder} dias.` });
     if (!e.stripeConnected && process.env.STRIPE_SECRET_KEY)
       alerts.push({ level: "info", establishmentId: e.id, text: `${e.name}: pagamentos no telemóvel por ligar (o dono liga a conta Stripe no painel, separador Mesas).` });
   }
@@ -417,6 +435,8 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       ordersThisMonth: establishmentsOut.reduce((a, e) => a + e.ordersThisMonth, 0),
       netCentsThisMonth: establishmentsOut.reduce((a, e) => a + e.netCentsThisMonth, 0),
       commissionCentsThisMonth: establishmentsOut.reduce((a, e) => a + e.commissionCentsThisMonth, 0),
+      // Só as mensalidades a ser cobradas: em experiência ou em atraso não contam.
+      mrrCents: establishmentsOut.reduce((a, e) => a + (e.billingStatus === "active" ? PLAN_MONTHLY_CENTS[e.plan] : 0), 0),
     },
     establishments: establishmentsOut,
     alerts: alerts.sort((a, b) => ["danger", "warning", "info"].indexOf(a.level) - ["danger", "warning", "info"].indexOf(b.level)),

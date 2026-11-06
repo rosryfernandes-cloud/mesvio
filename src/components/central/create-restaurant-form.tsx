@@ -147,7 +147,7 @@ export function CreateRestaurantForm() {
       </fieldset>
 
       <fieldset className="grid gap-4 rounded-3xl border border-line bg-card p-5">
-        <legend className="px-1 text-lg font-bold">Lugares (QR Code / NFC)</legend>
+        <legend className="px-1 text-lg font-bold">Lugares (QR Code)</legend>
         <div className="grid gap-4 sm:grid-cols-3">
           <label className={label}>
             Mesas <span className="font-normal text-ink-soft">(pagam no fim)</span>

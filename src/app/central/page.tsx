@@ -18,6 +18,15 @@ const POS_STATE: Record<string, { label: string; className: string }> = {
   disabled: { label: "Desligado", className: "bg-line text-ink-soft" },
 };
 const POS_NAME: Record<string, string> = { mock: "MockPOS (testes)", zonesoft: "ZoneSoft", mesvio: "Sem POS (ementa MESVIO)" };
+const BILLING_STATE: Record<string, { label: string; className: string }> = {
+  active: { label: "Ativa", className: "bg-[#ecfdf3] text-ok" },
+  trialing: { label: "Em experiência", className: "bg-brand-soft text-brand" },
+  past_due: { label: "Em atraso", className: "bg-danger-soft text-danger" },
+  unpaid: { label: "Por pagar", className: "bg-danger-soft text-danger" },
+  canceled: { label: "Cancelada", className: "bg-line text-ink-soft" },
+};
+const NO_BILLING = { label: "Sem subscrição", className: "bg-line text-ink-soft" };
+const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Lisbon" });
 const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-50 text-amber-900", info: "bg-brand-soft text-brand" };
 
 export default async function CentralOverviewPage() {
@@ -27,6 +36,7 @@ export default async function CentralOverviewPage() {
   const openDemos = await readWithRetry(() => countOpenDemoRequests(db));
   const month = new Date(o.periodStart).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
   const kpis = [
+    { label: "MRR (mensalidades ativas)", value: formatEur(o.totals.mrrCents) },
     { label: "Restaurantes", value: String(o.totals.restaurants) },
     { label: `Pedidos em ${month}`, value: o.totals.ordersThisMonth.toLocaleString("pt-PT") },
     { label: "Volume elegível sem IVA", value: formatEur(o.totals.netCentsThisMonth) },
@@ -37,15 +47,15 @@ export default async function CentralOverviewPage() {
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
       <h1 className="text-3xl tracking-tight">Visão geral</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        Mês de {month}. Contam os pedidos confirmados (aceites, em preparação ou servidos). A comissão é estimada sobre o valor sem
-        IVA; o valor a faturar confirma-se com a faturação do POS.
+        Mês de {month}. Contam os pedidos confirmados (aceites, em preparação ou servidos). A comissão é uma estimativa sobre o valor
+        sem IVA e só se cobra no plano com pagamentos. O MRR soma só as mensalidades ativas, sem IVA.
       </p>
 
-      <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <ul className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <li key={k.label} className="rounded-3xl border border-line bg-card p-5">
             <p className="text-sm text-ink-soft">{k.label}</p>
-            <p className="mt-2 text-xl font-extrabold tracking-tight whitespace-nowrap tabular-nums sm:text-3xl">{k.value}</p>
+            <p className="mt-2 text-xl font-extrabold tracking-tight whitespace-nowrap tabular-nums sm:text-2xl">{k.value}</p>
           </li>
         ))}
       </ul>
@@ -99,13 +109,15 @@ export default async function CentralOverviewPage() {
           <p className="mt-3 rounded-2xl border border-dashed border-line px-6 py-10 text-center text-ink-soft">Ainda não há restaurantes.</p>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-3xl border border-line bg-card">
-            <table className="w-full min-w-[46rem] text-left text-sm">
+            <table className="w-full min-w-[62rem] text-left text-sm">
               <thead className="border-b border-line text-ink-soft">
                 <tr>
                   <th scope="col" className="px-5 py-3 font-semibold">Restaurante</th>
+                  <th scope="col" className="px-5 py-3 font-semibold">Mensalidade</th>
                   <th scope="col" className="px-5 py-3 font-semibold">POS</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Lugares</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Pedidos</th>
+                  <th scope="col" className="px-5 py-3 font-semibold">Último pedido</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Sem IVA</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Comissão</th>
                 </tr>
@@ -113,6 +125,7 @@ export default async function CentralOverviewPage() {
               <tbody>
                 {o.establishments.map((e) => {
                   const pos = POS_STATE[e.posStatus] ?? POS_STATE.not_configured;
+                  const billing = BILLING_STATE[e.billingStatus ?? ""] ?? (e.billingStatus ? { label: e.billingStatus, className: "bg-line text-ink-soft" } : NO_BILLING);
                   return (
                     <tr key={e.id} className="border-b border-line last:border-0">
                       <td className="px-5 py-3">
@@ -123,11 +136,21 @@ export default async function CentralOverviewPage() {
                         <span className="mt-1 inline-block rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">{PLAN_LABEL[e.plan]}</span>
                       </td>
                       <td className="px-5 py-3">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${billing.className}`}>{billing.label}</span>
+                        {e.billingPeriodEnd && (
+                          <span className="mt-1 block text-xs text-ink-soft">
+                            {e.billingStatus === "trialing" ? "Experiência até " : "Até "}
+                            {formatDay(e.billingPeriodEnd)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
                         <span className="block">{POS_NAME[e.posProvider] ?? e.posProvider}</span>
                         <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${pos.className}`}>{pos.label}</span>
                       </td>
                       <td className="px-5 py-3 text-right tabular-nums">{e.tables}</td>
                       <td className="px-5 py-3 text-right tabular-nums">{e.ordersThisMonth.toLocaleString("pt-PT")}</td>
+                      <td className="px-5 py-3 whitespace-nowrap">{e.lastOrderAt ? formatDay(e.lastOrderAt) : <span className="text-ink-soft">Nenhum</span>}</td>
                       <td className="px-5 py-3 text-right tabular-nums">{formatEur(e.netCentsThisMonth)}</td>
                       <td className="px-5 py-3 text-right font-semibold tabular-nums">
                         {formatEur(e.commissionCentsThisMonth)}

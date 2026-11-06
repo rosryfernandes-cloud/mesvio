@@ -198,4 +198,39 @@ describe("visão geral", () => {
     // A demo (sem regra de comissão) usa 1%.
     expect(o.establishments.find((x) => x.id === DEMO_ESTABLISHMENT.id)!.commissionBps).toBe(100);
   });
+
+  it("o MRR só conta mensalidades ativas e a central avisa de atrasos e restaurantes parados", async () => {
+    const r = await createRestaurant(db, admin, input, users);
+    if (!r.ok) throw new Error();
+    const [table] = await db.select().from(t.diningTables).where(eq(t.diningTables.establishmentId, r.establishmentId)).limit(1);
+    const [est] = await db.select().from(t.establishments).where(eq(t.establishments.id, r.establishmentId));
+    const now = new Date("2026-11-20T12:00:00Z");
+    const set = (billingStatus: string) => db.update(t.establishments).set({ plan: "orders", billingStatus }).where(eq(t.establishments.id, est.id));
+    const alertsOf = async () => (await getPlatformOverview(db, now)).alerts.filter((a) => a.establishmentId === est.id).map((a) => a.text);
+
+    await db.insert(t.orders).values({
+      organizationId: est.organizationId,
+      establishmentId: est.id,
+      tableId: table.id,
+      idempotencyKey: randomUUID(),
+      shortCode: "001",
+      status: "ACCEPTED",
+      totalGrossCents: 1130,
+      totalNetCents: 1000,
+      createdAt: new Date("2026-11-10T12:00:00Z"),
+    });
+
+    await set("trialing");
+    expect((await getPlatformOverview(db, now)).totals.mrrCents).toBe(0);
+    await set("active");
+    const o = await getPlatformOverview(db, now);
+    expect(o.totals.mrrCents).toBe(5900);
+    expect(o.establishments.find((x) => x.id === est.id)).toMatchObject({ billingStatus: "active", daysSinceLastOrder: 10 });
+    expect(await alertsOf()).toContain("Bar Praia Azul: sem pedidos há 10 dias.");
+    await set("past_due");
+    expect(await alertsOf()).toContain("Bar Praia Azul: mensalidade em atraso.");
+    expect((await getPlatformOverview(db, now)).totals.mrrCents).toBe(0);
+    // Quem nunca recebeu pedidos ainda está a arrancar: não há aviso de parado.
+    expect((await getPlatformOverview(db, now)).alerts.some((a) => a.establishmentId === DEMO_ESTABLISHMENT.id && a.text.includes("sem pedidos"))).toBe(false);
+  });
 });
