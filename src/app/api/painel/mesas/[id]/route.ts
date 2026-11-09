@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
-import { closeTable } from "@/server/tables/table-sessions";
+import { closeTable, joinTables } from "@/server/tables/table-sessions";
 import { assignTable, PAID_WITH } from "@/server/tables/assignments";
 import { staffTableAction } from "@/server/tables/table-admin";
 import { activePaymentProvider } from "@/server/payments/provider";
@@ -12,11 +12,12 @@ export const dynamic = "force-dynamic";
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("close"), force: z.boolean().optional(), override: z.boolean().optional(), paidWith: z.enum(PAID_WITH).optional() }),
   z.object({ action: z.literal("assign"), userId: z.uuid().nullable() }),
+  z.object({ action: z.literal("join"), intoTableId: z.uuid() }),
   z.object({ action: z.literal("rotate_qr") }),
   z.object({ action: z.literal("refund_overpaid") }),
 ]);
 
-/** Fechar a conta de uma mesa ou mudar o responsável (staff); gerar um QR novo ou devolver o pago a mais (dono/gerente). */
+/** Fechar a conta de uma mesa, juntá-la a outra ou mudar o responsável (staff); gerar um QR novo ou devolver o pago a mais (dono/gerente). */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -43,6 +44,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (parsed.data.action === "assign") {
     const a = await assignTable(await getDb(), ctx, id, parsed.data.userId);
     return a.ok ? json({ ok: true }) : json(a, a.code === "NOT_FOUND" ? 404 : 409);
+  }
+  if (parsed.data.action === "join") {
+    const j = await joinTables(await getDb(), ctx, id, parsed.data.intoTableId);
+    return j.ok ? json(j) : json(j, j.code === "NOT_FOUND" ? 404 : 409);
   }
   const r = await closeTable(await getDb(), ctx, id, { force: parsed.data.force, override: parsed.data.override, paidWith: parsed.data.paidWith ?? null });
   if (r.ok) return json({ ok: true });

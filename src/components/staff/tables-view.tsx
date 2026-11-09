@@ -8,6 +8,7 @@ import { SubscriptionCard } from "./subscription-card";
 import { InvoicingCard } from "./invoicing-card";
 import { StripeConnectCard } from "./stripe-connect-card";
 import { AssignmentsCard } from "./assignments-card";
+import { SplitBill } from "./split-bill";
 import type { TableOverview } from "@/server/tables/table-sessions";
 
 const POLL_MS = 5000;
@@ -32,6 +33,9 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
    * de um colega; `askPaidWith`: falta pagar e é preciso dizer como foi pago (mesas por empregado).
    */
   const [confirming, setConfirming] = useState<{ tableId: string; force: boolean; override: boolean; askPaidWith: boolean; message: string } | null>(null);
+  /** Mesa com a calculadora de dividir a conta aberta, ou a escolher a mesa para onde juntar. */
+  const [splitting, setSplitting] = useState<string | null>(null);
+  const [joining, setJoining] = useState<{ tableId: string; intoId: string } | null>(null);
   /** Mesas por empregado (em teste): eu e os nomes da equipa; null = desligado. */
   const [assignments, setAssignments] = useState<{ me: string; staff: { userId: string; name: string }[] } | null>(null);
   /** "Só as minhas": esconde as mesas dos colegas neste aparelho (fica guardado no browser). */
@@ -119,6 +123,26 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
       // Inclui PENDING_PAYMENT: com dinheiro a caminho a mesa não fecha, nem forçada.
       setConfirming(null);
       setMessage(data.message ?? (res ? "Não foi possível fechar a mesa." : "Sem ligação. Tente de novo."), true);
+    }
+    await load();
+  }
+
+  async function join(t: TableOverview, intoId: string) {
+    setBusy(t.tableId);
+    setMessage(null);
+    const res = await fetch(`/api/painel/mesas/${t.tableId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "join", intoTableId: intoId }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(null);
+    if (res?.ok) {
+      setMessage(`Conta da ${data.from} juntada à ${data.into}. A ${data.from} ficou livre.`);
+      setJoining(null);
+      setOpenId(intoId);
+    } else {
+      setMessage(data.message ?? (res ? "Não foi possível juntar as mesas." : "Sem ligação. Tente de novo."), true);
     }
     await load();
   }
@@ -332,6 +356,8 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                     onClick={() => {
                       setOpenId(selected ? null : t.tableId);
                       setConfirming(null);
+                      setSplitting(null);
+                      setJoining(null);
                     }}
                     aria-expanded={selected}
                     className="flex min-h-24 w-full flex-col justify-between px-4 py-3 text-left"
@@ -378,6 +404,75 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
                           </li>
                         ))}
                       </ul>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          aria-expanded={splitting === t.tableId}
+                          onClick={() => {
+                            setSplitting(splitting === t.tableId ? null : t.tableId);
+                            setJoining(null);
+                          }}
+                          className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold"
+                        >
+                          Dividir conta
+                        </button>
+                        <button
+                          type="button"
+                          aria-expanded={joining?.tableId === t.tableId}
+                          onClick={() => {
+                            setJoining(joining?.tableId === t.tableId ? null : { tableId: t.tableId, intoId: "" });
+                            setSplitting(null);
+                          }}
+                          className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold"
+                        >
+                          Juntar com outra mesa
+                        </button>
+                      </div>
+                      {splitting === t.tableId && <SplitBill bill={t.bill} onClose={() => setSplitting(null)} />}
+                      {joining?.tableId === t.tableId && (
+                        <div className="mt-3 rounded-xl border border-brand bg-brand-soft p-3 text-sm">
+                          <label className="block font-semibold">
+                            Passar a conta da {t.label} para:
+                            <select
+                              value={joining.intoId}
+                              onChange={(e) => setJoining({ tableId: t.tableId, intoId: e.target.value })}
+                              className="mt-1 block min-h-11 w-full rounded-xl border border-line bg-card px-3 font-normal"
+                            >
+                              <option value="">Escolha a mesa…</option>
+                              {(tables ?? [])
+                                .filter((x) => x.tableId !== t.tableId && x.orderingMode === t.orderingMode)
+                                .map((x) => (
+                                  <option key={x.tableId} value={x.tableId}>
+                                    {x.label}
+                                    {x.zone ? ` · ${x.zone}` : ""}
+                                    {x.bill ? ` · conta aberta ${formatEur(x.bill.totalCents)}` : " · livre"}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                          <p className="mt-2 text-ink-soft">
+                            Os pedidos e o que já foi pago passam para essa mesa, e a {t.label} fica livre. Se voltarem a pedir pelo QR da {t.label}, abre-se
+                            uma conta nova.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!joining.intoId || busy === t.tableId}
+                              onClick={() => join(t, joining.intoId)}
+                              className="min-h-11 rounded-xl bg-brand px-4 font-semibold text-white disabled:opacity-50"
+                            >
+                              Juntar contas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setJoining(null)}
+                              className="min-h-11 rounded-xl border border-line bg-card px-4 font-semibold"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                         <span className="font-semibold">
                           Total <span className="tabular-nums">{formatEur(t.bill.totalCents)}</span>

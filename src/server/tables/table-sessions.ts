@@ -435,3 +435,65 @@ export async function closeTable(
     return { ok: true, cancelled: cancelledRows.map((r) => r.shortCode), checkInPos: mayBeInPos.map((r) => r.shortCode) };
   });
 }
+
+export type JoinResult =
+  | { ok: true; from: string; into: string; movedOrders: number }
+  | { ok: false; code: "NOT_FOUND" | "SAME_TABLE" | "ALREADY_FREE" | "PENDING_PAYMENT" | "MIXED_MODE"; message: string };
+
+/**
+ * Junta a conta de uma mesa à de outra (ex.: o grupo da mesa 5 juntou-se à mesa 4): os pedidos, os
+ * pagamentos e as chamadas abertas passam para a conta da mesa de destino, e a mesa de origem fica
+ * livre. Se o destino estiver livre, abre-lhe uma conta. Novos pedidos feitos no QR da mesa de origem
+ * abrem uma conta nova nessa mesa (pode voltar a juntar-se).
+ */
+export async function joinTables(db: Db, s: Scope, fromTableId: string, intoTableId: string, now = new Date()): Promise<JoinResult> {
+  if (fromTableId === intoTableId) return { ok: false, code: "SAME_TABLE", message: "Escolha uma mesa diferente." };
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const found = await tx
+      .select({ id: diningTables.id, label: diningTables.label, mode: diningTables.orderingMode })
+      .from(diningTables)
+      .where(and(inArray(diningTables.id, [fromTableId, intoTableId]), eq(diningTables.establishmentId, s.establishmentId), eq(diningTables.active, true)));
+    const from = found.find((t) => t.id === fromTableId);
+    const into = found.find((t) => t.id === intoTableId);
+    if (!from || !into) return { ok: false, code: "NOT_FOUND", message: "Mesa não encontrada." };
+    if (from.mode !== into.mode) {
+      return { ok: false, code: "MIXED_MODE", message: "Só dá para juntar lugares do mesmo tipo (pagar no fim com pagar no fim, pagar ao pedir com pagar ao pedir)." };
+    }
+
+    const fromSession = await currentSession(tx, fromTableId, { lock: true });
+    if (!fromSession || !isOpen(fromSession, now)) return { ok: false, code: "ALREADY_FREE", message: `A ${from.label} já está livre.` };
+    const inFlight = await tx.$count(payments, and(eq(payments.tableSessionId, fromSession.id), eq(payments.status, "PENDING")));
+    if (inFlight > 0) {
+      return { ok: false, code: "PENDING_PAYMENT", message: `Há um pagamento em curso na ${from.label}. Aguarde que o cliente o conclua.` };
+    }
+
+    const intoSessionId = await getOrOpenSession(tx, { organizationId: s.organizationId, tableId: intoTableId }, now);
+    const moved = await tx
+      .update(orders)
+      .set({ tableSessionId: intoSessionId, updatedAt: now })
+      .where(eq(orders.tableSessionId, fromSession.id))
+      .returning({ id: orders.id });
+    await tx.update(payments).set({ tableSessionId: intoSessionId, updatedAt: now }).where(eq(payments.tableSessionId, fromSession.id));
+    await tx
+      .update(serviceRequests)
+      .set({ tableId: intoTableId })
+      .where(and(eq(serviceRequests.tableId, fromTableId), isNull(serviceRequests.resolvedAt)));
+    // A conta junta começa quando começou a mais antiga das duas.
+    await tx
+      .update(tableSessions)
+      .set({ openedAt: sql`least(${tableSessions.openedAt}, ${fromSession.openedAt})` })
+      .where(eq(tableSessions.id, intoSessionId));
+    await tx.update(tableSessions).set({ closedAt: now }).where(eq(tableSessions.id, fromSession.id));
+    await tx.insert(auditLogs).values({
+      organizationId: s.organizationId,
+      actorType: "user",
+      actorId: s.userId,
+      action: "table.join",
+      entityType: "table_session",
+      entityId: fromSession.id,
+      after: { fromTableId, intoTableId, intoSessionId, movedOrders: moved.length },
+      createdAt: now,
+    });
+    return { ok: true, from: from.label, into: into.label, movedOrders: moved.length };
+  });
+}

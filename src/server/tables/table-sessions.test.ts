@@ -9,9 +9,10 @@ import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { placeOrder, type PlaceOrderDeps } from "@/server/orders/place-order";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
 import { applyStaffAction, setManualAcceptance } from "@/server/staff/staff-service";
-import { closeTable, getTableBillByToken, listTables, SESSION_IDLE_MS } from "./table-sessions";
+import { closeTable, getTableBillByToken, joinTables, listTables, SESSION_IDLE_MS } from "./table-sessions";
 
-const [T1, T2] = [DEMO_TABLES[0], DEMO_TABLES[1]];
+const [T1, T2, T3] = [DEMO_TABLES[0], DEMO_TABLES[1], DEMO_TABLES[2]];
+const SUNBED = DEMO_TABLES.find((t) => t.orderingMode === "pay_first")!;
 
 let db: Db;
 let staff: StaffContext;
@@ -144,5 +145,40 @@ describe("mesas no painel", () => {
     expect(tables).toHaveLength(16); // 10 mesas + 6 espreguiçadeiras
     expect(tables[0].bill).toBeNull();
     expect(tables[1]).toMatchObject({ pendingCount: 1, bill: { totalCents: 250 } });
+  });
+});
+
+describe("juntar mesas", () => {
+  it("passa a conta de uma mesa para outra e liberta a primeira", async () => {
+    await order(T1);
+    now = new Date(now.getTime() + 10 * 60_000);
+    await order(T2);
+    await order(T2);
+    const r = await joinTables(db, staff, T2.id, T1.id, now);
+    expect(r).toMatchObject({ ok: true, from: "Mesa 2", into: "Mesa 1", movedOrders: 2 });
+    const b1 = (await bill(T1))!;
+    expect(b1.totalCents).toBe(750);
+    expect(b1.orders).toHaveLength(3);
+    expect(b1.openedAt).toBe("2026-10-22T13:00:00.000Z");
+    expect((await bill(T2))!.openedAt).toBeNull();
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, "table.join"));
+    expect(log.after).toMatchObject({ fromTableId: T2.id, intoTableId: T1.id, movedOrders: 2 });
+  });
+
+  it("junta a uma mesa livre (abre-lhe a conta) e o QR antigo começa uma conta nova", async () => {
+    await order(T2);
+    expect(await joinTables(db, staff, T2.id, T3.id, now)).toMatchObject({ ok: true });
+    expect((await bill(T3))!.totalCents).toBe(250);
+    await order(T2);
+    expect((await bill(T2))!.totalCents).toBe(250);
+    expect((await bill(T3))!.totalCents).toBe(250);
+  });
+
+  it("recusa mesa livre, a mesma mesa e lugares de tipos diferentes", async () => {
+    expect(await joinTables(db, staff, T2.id, T1.id, now)).toMatchObject({ ok: false, code: "ALREADY_FREE" });
+    expect(await joinTables(db, staff, T1.id, T1.id, now)).toMatchObject({ ok: false, code: "SAME_TABLE" });
+    await order(T1);
+    expect(await joinTables(db, staff, T1.id, SUNBED.id, now)).toMatchObject({ ok: false, code: "MIXED_MODE" });
+    expect(await joinTables(db, staff, T1.id, randomUUID(), now)).toMatchObject({ ok: false, code: "NOT_FOUND" });
   });
 });
