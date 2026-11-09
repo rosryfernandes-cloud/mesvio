@@ -245,3 +245,9 @@ export async function updateDemoRequest(db: Db, id: string, raw: unknown, now = 
     .returning({ id: demoRequests.id });
   return updated.length > 0;
 }
+
+/** Apaga de vez um pedido de demonstração (ex.: teste ou spam). Devolve false se não existir. */
+export async function deleteDemoRequest(db: Db, id: string): Promise<boolean> {
+  const deleted = await db.delete(demoRequests).where(eq(demoRequests.id, id)).returning({ id: demoRequests.id });
+  return deleted.length > 0;
+}

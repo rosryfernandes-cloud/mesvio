@@ -49,6 +49,18 @@ export function DemoRequestsBoard({ initial }: { initial: Row[] }) {
     }
   }
 
+  async function remove(r: Row) {
+    if (!window.confirm(`Eliminar o pedido de ${r.business} (${r.name})? Não dá para desfazer.`)) return;
+    setError(null);
+    const before = rows;
+    setRows((rs) => rs.filter((x) => x.id !== r.id));
+    const res = await fetch(`/api/central/pedidos/${r.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      setRows(before);
+      setError("Não foi possível eliminar. Tente de novo.");
+    }
+  }
+
   const count = (s: Status) => rows.filter((r) => r.status === s).length;
   const shown = rows.filter((r) => (filter === "all" ? true : filter === "open" ? r.status !== "client" && r.status !== "lost" : r.status === filter));
 
@@ -120,6 +132,13 @@ export function DemoRequestsBoard({ initial }: { initial: Row[] }) {
                     → {STATUS[s].label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => remove(r)}
+                  className="ml-auto min-h-9 rounded-xl border border-line bg-paper px-3 text-sm text-danger"
+                >
+                  Eliminar
+                </button>
               </div>
               <label className="mt-4 block text-sm font-semibold">
                 Notas

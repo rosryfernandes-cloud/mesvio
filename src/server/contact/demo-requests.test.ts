@@ -11,6 +11,7 @@ import {
   sendDemoConfirmationEmail,
   sendDemoRequestEmail,
   updateDemoRequest,
+  deleteDemoRequest,
 } from "./demo-requests";
 
 let db: Db;
@@ -138,5 +139,12 @@ describe("resposta automática e seguimento", () => {
     expect(after.find((r) => r.id === a.id)).toMatchObject({ status: "client", notes: "Assinou plano 3" });
     expect(after.find((r) => r.id === a.id)!.statusChangedAt).not.toBeNull();
   });
-});
 
+  it("no painel central: eliminar um pedido apaga-o de vez", async () => {
+    await createDemoRequest(db, valid, { ipHash: "ip1", notify: async () => true, confirm: async () => true, alert: () => {} });
+    const [a] = await listDemoRequests(db);
+    expect(await deleteDemoRequest(db, a.id)).toBe(true);
+    expect(await listDemoRequests(db)).toHaveLength(0);
+    expect(await deleteDemoRequest(db, a.id)).toBe(false);
+  });
+});
