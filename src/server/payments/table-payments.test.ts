@@ -204,3 +204,56 @@ describe("gorjeta e aviso no painel", () => {
     expect((await listTables(db, staff)).find((t) => t.label === T1.label)!.calls).toEqual(["paid"]);
   });
 });
+
+describe("conta dividida", () => {
+  const share = (cents: number, payerKey: string, tipCents = 0) =>
+    startTablePayment(db, T1.publicToken, provider, new Date(), { share: { cents, payerKey }, tipCents });
+  const complete = async (paymentId: string, approved = true) => {
+    const [row] = (await db.select().from(payments)).filter((p) => p.id === paymentId);
+    provider.complete(row.providerRef, "mb_way", approved);
+    return (await refreshTablePayment(db, T1.publicToken, paymentId, provider))!;
+  };
+
+  it("cada pessoa paga a sua parte e a conta fica paga quando a soma chega ao total", async () => {
+    await order(); // 20,50 €
+    const a = await share(1025, "telemovel-ana");
+    const b = await share(1025, "telemovel-rui");
+    if (!a.ok || !b.ok) throw new Error("devia começar");
+    expect(a.paymentId).not.toBe(b.paymentId);
+    expect(a.amountCents).toBe(1025);
+    // Os dois pagamentos ficam ativos ao mesmo tempo: o segundo não cancela o primeiro.
+    expect((await db.select().from(payments)).filter((p) => p.status === "PENDING")).toHaveLength(2);
+    expect((await complete(a.paymentId)).bill).toMatchObject({ paidCents: 1025, dueCents: 1025 });
+    expect((await complete(b.paymentId)).bill).toMatchObject({ paidCents: 2050, dueCents: 0, overpaidCents: 0 });
+  });
+
+  it("nunca deixa pagar mais do que falta, contando com o que está a ser pago", async () => {
+    await order(); // 20,50 €
+    expect(await share(2051, "telemovel-ana")).toMatchObject({ ok: false, code: "INVALID_SHARE" });
+    expect(await share(0, "telemovel-ana")).toMatchObject({ ok: false, code: "INVALID_SHARE" });
+    expect(await share(1500, "telemovel-ana")).toMatchObject({ ok: true });
+    expect(await share(600, "telemovel-rui")).toMatchObject({ ok: false, code: "INVALID_SHARE" });
+    expect(await share(550, "telemovel-rui")).toMatchObject({ ok: true, amountCents: 550 });
+    expect(await share(1, "telemovel-eva")).toMatchObject({ ok: false, code: "PAYMENT_IN_PROGRESS" });
+  });
+
+  it("tocar duas vezes na mesma parte não cria dois pagamentos; um recusado liberta o valor", async () => {
+    await order();
+    const a = await share(1000, "telemovel-ana");
+    const again = await share(1000, "telemovel-ana");
+    expect(a.ok && again.ok && a.paymentId === again.paymentId).toBe(true);
+    if (!a.ok) throw new Error();
+    await complete(a.paymentId, false);
+    expect(await share(2050, "telemovel-rui")).toMatchObject({ ok: true, amountCents: 2050 });
+  });
+
+  it("a gorjeta conta sobre a parte e a comissão só sobre a parte", async () => {
+    await order(); // 20,50 € → comissão de 18 cêntimos na conta toda
+    expect(await share(1025, "telemovel-ana", 400)).toMatchObject({ ok: false, code: "INVALID_TIP" });
+    const r = await share(1025, "telemovel-ana", 100);
+    if (!r.ok) throw new Error();
+    expect(r.amountCents).toBe(1125);
+    const [row] = await db.select().from(payments);
+    expect(row).toMatchObject({ tipCents: 100, applicationFeeCents: 9 });
+  });
+});

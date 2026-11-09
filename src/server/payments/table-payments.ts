@@ -16,7 +16,16 @@ export type StartPaymentResult =
   | { ok: true; paymentId: string; provider: PaymentProvider["id"]; amountCents: number; clientSecret?: string; accountId?: string }
   | {
       ok: false;
-      code: "TABLE_NOT_FOUND" | "PAYMENTS_DISABLED" | "NOTHING_TO_PAY" | "PENDING_ORDERS" | "ALREADY_PAID" | "INVALID_TIP" | "INVOICE_OWN_NIF";
+      code:
+        | "TABLE_NOT_FOUND"
+        | "PAYMENTS_DISABLED"
+        | "NOTHING_TO_PAY"
+        | "PENDING_ORDERS"
+        | "ALREADY_PAID"
+        | "INVALID_TIP"
+        | "INVOICE_OWN_NIF"
+        | "INVALID_SHARE"
+        | "PAYMENT_IN_PROGRESS";
       message: string;
     };
 
@@ -27,7 +36,16 @@ const MESSAGES = {
   ALREADY_PAID: "A conta desta mesa já está paga.",
   INVALID_TIP: "Gorjeta inválida.",
   INVOICE_OWN_NIF: "Este NIF é o do restaurante. Escreva o seu NIF ou deixe em branco.",
+  INVALID_SHARE: "Esse valor é maior do que o que falta pagar. Atualize a conta e tente de novo.",
+  PAYMENT_IN_PROGRESS: "Outras pessoas já estão a pagar o que falta. Aguarde um momento.",
 } as const;
+
+/** Pagar só uma parte da conta (conta dividida): `payerKey` distingue o telemóvel de quem paga. */
+export interface SharePayment {
+  cents: number;
+  payerKey: string;
+}
+export const PAYER_KEY = /^[A-Za-z0-9_-]{8,64}$/;
 
 /** Gorjeta máxima: 30% da conta e nunca mais de 100 € (protege contra enganos ao escrever). */
 export const maxTipCents = (dueCents: number) => Math.min(Math.floor(dueCents * 0.3), 100_00);
@@ -45,7 +63,11 @@ export async function startTablePayment(
   token: string,
   provider: PaymentProvider,
   now = new Date(),
-  { tipCents = 0, invoice = null }: { tipCents?: number; invoice?: { nif: string | null; email: string } | null } = {},
+  {
+    tipCents = 0,
+    invoice = null,
+    share = null,
+  }: { tipCents?: number; invoice?: { nif: string | null; email: string } | null; share?: SharePayment | null } = {},
 ): Promise<StartPaymentResult> {
   if (!isWellFormedTableToken(token)) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
   const t = await resolveTableToken(db, token);
@@ -76,12 +98,26 @@ export async function startTablePayment(
     if (bill.totalCents === 0) return { ok: false, code: "NOTHING_TO_PAY", message: MESSAGES.NOTHING_TO_PAY };
     if (bill.orders.some((o) => o.pending)) return { ok: false, code: "PENDING_ORDERS", message: MESSAGES.PENDING_ORDERS };
 
-    if (!Number.isInteger(tipCents) || tipCents < 0 || tipCents > maxTipCents(bill.dueCents)) {
+    // Conta dividida: cada pessoa paga a sua parte, e os pagamentos dos outros (ex.: um MB WAY
+    // por aprovar) não se cancelam. A parte nunca passa do que falta, descontado o que está a ser pago.
+    if (share) {
+      if (!PAYER_KEY.test(share.payerKey)) return { ok: false, code: "INVALID_SHARE", message: MESSAGES.INVALID_SHARE };
+      if (bill.dueCents === 0) return { ok: false, code: "ALREADY_PAID", message: MESSAGES.ALREADY_PAID };
+      const available = bill.dueCents - bill.pendingPaymentCents;
+      if (available <= 0) return { ok: false, code: "PAYMENT_IN_PROGRESS", message: MESSAGES.PAYMENT_IN_PROGRESS };
+      if (!Number.isInteger(share.cents) || share.cents < 1 || share.cents > available) {
+        return { ok: false, code: "INVALID_SHARE", message: MESSAGES.INVALID_SHARE };
+      }
+    }
+    const baseCents = share ? share.cents : bill.dueCents;
+
+    if (!Number.isInteger(tipCents) || tipCents < 0 || tipCents > maxTipCents(baseCents)) {
       return { ok: false, code: "INVALID_TIP", message: MESSAGES.INVALID_TIP };
     }
 
     // 2) Um só pagamento ativo: cancelar pendentes de outro valor ou gorjeta (se o fornecedor deixar).
-    for (const p of await pendingRows()) {
+    // Na conta dividida não: cada pessoa tem o seu.
+    for (const p of share ? [] : await pendingRows()) {
       if (p.amountCents === bill.dueCents + tipCents && p.tipCents === tipCents) continue;
       if (await provider.cancel(p.providerRef, accountId)) {
         await tx.update(payments).set({ status: "CANCELLED", updatedAt: now }).where(eq(payments.id, p.id));
@@ -92,7 +128,7 @@ export async function startTablePayment(
     bill = (await loadBill(tx, t.tableId, now))!;
     if (bill.dueCents === 0) return { ok: false, code: "ALREADY_PAID", message: MESSAGES.ALREADY_PAID };
 
-    // 3) Comissão proporcional à parte sem IVA do valor em falta.
+    // 3) Comissão proporcional à parte sem IVA do valor cobrado (sem a gorjeta).
     const sessionOrders = await tx
       .select({ gross: orders.totalGrossCents, net: orders.totalNetCents })
       .from(orders)
@@ -100,11 +136,11 @@ export async function startTablePayment(
     const gross = sessionOrders.reduce((s, o) => s + o.gross, 0);
     const net = sessionOrders.reduce((s, o) => s + o.net, 0);
     const bps = await commissionBpsFor(tx, t.organizationId, t.establishmentId, now);
-    const fee = applicationFee(gross > 0 ? roundHalfUpDiv(net * bill.dueCents, gross) : 0, bps);
+    const fee = applicationFee(gross > 0 ? roundHalfUpDiv(net * baseCents, gross) : 0, bps);
 
     // 4) Criar (ou reaproveitar, com a mesma chave idempotente) o pagamento no fornecedor.
     const finished = await tx.$count(payments, and(eq(payments.tableSessionId, session.id), ne(payments.status, "PENDING")));
-    const amountCents = bill.dueCents + tipCents;
+    const amountCents = baseCents + tipCents;
     // Fatura pedida pelo cliente: emite-se depois de o pagamento ficar confirmado.
     const invoiceFields = invoice ? { invoiceNif: invoice.nif, invoiceEmail: invoice.email, invoiceStatus: "pending" as const } : {};
     const created = await provider.create({
@@ -112,8 +148,11 @@ export async function startTablePayment(
       applicationFeeCents: fee,
       accountId,
       // Mesma conta + mesma tentativa + mesmo valor → mesmo pagamento (toques repetidos, outro telemóvel).
-      idempotencyKey: `${session.id}:${finished}:${bill.dueCents}:${tipCents}`,
-      description: `${bill.tableLabel} — conta`,
+      // Conta dividida: a chave inclui o telemóvel, para duas pessoas com a mesma parte não partilharem o pagamento.
+      idempotencyKey: share
+        ? `${session.id}:parte:${share.payerKey}:${finished}:${bill.dueCents}:${share.cents}:${tipCents}`
+        : `${session.id}:${finished}:${bill.dueCents}:${tipCents}`,
+      description: share ? `${bill.tableLabel} — parte da conta` : `${bill.tableLabel} — conta`,
       metadata: { tableSessionId: session.id, establishmentId: t.establishmentId },
     });
     const [existing] = await tx

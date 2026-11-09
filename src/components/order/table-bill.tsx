@@ -13,6 +13,19 @@ import { apiErrorText, LOCALE_TAGS, type Messages } from "@/lib/i18n/messages";
 
 const TIP_OPTIONS = [0, 5, 10, 15];
 
+/** Identifica este telemóvel nos pagamentos da conta dividida (fica no browser; sem dados pessoais). */
+function payerKey(): string {
+  try {
+    const saved = localStorage.getItem("mesvio:pagador");
+    if (saved && /^[A-Za-z0-9_-]{8,64}$/.test(saved)) return saved;
+    const key = crypto.randomUUID();
+    localStorage.setItem("mesvio:pagador", key);
+    return key;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 // 10 s nos primeiros 5 min, 30 s até à meia hora, depois 60 s; parado com o ecrã bloqueado.
 const BILL_POLL = backoffSchedule([[5 * 60_000, 10_000], [30 * 60_000, 30_000]], 60_000);
 
@@ -38,6 +51,10 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const [wantInvoice, setWantInvoice] = useState(false);
   const [nif, setNif] = useState("");
   const [email, setEmail] = useState("");
+  // Conta dividida: pagar tudo, uma parte igual ou só o que esta pessoa consumiu.
+  const [split, setSplit] = useState<"all" | "equal" | "items">("all");
+  const [people, setPeople] = useState(2);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   async function startPayment() {
     const nifDigits = nif.replace(/\s/g, "");
@@ -49,7 +66,11 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
     const res = await fetch(`/api/mesa/${tableToken}/pagamento`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipCents, ...(wantInvoice ? { fatura: { nif: nifDigits, email: email.trim() } } : {}) }),
+      body: JSON.stringify({
+        tipCents,
+        ...(wantInvoice ? { fatura: { nif: nifDigits, email: email.trim() } } : {}),
+        ...(shareCents !== null ? { parte: { cents: shareCents, payerKey: payerKey() } } : {}),
+      }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setStarting(false);
@@ -86,7 +107,22 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const time = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE_TAGS[locale], { hour: "2-digit", minute: "2-digit" });
   const hasPending = bill.orders.some((o) => o.pending);
   const fullyPaid = bill.totalCents > 0 && bill.dueCents === 0;
-  const tipCents = Math.round((bill.dueCents * tipPct) / 100);
+  // O que esta pessoa vai pagar. `shareCents` = null → paga tudo da forma habitual.
+  const available = Math.max(0, bill.dueCents - bill.pendingPaymentCents);
+  const lines = bill.orders
+    .filter((o) => !o.void && !o.awaitingPayment)
+    .flatMap((o) => o.lines.map((l, i) => ({ key: `${o.id}:${i}`, ...l })));
+  const wanted =
+    split === "equal"
+      ? Math.ceil(bill.totalCents / people)
+      : split === "items"
+        ? lines.filter((l) => picked.has(l.key)).reduce((acc, l) => acc + l.lineTotalCents, 0)
+        : available;
+  // Com outra pessoa a pagar (ex.: MB WAY por aprovar), "Tudo" paga só o resto, sem cancelar o dela.
+  const shareCents = split === "all" && bill.pendingPaymentCents === 0 ? null : Math.min(wanted, available);
+  const payCents = shareCents ?? bill.dueCents;
+  const capped = split !== "all" && wanted > available;
+  const tipCents = Math.round((payCents * tipPct) / 100);
 
   return (
     <main className="mx-auto max-w-2xl px-4 pt-8 pb-16">
@@ -181,6 +217,85 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
               ) : (
                 <>
                   <fieldset className="mb-3">
+                    <legend className="mb-2 text-sm font-semibold">{t.bill.splitTitle}</legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          ["all", t.bill.splitAll],
+                          ["equal", t.bill.splitEqual],
+                          ["items", t.bill.splitItems],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={split === key}
+                          onClick={() => setSplit(key)}
+                          className={`min-h-12 rounded-xl border text-sm font-semibold ${split === key ? "border-brand bg-brand-soft text-brand" : "border-line bg-card"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {split === "equal" && (
+                      <div className="mt-3 rounded-2xl border border-line bg-card p-3">
+                        <div className="flex items-center justify-center gap-4">
+                          <button
+                            type="button"
+                            aria-label="−"
+                            disabled={people <= 2}
+                            onClick={() => setPeople((n) => Math.max(2, n - 1))}
+                            className="size-11 rounded-xl border border-line bg-paper text-lg font-semibold disabled:opacity-40"
+                          >
+                            −
+                          </button>
+                          <span className="min-w-24 text-center font-semibold">{t.bill.splitPeople(people)}</span>
+                          <button
+                            type="button"
+                            aria-label="+"
+                            disabled={people >= 20}
+                            onClick={() => setPeople((n) => Math.min(20, n + 1))}
+                            className="size-11 rounded-xl border border-line bg-paper text-lg font-semibold disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <p className="mt-2 text-center text-xs text-ink-soft">{t.bill.splitEqualHint}</p>
+                      </div>
+                    )}
+                    {split === "items" && (
+                      <div className="mt-3 rounded-2xl border border-line bg-card p-3">
+                        <p className="mb-2 text-xs text-ink-soft">{t.bill.splitItemsHint}</p>
+                        <ul className="grid gap-1">
+                          {lines.map((l) => (
+                            <li key={l.key}>
+                              <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-paper px-3 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="size-5"
+                                  checked={picked.has(l.key)}
+                                  onChange={() =>
+                                    setPicked((p) => {
+                                      const next = new Set(p);
+                                      if (next.has(l.key)) next.delete(l.key);
+                                      else next.add(l.key);
+                                      return next;
+                                    })
+                                  }
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="font-semibold tabular-nums">{l.quantity}×</span> {l.name}
+                                </span>
+                                <span className="tabular-nums">{formatEur(l.lineTotalCents)}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {capped && <p className="mt-2 text-sm text-amber-800">{t.bill.splitCapped(formatEur(available))}</p>}
+                  </fieldset>
+                  <fieldset className="mb-3">
                     <legend className="mb-2 text-sm font-semibold">{t.bill.tipTitle}</legend>
                     <div className="grid grid-cols-4 gap-2">
                       {TIP_OPTIONS.map((pct) => (
@@ -192,7 +307,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                           className={`min-h-12 rounded-xl border text-sm font-semibold ${tipPct === pct ? "border-brand bg-brand-soft text-brand" : "border-line bg-card"}`}
                         >
                           {pct === 0 ? t.bill.tipNone : `${pct}%`}
-                          {pct > 0 && <span className="block text-xs font-normal text-ink-soft tabular-nums">{formatEur(Math.round((bill.dueCents * pct) / 100))}</span>}
+                          {pct > 0 && <span className="block text-xs font-normal text-ink-soft tabular-nums">{formatEur(Math.round((payCents * pct) / 100))}</span>}
                         </button>
                       ))}
                     </div>
@@ -236,11 +351,13 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                   <button
                     type="button"
                     onClick={startPayment}
-                    disabled={starting}
+                    disabled={starting || payCents <= 0}
                     className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
                   >
-                    <span>{starting ? t.order.preparing : t.bill.payBill}</span>
-                    <span className="tabular-nums">{formatEur(bill.dueCents + tipCents)}</span>
+                    <span>
+                      {starting ? t.order.preparing : split !== "all" ? t.bill.payShare : shareCents !== null ? t.bill.payRest : t.bill.payBill}
+                    </span>
+                    <span className="tabular-nums">{formatEur(payCents + tipCents)}</span>
                   </button>
                   {tipCents > 0 && <p className="mt-1 text-center text-xs text-ink-soft">{t.bill.tipIncluded(formatEur(tipCents))}</p>}
                 </>
