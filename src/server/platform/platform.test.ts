@@ -13,6 +13,7 @@ import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment as 
 import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "./activation";
 import { totpCode, stepAt } from "./totp";
 import { addTables, createRestaurant, getPlatformOverview, inviteOwner } from "./platform-service";
+import { PLAN_MONTHLY_CENTS } from "@/lib/plan";
 
 let db: Db;
 let admin: PlatformAdmin;
@@ -224,7 +225,7 @@ describe("visão geral", () => {
     expect((await getPlatformOverview(db, now)).totals.mrrCents).toBe(0);
     await set("active");
     const o = await getPlatformOverview(db, now);
-    expect(o.totals.mrrCents).toBe(5900);
+    expect(o.totals.mrrCents).toBe(PLAN_MONTHLY_CENTS.orders);
     expect(o.establishments.find((x) => x.id === est.id)).toMatchObject({ billingStatus: "active", daysSinceLastOrder: 10 });
     expect(await alertsOf()).toContain("Bar Praia Azul: sem pedidos há 10 dias.");
     await set("past_due");

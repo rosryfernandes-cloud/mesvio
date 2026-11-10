@@ -30,8 +30,15 @@ export const planAllowsPayments = (plan: Plan) => plan === "payments";
 export const effectiveOrderingMode = (plan: Plan, mode: "pay_later" | "pay_first"): "pay_later" | "pay_first" =>
   planAllowsPayments(plan) ? mode : "pay_later";
 
-/** Mensalidade de cada plano, em cêntimos, sem IVA (o que aparece no site e se cobra na subscrição). */
-export const PLAN_MONTHLY_CENTS: Record<Plan, number> = { menu: 25_00, orders: 59_00, payments: 59_00 };
+/**
+ * Mensalidade de cada plano, em cêntimos, sem IVA (o que aparece no site e se cobra na subscrição).
+ * "orders" a 49 € é o preço de lançamento (fundador) decidido a 2026-11-10 para os primeiros
+ * restaurantes, garantido 12 meses pelo contrato; o preço de tabela volta a ser 59 € mais tarde.
+ */
+export const PLAN_MONTHLY_CENTS: Record<Plan, number> = { menu: 25_00, orders: 49_00, payments: 59_00 };
+
+/** Planos com preço de lançamento (o site mostra-o junto ao preço). */
+export const PLAN_LAUNCH_PRICE: Partial<Record<Plan, true>> = { orders: true };
 
 /** O que cada plano inclui (página de preços). Cada plano inclui também tudo o do anterior. */
 export const PLAN_FEATURES: Record<Plan, string[]> = {

@@ -1,4 +1,4 @@
-import { PLAN_FEATURES, PLAN_LABEL, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
+import { PLAN_FEATURES, PLAN_LABEL, PLAN_LAUNCH_PRICE, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
@@ -296,7 +296,9 @@ function Pricing() {
                       <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
                       <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês + IVA</span>
                     </p>
-                    <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>sem comissões</p>
+                    <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>
+                      sem comissões{PLAN_LAUNCH_PRICE[p] && " · preço de lançamento para os primeiros restaurantes"}
+                    </p>
                     <ul className={`mt-7 mb-8 grid gap-3 ${featured ? "text-white/90" : ""}`}>
                       {PLAN_FEATURES[p].map((t) => (
                         <li key={t} className="flex items-start gap-3">
