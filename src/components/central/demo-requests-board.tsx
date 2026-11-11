@@ -11,6 +11,9 @@ type Row = {
   phone: string | null;
   venueType: string | null;
   message: string | null;
+  /** "Como nos conheceu?" e o resumo da origem automática do link. */
+  source: string | null;
+  origin: string | null;
   status: Status;
   notes: string | null;
   createdAt: string;
@@ -64,8 +67,39 @@ export function DemoRequestsBoard({ initial }: { initial: Row[] }) {
   const count = (s: Status) => rows.filter((r) => r.status === s).length;
   const shown = rows.filter((r) => (filter === "all" ? true : filter === "open" ? r.status !== "client" && r.status !== "lost" : r.status === filter));
 
+  // De onde vêm os pedidos (e quantos viraram clientes): diz onde vale a pena pôr anúncios.
+  const bySource = Object.entries(
+    rows.reduce<Record<string, { total: number; clients: number }>>((acc, r) => {
+      const k = r.source ?? "Não indicado";
+      acc[k] ??= { total: 0, clients: 0 };
+      acc[k].total++;
+      if (r.status === "client") acc[k].clients++;
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1].total - a[1].total);
+
   return (
     <div className="grid gap-4">
+      {bySource.length > 0 && (
+        <section aria-labelledby="origens" className="rounded-3xl border border-line bg-card p-5">
+          <h2 id="origens" className="text-lg">
+            De onde vêm os pedidos
+          </h2>
+          <ul className="mt-3 grid gap-2">
+            {bySource.map(([k, v]) => (
+              <li key={k} className="grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 text-sm">
+                <span className="truncate font-semibold">{k}</span>
+                <span className="h-3 rounded-full bg-line" aria-hidden="true">
+                  <span className="block h-3 rounded-full bg-brand" style={{ width: `${Math.round((v.total / rows.length) * 100)}%` }} />
+                </span>
+                <span className="whitespace-nowrap text-ink-soft">
+                  {v.total} {v.total === 1 ? "pedido" : "pedidos"} · {v.clients} {v.clients === 1 ? "cliente" : "clientes"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrar pedidos">
         {(
           [
@@ -122,6 +156,12 @@ export function DemoRequestsBoard({ initial }: { initial: Row[] }) {
                   <p className="mt-1 text-xs text-ink-soft">
                     Pedido a {when(r.createdAt)} · {r.confirmationSent ? "recebeu o email de confirmação" : "email de confirmação por enviar"}
                   </p>
+                  {(r.source || r.origin) && (
+                    <p className="mt-1 text-xs">
+                      {r.source && <span className="rounded-full bg-brand-soft px-2.5 py-0.5 font-semibold text-brand">{r.source}</span>}
+                      {r.origin && <span className="ml-2 text-ink-soft">{r.origin}</span>}
+                    </p>
+                  )}
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS[r.status].className}`}>{STATUS[r.status].label}</span>
               </div>

@@ -1,9 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconArrow, IconCheck } from "../brand/icons";
 
 const VENUE_TYPES = ["Restaurante", "Bar de praia", "Hotel", "Piscina", "Outro"];
+const SOURCES = ["Instagram", "TikTok", "Facebook", "Google", "Recomendação de alguém", "Visita ou cartão da MESVIO", "Outro"];
+
+/** Links com ?utm_source=instagram (ou ?ref=cartao) já escolhem a resposta certa. */
+const SOURCE_FROM_LINK: Record<string, string> = {
+  instagram: "Instagram",
+  ig: "Instagram",
+  tiktok: "TikTok",
+  facebook: "Facebook",
+  fb: "Facebook",
+  google: "Google",
+  cartao: "Visita ou cartão da MESVIO",
+  qr: "Visita ou cartão da MESVIO",
+};
+
+/** Origem automática: parâmetros do link (utm_*, ref), o site de onde veio e a página de entrada. */
+function readAttribution(): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    const q = new URLSearchParams(window.location.search);
+    for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"]) {
+      const v = q.get(k);
+      if (v) out[k] = v.slice(0, 200);
+    }
+    const ref = document.referrer ? new URL(document.referrer).hostname : "";
+    if (ref && ref !== window.location.hostname) out.referrer = ref;
+    out.landing = window.location.pathname;
+  } catch {
+    // Sem origem: o formulário funciona na mesma.
+  }
+  return out;
+}
 
 const field =
   "min-h-12 w-full rounded-xl border border-white/20 bg-white/5 px-4 text-white placeholder:text-white/60 focus:border-mint focus:outline-none";
@@ -12,6 +43,15 @@ const field =
 export function DemoRequestForm() {
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [attribution, setAttribution] = useState<Record<string, string>>({});
+  const [source, setSource] = useState("");
+
+  useEffect(() => {
+    const a = readAttribution();
+    setAttribution(a);
+    const guess = SOURCE_FROM_LINK[(a.utm_source ?? a.ref ?? "").toLowerCase()];
+    if (guess) setSource(guess);
+  }, []);
 
   async function submit(form: HTMLFormElement) {
     setState("sending");
@@ -75,6 +115,18 @@ export function DemoRequestForm() {
           ))}
         </select>
       </label>
+      <label className="grid gap-1.5 text-sm font-semibold">
+        Como conheceste a MESVIO?
+        <select name="source" required value={source} onChange={(e) => setSource(e.target.value)} className={`${field} [&>option]:text-ink`}>
+          <option value="" disabled>
+            Escolher…
+          </option>
+          {SOURCES.map((v) => (
+            <option key={v}>{v}</option>
+          ))}
+        </select>
+      </label>
+      <input type="hidden" name="attribution" value={JSON.stringify(attribution)} />
       <label className="grid gap-1.5 text-sm font-semibold">
         Mensagem <span className="font-normal text-white/70">(opcional)</span>
         <textarea

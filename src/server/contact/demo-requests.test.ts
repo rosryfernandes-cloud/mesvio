@@ -12,6 +12,7 @@ import {
   sendDemoRequestEmail,
   updateDemoRequest,
   deleteDemoRequest,
+  describeAttribution,
 } from "./demo-requests";
 
 let db: Db;
@@ -19,7 +20,30 @@ beforeEach(async () => {
   db = await createTestDb();
 });
 
-const valid = { name: "Joana Silva", business: "Bar da Praia Azul", email: "Joana@Exemplo.pt", venueType: "Bar de praia", message: "20 espreguiçadeiras" };
+const valid = { name: "Joana Silva", business: "Bar da Praia Azul", email: "Joana@Exemplo.pt", venueType: "Bar de praia", message: "20 espreguiçadeiras", source: "Instagram" };
+
+describe("pedidos de demonstração: de onde vêm", () => {
+  it("guarda o \"como nos conheceu\" e a origem do link (só as chaves conhecidas)", async () => {
+    const attribution = JSON.stringify({ utm_source: "instagram", utm_medium: "bio", utm_campaign: "fundador", referrer: "l.instagram.com", hack: "x", landing: "/" });
+    expect((await createDemoRequest(db, { ...valid, attribution }, { ipHash: "ip1", notify: async () => true, confirm: async () => true, alert: () => {} })).ok).toBe(true);
+    const [row] = await db.select().from(demoRequests);
+    expect(row.source).toBe("Instagram");
+    expect(row.attribution).toEqual({ utm_source: "instagram", utm_medium: "bio", utm_campaign: "fundador", referrer: "l.instagram.com", landing: "/" });
+    expect(describeAttribution(row.attribution)).toBe("instagram / bio · campanha: fundador");
+    expect(describeAttribution({ referrer: "www.google.com" })).toBe("veio de www.google.com");
+    expect(describeAttribution(null)).toBeNull();
+  });
+
+  it("pede o \"como nos conheceu\"; uma origem estragada não impede o pedido", async () => {
+    const { source: _omit, ...noSource } = valid;
+    void _omit;
+    expect(await createDemoRequest(db, noSource, { ipHash: "ip1", notify: async () => true })).toMatchObject({ ok: false, code: "INVALID_INPUT", message: "Diz-nos como conheceste a MESVIO." });
+    expect(await createDemoRequest(db, { ...valid, source: "Rádio" }, { ipHash: "ip1", notify: async () => true })).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+    expect((await createDemoRequest(db, { ...valid, attribution: "{nao-json" }, { ipHash: "ip1", notify: async () => true, confirm: async () => true, alert: () => {} })).ok).toBe(true);
+    const [row] = await db.select().from(demoRequests);
+    expect(row.attribution).toBeNull();
+  });
+});
 
 describe("pedidos de demonstração da landing", () => {
   it("guarda o pedido e avisa a equipa", async () => {

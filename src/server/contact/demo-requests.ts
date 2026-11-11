@@ -54,6 +54,23 @@ export async function retryDemoRequestEmails(
 
 export const VENUE_TYPES = ["Restaurante", "Bar de praia", "Hotel", "Piscina", "Outro"] as const;
 
+/** "Como nos conheceu?" — para saber que canais trazem pedidos (e onde investir em anúncios). */
+export const LEAD_SOURCES = ["Instagram", "TikTok", "Facebook", "Google", "Recomendação de alguém", "Visita ou cartão da MESVIO", "Outro"] as const;
+
+/** Parâmetros de origem que o formulário apanha do link (utm_*, ref) e o site de onde a pessoa veio. */
+export const ATTRIBUTION_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "referrer", "landing"] as const;
+
+const attributionSchema = z
+  .record(z.string(), z.unknown())
+  .transform((o) => {
+    const out: Record<string, string> = {};
+    for (const k of ATTRIBUTION_KEYS) {
+      const v = o[k];
+      if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, 200);
+    }
+    return Object.keys(out).length ? out : null;
+  });
+
 const text = (max: number) => z.string().trim().max(max);
 
 export const demoRequestSchema = z.object({
@@ -63,6 +80,21 @@ export const demoRequestSchema = z.object({
   phone: text(40).regex(/^[+\d\s()-]*$/, "Telefone inválido.").optional().or(z.literal("")),
   venueType: z.enum(VENUE_TYPES).optional().or(z.literal("")),
   message: text(2000).optional(),
+  source: z.enum(LEAD_SOURCES, { error: "Diz-nos como conheceste a MESVIO." }),
+  /** Enviado pelo formulário em JSON (texto) ou objeto; nunca obrigatório. */
+  attribution: z
+    .union([z.string().max(2000), z.record(z.string(), z.unknown())])
+    .optional()
+    .transform((v) => {
+      if (!v) return null;
+      try {
+        const obj = typeof v === "string" ? JSON.parse(v) : v;
+        const r = attributionSchema.safeParse(obj);
+        return r.success ? r.data : null;
+      } catch {
+        return null;
+      }
+    }),
   /** Campo escondido: as pessoas não o veem; os robôs preenchem-no. */
   website: z.string().max(200).optional(),
 });
@@ -106,6 +138,8 @@ export async function createDemoRequest(
       phone: d.phone || null,
       venueType: d.venueType || null,
       message: d.message || null,
+      source: d.source,
+      attribution: d.attribution ?? null,
       ipHash,
     })
     .returning();
@@ -122,6 +156,18 @@ export async function createDemoRequest(
   // Aviso no telemóvel da equipa MESVIO (depois da resposta; nunca falha o pedido).
   alert(row);
   return { ok: true, notified };
+}
+
+/** Resumo legível da origem automática (ex.: "instagram / bio · campanha: fundador"). */
+export function describeAttribution(a: Record<string, string> | null | undefined): string | null {
+  if (!a) return null;
+  const parts = [
+    [a.utm_source, a.utm_medium].filter(Boolean).join(" / "),
+    a.utm_campaign ? `campanha: ${a.utm_campaign}` : "",
+    a.ref ? `ref: ${a.ref}` : "",
+    a.referrer && !a.utm_source ? `veio de ${a.referrer}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -144,6 +190,8 @@ export async function sendDemoRequestEmail(r: typeof demoRequests.$inferSelect):
     ["Email", r.email],
     ["Telefone", r.phone],
     ["Mensagem", r.message],
+    ["Como nos conheceu", r.source],
+    ["Origem do link", describeAttribution(r.attribution)],
   ];
   const html =
     `<h2 style="font-family:Arial,sans-serif">Novo pedido de demonstração</h2><table style="font-family:Arial,sans-serif;font-size:14px">` +

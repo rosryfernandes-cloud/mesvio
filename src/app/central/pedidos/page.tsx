@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getDb } from "@/server/db/client";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
-import { listDemoRequests } from "@/server/contact/demo-requests";
+import { describeAttribution, listDemoRequests } from "@/server/contact/demo-requests";
 import { CentralShell } from "@/components/central/central-shell";
 import { DemoRequestsBoard } from "@/components/central/demo-requests-board";
 
@@ -33,6 +33,8 @@ export default async function DemoRequestsPage() {
           phone: r.phone,
           venueType: r.venueType,
           message: r.message,
+          source: r.source,
+          origin: describeAttribution(r.attribution),
           status: r.status,
           notes: r.notes,
           createdAt: r.createdAt.toISOString(),

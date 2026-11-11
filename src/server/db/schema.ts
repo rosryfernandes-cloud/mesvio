@@ -641,6 +641,10 @@ export const demoRequests = pgTable(
     phone: text("phone"),
     venueType: text("venue_type"),
     message: text("message"),
+    /** "Como nos conheceu?" (Instagram, Google, amigo…), escolhido no formulário. */
+    source: text("source"),
+    /** Origem automática: parâmetros utm_* / ref do link e o site de onde veio (referrer). */
+    attribution: jsonb("attribution").$type<Record<string, string>>(),
     ipHash: text("ip_hash"),
     /** Quando o aviso por email foi enviado à equipa (null = ainda não / email não configurado). */
     notifiedAt: timestamp("notified_at", { withTimezone: true }),
