@@ -95,11 +95,12 @@ describe("MockPOS", () => {
   });
 });
 
-describe("ZoneSoft (esqueleto)", () => {
-  it("não declara nenhuma capacidade nem finge funcionar", async () => {
+describe("ZoneSoft (ZSROI)", () => {
+  it("só declara a ementa; não finge enviar pedidos", async () => {
     const zs = new ZoneSoftAdapter({ establishmentId: "e1", settings: {} });
-    expect(Object.values(zs.capabilities).every((v) => v === false)).toBe(true);
+    const on = Object.entries(zs.capabilities).filter(([, v]) => v).map(([k]) => k);
+    expect(on).toEqual(["catalogSync"]);
     expect((await zs.healthCheck()).ok).toBe(false);
-    await expect(zs.fetchCatalog()).rejects.toThrow(/documentação oficial/);
+    await expect(zs.submitOrder(ribeye())).rejects.toThrow(/não está implementado/);
   });
 });

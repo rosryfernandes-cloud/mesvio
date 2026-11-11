@@ -1,16 +1,16 @@
 /**
- * Adaptador ZoneSoft (ZS Rest) — ESQUELETO, NÃO IMPLEMENTADO.
+ * Adaptador ZoneSoft (ZS Rest) através da ZSROI (ZS Restaurant Ordering Integration).
  *
- * ⚠️ Ainda não temos a documentação oficial da API da ZoneSoft.
- * Por regra do projeto, este ficheiro NÃO contém endpoints, formatos de credenciais
- * nem capacidades presumidas. Todas as capacidades estão a `false` até serem
- * confirmadas por escrito pela ZoneSoft (ver docs/04-INTEGRACAO-POS.md, secção 4).
+ * Documentação oficial: portal developer.zonesoft.org → ZSROI Docs ("Generic Integration").
  *
- * Quando a documentação chegar:
- *  1. Preencher a matriz de capacidades em docs/04-INTEGRACAO-POS.md.
- *  2. Implementar cada método, com testes de contrato contra o sandbox oficial.
- *  3. Só então ativar as capacidades correspondentes abaixo.
+ * - Ementa: IMPLEMENTADO. A ZoneSoft envia a ementa para o nosso endpoint
+ *   (`/api/pos/zonesoft/menu`) quando o restaurante carrega em "Sync Menus" no ZSBMS; fica guardada
+ *   na BD e é lida daqui como a ementa MESVIO (fotos, traduções e esgotados funcionam igual).
+ * - Estados dos pedidos: IMPLEMENTADO no endpoint `/api/pos/zonesoft/order-status`.
+ * - Enviar pedidos: POR IMPLEMENTAR. A ZSROI só aceita `type_order` DELIVERY/PICKUP e não tem campo
+ *   de mesa: à espera da resposta da ZoneSoft sobre como indicar a mesa. Até lá `createOrder` é false.
  */
+import { MesvioMenuAdapter } from "../mesvio/mesvio-menu-adapter";
 import type {
   PosAdapter,
   PosCapabilities,
@@ -25,8 +25,7 @@ import type {
 export class ZoneSoftNotAvailableError extends Error {
   constructor(operation: string) {
     super(
-      `Integração ZoneSoft indisponível (${operation}): aguarda documentação oficial da API. ` +
-        `Use o adaptador "mock" até lá.`,
+      `Integração ZoneSoft indisponível (${operation}): o envio de pedidos pela ZSROI ainda não está implementado.`,
     );
     this.name = "ZoneSoftNotAvailableError";
   }
@@ -35,7 +34,7 @@ export class ZoneSoftNotAvailableError extends Error {
 export class ZoneSoftAdapter implements PosAdapter {
   readonly provider = "zonesoft" as const;
   readonly capabilities: PosCapabilities = {
-    catalogSync: false,
+    catalogSync: true,
     tableSync: false,
     createOrder: false,
     orderAcknowledgement: false,
@@ -46,15 +45,19 @@ export class ZoneSoftAdapter implements PosAdapter {
     availabilitySync: false,
   };
 
-  // A configuração é guardada para a futura implementação; não é lida nem validada agora.
-  constructor(private readonly config: PosConnectionConfig) {}
+  private readonly stored: MesvioMenuAdapter;
 
-  async healthCheck() {
-    return { ok: false, detail: "Adaptador ZoneSoft por implementar (sem documentação oficial)." };
+  constructor(private readonly config: PosConnectionConfig) {
+    this.stored = new MesvioMenuAdapter(config.establishmentId);
   }
 
+  async healthCheck() {
+    return { ok: false, detail: "ZoneSoft: ementa sincronizada pela ZSROI; envio de pedidos por implementar." };
+  }
+
+  /** A ementa que a ZoneSoft enviou na última sincronização (guardada na BD). */
   async fetchCatalog(): Promise<PosCatalog> {
-    throw new ZoneSoftNotAvailableError("fetchCatalog");
+    return this.stored.fetchCatalog();
   }
 
   async fetchTables(): Promise<PosTable[]> {
