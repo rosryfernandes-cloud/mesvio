@@ -88,6 +88,33 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
         ))}
       </ul>
 
+      <section aria-labelledby="arranque" className="mt-6 rounded-3xl border border-line bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="arranque" className="text-lg">
+            Arranque
+          </h2>
+          <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-sm font-semibold text-brand tabular-nums">
+            {s.setup.done} de {s.setup.total}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-ink-soft">
+          {s.setup.next
+            ? `Criado há ${s.setup.daysSinceCreated} ${s.setup.daysSinceCreated === 1 ? "dia" : "dias"}. Próximo passo: ${s.setup.next.label}.`
+            : "Arranque completo: o restaurante já recebeu pedidos."}
+        </p>
+        <ol className="mt-3 grid gap-2 sm:grid-cols-5">
+          {s.setup.steps.map((step) => (
+            <li key={step.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${step.done ? "border-line" : step.id === s.setup.next?.id ? "border-brand font-semibold" : "border-line text-ink-soft"}`}>
+              <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border text-xs font-bold ${step.done ? "border-ok bg-ok text-white" : "border-line"}`}>
+                {step.done ? "✓" : ""}
+              </span>
+              {step.label}
+              <span className="sr-only">{step.done ? " (feito)" : " (por fazer)"}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <PlanPicker establishmentId={id} plan={s.plan} />
 
       <OwnMenuSwitch establishmentId={id} provider={s.posProvider} />

@@ -109,11 +109,12 @@ export default async function CentralOverviewPage() {
           <p className="mt-3 rounded-2xl border border-dashed border-line px-6 py-10 text-center text-ink-soft">Ainda não há restaurantes.</p>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-3xl border border-line bg-card">
-            <table className="w-full min-w-[62rem] text-left text-sm">
+            <table className="w-full min-w-[70rem] text-left text-sm">
               <thead className="border-b border-line text-ink-soft">
                 <tr>
                   <th scope="col" className="px-5 py-3 font-semibold">Restaurante</th>
                   <th scope="col" className="px-5 py-3 font-semibold">Mensalidade</th>
+                  <th scope="col" className="px-5 py-3 font-semibold">Arranque</th>
                   <th scope="col" className="px-5 py-3 font-semibold">POS</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Lugares</th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">Pedidos</th>
@@ -142,6 +143,23 @@ export default async function CentralOverviewPage() {
                             {e.billingStatus === "trialing" ? "Experiência até " : "Até "}
                             {formatDay(e.billingPeriodEnd)}
                           </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {e.setup.next ? (
+                          <>
+                            <span className="flex items-center gap-2">
+                              <span aria-hidden="true" className="h-1.5 w-16 overflow-hidden rounded-full bg-line">
+                                <span className="block h-full rounded-full bg-brand" style={{ width: `${(e.setup.done / e.setup.total) * 100}%` }} />
+                              </span>
+                              <span className="text-xs font-semibold tabular-nums">
+                                {e.setup.done} de {e.setup.total}
+                              </span>
+                            </span>
+                            <span className="mt-1 block text-xs text-ink-soft">Falta: {e.setup.next.label}</span>
+                          </>
+                        ) : (
+                          <span className="inline-block rounded-full bg-[#ecfdf3] px-2 py-0.5 text-xs font-semibold text-ok">Completo</span>
                         )}
                       </td>
                       <td className="px-5 py-3">

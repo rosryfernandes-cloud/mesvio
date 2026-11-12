@@ -13,6 +13,7 @@ import {
   organizations,
   outbox,
   posIntegrations,
+  products,
   staffProfiles,
 } from "@/server/db/schema";
 import { generateTableToken } from "@/server/tables/table-token";
@@ -276,6 +277,43 @@ export interface EstablishmentSummary {
   billingPeriodEnd: string | null;
   /** Dias sem pedidos, se já tiver recebido algum; null = nunca recebeu. */
   daysSinceLastOrder: number | null;
+  /** Arranque do restaurante: os passos até ao primeiro pedido, calculados pela base de dados. */
+  setup: SetupProgress;
+}
+
+export type SetupStep = { id: "owner" | "menu" | "tables" | "logo" | "first_order"; label: string; done: boolean };
+export interface SetupProgress {
+  steps: SetupStep[];
+  done: number;
+  total: number;
+  /** O primeiro passo por fazer; null = arranque completo. */
+  next: SetupStep | null;
+  /** Dias desde que o restaurante foi criado. */
+  daysSinceCreated: number;
+}
+
+/** A partir de quantos dias sem acabar o arranque a Central avisa (para ligar ao dono antes de ele desistir). */
+export const SETUP_STALL_DAYS = 2;
+
+export function setupProgress(
+  e: { owners: number; products: number; tables: number; hasLogo: boolean; hasOrders: boolean; createdAt: Date },
+  now: Date,
+): SetupProgress {
+  const steps: SetupStep[] = [
+    { id: "owner", label: "Convidar o dono", done: e.owners > 0 },
+    { id: "menu", label: "Ementa com pratos", done: e.products > 0 },
+    { id: "tables", label: "Mesas e QR Codes", done: e.tables > 0 },
+    { id: "logo", label: "Logótipo", done: e.hasLogo },
+    { id: "first_order", label: "Primeiro pedido", done: e.hasOrders },
+  ];
+  const done = steps.filter((s) => s.done).length;
+  return {
+    steps,
+    done,
+    total: steps.length,
+    next: steps.find((s) => !s.done) ?? null,
+    daysSinceCreated: Math.max(0, Math.floor((now.getTime() - e.createdAt.getTime()) / (24 * 3600_000))),
+  };
 }
 
 export interface PlatformAlert {
@@ -324,7 +362,7 @@ const IDLE_ALERT_DAYS = 7;
 export async function getPlatformOverview(db: Db, now = new Date()): Promise<PlatformOverview> {
   const from = monthStart(now);
   const today = now.toISOString().slice(0, 10);
-  const [ests, tableCounts, ownerCounts, monthly, attention, lastOrders, dead, rates] = await inOrder([
+  const [ests, tableCounts, ownerCounts, monthly, attention, lastOrders, dead, rates, productCounts] = await inOrder([
     () => db
       .select({
         id: establishments.id,
@@ -338,6 +376,8 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
         plan: establishments.plan,
         billingStatus: establishments.billingStatus,
         billingPeriodEnd: establishments.billingPeriodEnd,
+        brandLogoUrl: establishments.brandLogoUrl,
+        createdAt: establishments.createdAt,
       })
       .from(establishments)
       .innerJoin(organizations, eq(organizations.id, establishments.organizationId))
@@ -366,6 +406,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       .where(and(eq(outbox.status, "DEAD"), gte(outbox.createdAt, new Date(now.getTime() - 7 * 24 * 3600_000))))
       .groupBy(outbox.organizationId),
     () => commissionRates(db, today),
+    () => db.select({ est: products.establishmentId, n: count() }).from(products).groupBy(products.establishmentId),
   ]);
 
   const byEst = <T extends { est: string }>(rows: T[]) => new Map(rows.map((r) => [r.est, r]));
@@ -373,6 +414,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
   const monthlyM = byEst(monthly);
   const attentionM = byEst(attention);
   const lastM = byEst(lastOrders);
+  const productsM = byEst(productCounts);
   const ownersM = new Map(ownerCounts.map((r) => [r.org, r.n]));
   const deadM = new Map(dead.map((r) => [r.org, r.n]));
 
@@ -403,6 +445,17 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       billingStatus: e.billingStatus,
       billingPeriodEnd: e.billingPeriodEnd ? e.billingPeriodEnd.toISOString() : null,
       daysSinceLastOrder: last ? Math.floor((now.getTime() - new Date(last).getTime()) / DAY_MS) : null,
+      setup: setupProgress(
+        {
+          owners: ownersM.get(e.organizationId) ?? 0,
+          products: productsM.get(e.id)?.n ?? 0,
+          tables: tablesM.get(e.id)?.n ?? 0,
+          hasLogo: !!e.brandLogoUrl,
+          hasOrders: !!last,
+          createdAt: new Date(e.createdAt),
+        },
+        now,
+      ),
     };
   });
 
@@ -420,6 +473,12 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       alerts.push({ level: "danger", establishmentId: e.id, text: `${e.name}: mensalidade em atraso.` });
     if (planAllowsOrdering(e.plan) && e.daysSinceLastOrder !== null && e.daysSinceLastOrder >= IDLE_ALERT_DAYS)
       alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: sem pedidos há ${e.daysSinceLastOrder} dias.` });
+    if (e.setup.next && e.setup.daysSinceCreated >= SETUP_STALL_DAYS)
+      alerts.push({
+        level: "warning",
+        establishmentId: e.id,
+        text: `${e.name}: arranque parado em "${e.setup.next.label}" (${e.setup.done} de ${e.setup.total}, criado há ${e.setup.daysSinceCreated} dias). Liga ao dono.`,
+      });
     if (!e.stripeConnected && process.env.STRIPE_SECRET_KEY)
       alerts.push({ level: "info", establishmentId: e.id, text: `${e.name}: pagamentos no telemóvel por ligar (o dono liga a conta Stripe no painel, separador Mesas).` });
   }

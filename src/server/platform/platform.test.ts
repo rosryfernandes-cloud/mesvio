@@ -12,7 +12,7 @@ import { open } from "@/server/security/secret-box";
 import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment as start, verifyMfa, type PlatformAdmin } from "./admin-auth";
 import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "./activation";
 import { totpCode, stepAt } from "./totp";
-import { addTables, createRestaurant, getPlatformOverview, inviteOwner } from "./platform-service";
+import { addTables, createRestaurant, getPlatformOverview, inviteOwner, setupProgress } from "./platform-service";
 import { PLAN_MONTHLY_CENTS } from "@/lib/plan";
 
 let db: Db;
@@ -233,5 +233,32 @@ describe("visão geral", () => {
     expect((await getPlatformOverview(db, now)).totals.mrrCents).toBe(0);
     // Quem nunca recebeu pedidos ainda está a arrancar: não há aviso de parado.
     expect((await getPlatformOverview(db, now)).alerts.some((a) => a.establishmentId === DEMO_ESTABLISHMENT.id && a.text.includes("sem pedidos"))).toBe(false);
+  });
+
+  it("mostra o arranque de cada restaurante e avisa quando fica parado", async () => {
+    const r = await createRestaurant(db, admin, input, users);
+    if (!r.ok) throw new Error();
+    const [est] = await db.select().from(t.establishments).where(eq(t.establishments.id, r.establishmentId));
+    const day = 24 * 3600_000;
+    const at = (days: number) => new Date(est.createdAt.getTime() + days * day);
+    const setupOf = async (now: Date) => (await getPlatformOverview(db, now)).establishments.find((x) => x.id === est.id)!.setup;
+    const stalled = async (now: Date) => (await getPlatformOverview(db, now)).alerts.some((a) => a.establishmentId === est.id && a.text.includes("arranque parado"));
+
+    // Criado com dono convidado e mesas: faltam a ementa, o logótipo e o primeiro pedido.
+    const s = await setupOf(at(0));
+    expect(s).toMatchObject({ done: 2, total: 5, daysSinceCreated: 0 });
+    expect(s.next?.label).toBe("Ementa com pratos");
+    expect(await stalled(at(1))).toBe(false);
+    expect(await stalled(at(3))).toBe(true);
+  });
+});
+
+describe("progresso do arranque", () => {
+  it("segue a ordem dos passos e fica completo quando está tudo feito", () => {
+    const now = new Date("2026-11-20T12:00:00Z");
+    const base = { owners: 1, products: 0, tables: 0, hasLogo: false, hasOrders: false, createdAt: new Date("2026-11-17T09:00:00Z") };
+    expect(setupProgress(base, now)).toMatchObject({ done: 1, daysSinceCreated: 3, next: { id: "menu" } });
+    expect(setupProgress({ ...base, products: 30, tables: 8 }, now).next?.id).toBe("logo");
+    expect(setupProgress({ ...base, products: 30, tables: 8, hasLogo: true, hasOrders: true }, now)).toMatchObject({ done: 5, next: null });
   });
 });
