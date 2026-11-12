@@ -1,3 +1,4 @@
+import { VAT_EXEMPT, VAT_NOTE } from "@/lib/legal";
 import { PLAN_FEATURES, PLAN_LABEL, PLAN_LAUNCH_PRICE, PLAN_MONTHLY_CENTS, PLANS } from "@/lib/plan";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -294,7 +295,7 @@ function Pricing() {
                   <>
                     <p className="mt-5 flex items-baseline gap-1.5">
                       <span className="text-5xl font-extrabold tracking-tight tabular-nums">{PLAN_MONTHLY_CENTS[p] / 100} €</span>
-                      <span className={featured ? "text-white/75" : "text-ink-soft"}>/mês + IVA</span>
+                      <span className={featured ? "text-white/75" : "text-ink-soft"}>{VAT_EXEMPT ? "/mês" : "/mês + IVA"}</span>
                     </p>
                     <p className={`mt-1 text-sm ${featured ? "text-white/80" : "text-ink-soft"}`}>
                       sem comissões{PLAN_LAUNCH_PRICE[p] && " · preço de lançamento para os primeiros restaurantes"}
@@ -320,7 +321,7 @@ function Pricing() {
           })}
         </ul>
         <p className="mt-8 max-w-3xl text-sm leading-relaxed text-ink-soft">
-          Preços sem IVA. Instalação opcional (placas com QR e ementa configurada por nós) e planos de época para bares de praia: falamos na
+          {VAT_EXEMPT ? `${VAT_NOTE} ` : "Preços sem IVA. "}Instalação opcional (placas com QR e ementa configurada por nós) e planos de época para bares de praia: falamos na
           demonstração.
         </p>
       </div>

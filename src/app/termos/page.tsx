@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/legal/legal-page";
-import { LEGAL } from "@/lib/legal";
+import { LEGAL, VAT_EXEMPT, VAT_NOTE } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Termos de Utilização",
@@ -13,7 +13,7 @@ export default function TermsPage() {
     <LegalPage title="Termos de Utilização">
       <section>
         <p>
-          Estes termos regulam a utilização da MESVIO, uma plataforma de pedidos digitais por QR Code e NFC disponibilizada por{" "}
+          Estes termos regulam a utilização da MESVIO, uma plataforma de pedidos digitais por QR Code disponibilizada por{" "}
           {LEGAL.company}, NIF {LEGAL.nif}, com sede em {LEGAL.address} (&ldquo;MESVIO&rdquo;). A parte A aplica-se aos
           estabelecimentos que usam a plataforma; a parte B, a quem faz pedidos pela ementa digital.
         </p>
@@ -37,9 +37,11 @@ export default function TermsPage() {
 
         <h3 className="mt-6 font-bold">3. Preço</h3>
         <p>
-          Salvo acordo diferente, a MESVIO cobra uma comissão de <strong>1% sobre o valor elegível, sem IVA, dos pedidos
-          originados na plataforma</strong>, sem mensalidade obrigatória. O valor elegível, a periodicidade da faturação e
-          outras condições constam do acordo comercial com cada estabelecimento, que prevalece sobre estes termos.
+          A MESVIO cobra uma <strong>mensalidade</strong>, de acordo com o plano escolhido, sem comissões sobre os pedidos. Os
+          preços em vigor estão em mesvio.pt. {VAT_EXEMPT ? VAT_NOTE : "Aos preços acresce IVA à taxa legal."} O plano com
+          pagamentos pela app, quando disponível, inclui uma comissão sobre o valor pago, indicada antes da adesão. A duração,
+          eventuais preços de lançamento e outras condições constam do acordo comercial com cada estabelecimento, que prevalece
+          sobre estes termos.
         </p>
 
         <h3 className="mt-6 font-bold">4. Responsabilidades do estabelecimento</h3>

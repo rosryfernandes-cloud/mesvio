@@ -1,5 +1,6 @@
 "use client";
 
+import { VAT_EXEMPT } from "@/lib/legal";
 import { useEffect, useState } from "react";
 import { formatEur } from "@/lib/money";
 
@@ -61,7 +62,7 @@ export function SubscriptionCard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm">
           <span className="block font-semibold">
-            Subscrição MESVIO · {s.planLabel} · {formatEur(s.monthlyCents)}/mês + IVA
+            Subscrição MESVIO · {s.planLabel} · {formatEur(s.monthlyCents)}/mês{VAT_EXEMPT ? "" : " + IVA"}
           </span>
           <span className="block text-ink-soft">
             {s.active

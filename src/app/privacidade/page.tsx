@@ -14,7 +14,7 @@ export default function PrivacyPage() {
       <section>
         <p>
           Esta política explica que dados pessoais a MESVIO trata, porquê, durante quanto tempo e que direitos tens. Aplica-se ao
-          site da MESVIO, ao painel dos restaurantes e às ementas digitais abertas por QR Code ou NFC.
+          site da MESVIO, ao painel dos restaurantes e às ementas digitais abertas por QR Code.
         </p>
       </section>
 
