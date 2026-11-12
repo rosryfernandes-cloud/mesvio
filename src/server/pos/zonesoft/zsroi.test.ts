@@ -293,3 +293,16 @@ describe("ZSROI: simular aceite (conta demo)", () => {
     expect(JSON.parse(sent!)).toMatchObject({ serial: "D_TESTE01", app_order_id: orderId, status: "accept" });
   });
 });
+
+describe("ZSROI: desligar", () => {
+  it("volta ao POS de demonstração, apaga as chaves e a ZoneSoft deixa de entrar", async () => {
+    const { unlinkZoneSoft } = await import("./zsroi-service");
+    expect(await unlinkZoneSoft(db, "admin-teste", owner.establishmentId)).toMatchObject({ ok: false, code: "INVALID" });
+    await link();
+    expect(await unlinkZoneSoft(db, "admin-teste", owner.establishmentId)).toEqual({ ok: true });
+    const [row] = await db.select().from(posIntegrations).where(eq(posIntegrations.establishmentId, owner.establishmentId));
+    expect(row).toMatchObject({ provider: "mock", credentialsCiphertext: null });
+    expect(await zsroiLogin(db, { app_store_username: CREDS.appKey, app_store_secret: CREDS.appSecret })).toEqual({ ok: false, status: 401 });
+    expect(await zsroiReceiveMenu(db, claims(), EXAMPLE_MENU)).toMatchObject({ ok: false, status: 404 });
+  });
+});

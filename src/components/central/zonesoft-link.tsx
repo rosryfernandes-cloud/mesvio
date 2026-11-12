@@ -43,6 +43,17 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
     router.refresh();
   }
 
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  async function unlink() {
+    setPinging(true);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/desligar`, { method: "POST" }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setPinging(false);
+    setConfirmUnlink(false);
+    setMessage(res?.ok ? { text: "ZoneSoft desligada: o restaurante voltou ao POS de demonstração (ementa de praia).", error: false } : { text: data.message ?? "Não foi possível desligar.", error: true });
+    router.refresh();
+  }
+
   async function ping() {
     setPinging(true);
     const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/ping`, { method: "POST" }).catch(() => null);
@@ -121,6 +132,25 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
         <button type="button" onClick={simulateAccept} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl border border-brand px-4 text-sm font-semibold text-brand disabled:opacity-60">
           Simular aceite do último pedido (teste)
         </button>
+      )}
+      {provider === "zonesoft" && !open && (
+        <div className="mt-4">
+          {confirmUnlink ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">Desligar a ZoneSoft e voltar à ementa de demonstração? As chaves guardadas são apagadas.</span>
+              <button type="button" onClick={unlink} disabled={pinging} className="min-h-10 rounded-xl bg-danger px-4 text-sm font-semibold text-white disabled:opacity-60">
+                Sim, desligar
+              </button>
+              <button type="button" onClick={() => setConfirmUnlink(false)} className="min-h-10 rounded-xl border border-line px-4 text-sm">
+                Voltar
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmUnlink(true)} className="min-h-10 rounded-xl border border-line px-4 text-sm text-ink-soft">
+              Desligar a ZoneSoft (voltar ao POS de demonstração)
+            </button>
+          )}
+        </div>
       )}
       {open ? (
         <form onSubmit={submit} className="mt-4 grid gap-3" autoComplete="off">

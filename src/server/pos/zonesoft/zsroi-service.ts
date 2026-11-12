@@ -399,3 +399,32 @@ export async function simulateZoneSoftAccept(
     return { ok: false, code: "NETWORK", message: err instanceof Error ? err.message : "Sem ligação à ZoneSoft." };
   }
 }
+
+/**
+ * Desliga o restaurante da ZoneSoft e volta ao POS de demonstração (MockPOS, com a ementa de praia).
+ * Apaga as chaves guardadas: a ZoneSoft deixa de conseguir entrar ou enviar ementas para este restaurante.
+ */
+export async function unlinkZoneSoft(db: Db, adminUserId: string, establishmentId: string): Promise<LinkResult> {
+  const [integration] = await db
+    .select({ organizationId: posIntegrations.organizationId, provider: posIntegrations.provider })
+    .from(posIntegrations)
+    .where(eq(posIntegrations.establishmentId, establishmentId));
+  if (!integration) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  if (integration.provider !== "zonesoft") return { ok: false, code: "INVALID", message: "Este restaurante não está ligado à ZoneSoft." };
+  await db.transaction(async (tx) => {
+    await tx
+      .update(posIntegrations)
+      .set({ provider: "mock", status: "healthy", credentialsCiphertext: null, credentialsKeyId: null, lastError: null })
+      .where(eq(posIntegrations.establishmentId, establishmentId));
+    await tx.insert(auditLogs).values({
+      organizationId: integration.organizationId,
+      actorType: "admin",
+      actorId: adminUserId,
+      action: "platform.unlink_zonesoft",
+      entityType: "establishment",
+      entityId: establishmentId,
+      after: { to: "mock" },
+    });
+  });
+  return { ok: true };
+}
