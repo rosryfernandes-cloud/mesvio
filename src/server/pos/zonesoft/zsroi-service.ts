@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { auditLogs, categories, modifierGroups, modifiers, orderEvents, orders, posIntegrations, productModifierGroups, products } from "@/server/db/schema";
@@ -328,11 +328,24 @@ export async function getZoneSoftStatus(db: Db, establishmentId: string): Promis
     .from(posIntegrations)
     .where(eq(posIntegrations.establishmentId, establishmentId));
   const productCount = await db.$count(products, eq(products.establishmentId, establishmentId));
+  // Só os pedidos desde que o restaurante foi ligado à ZoneSoft (os anteriores eram de outro POS).
+  const [linked] = await db
+    .select({ at: auditLogs.createdAt })
+    .from(auditLogs)
+    .where(and(eq(auditLogs.action, "platform.link_zonesoft"), eq(auditLogs.entityId, establishmentId)))
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(1);
   const rows = await db
     .select({ at: orderEvents.createdAt, status: orderEvents.toStatus, detail: orderEvents.detail, shortCode: orders.shortCode })
     .from(orderEvents)
     .innerJoin(orders, eq(orders.id, orderEvents.orderId))
-    .where(and(eq(orders.establishmentId, establishmentId), inArray(orderEvents.toStatus, ["SUBMITTED", "ACCEPTED", "REJECTED", "NEEDS_ATTENTION", "FAILED_RETRYING", "SERVED"])))
+    .where(
+      and(
+        eq(orders.establishmentId, establishmentId),
+        inArray(orderEvents.toStatus, ["SUBMITTED", "ACCEPTED", "REJECTED", "NEEDS_ATTENTION", "FAILED_RETRYING", "SERVED"]),
+        linked ? gte(orderEvents.createdAt, linked.at) : undefined,
+      ),
+    )
     .orderBy(desc(orderEvents.createdAt))
     .limit(8);
   return {
@@ -343,4 +356,46 @@ export async function getZoneSoftStatus(db: Db, establishmentId: string): Promis
       return { at: r.at.toISOString(), shortCode: r.shortCode, status: r.status, reason: typeof d.reason === "string" ? d.reason : null };
     }),
   };
+}
+
+export const ZSROI_TEST_ORDER_STATUS_URL = "https://zsroi.zonesoft.org/v1.0/testintegration/orderStatus";
+
+/**
+ * Conta demo: pede à ZoneSoft que simule o "aceite" do último pedido enviado (ainda à espera do POS).
+ * A ZoneSoft responde chamando o nosso /order-status, como faria um POS real.
+ */
+export async function simulateZoneSoftAccept(
+  db: Db,
+  establishmentId: string,
+  { fetchImpl = fetch, url = ZSROI_TEST_ORDER_STATUS_URL }: { fetchImpl?: typeof fetch; url?: string } = {},
+): Promise<PingResult & { orderCode?: string }> {
+  const [row] = await db
+    .select({ provider: posIntegrations.provider, ciphertext: posIntegrations.credentialsCiphertext })
+    .from(posIntegrations)
+    .where(eq(posIntegrations.establishmentId, establishmentId));
+  if (!row) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const creds = row.provider === "zonesoft" ? readCredentials(row.ciphertext) : null;
+  if (!creds) return { ok: false, code: "NO_CREDENTIALS", message: "Este restaurante não está ligado à ZoneSoft." };
+  const [order] = await db
+    .select({ id: orders.id, shortCode: orders.shortCode })
+    .from(orders)
+    .where(and(eq(orders.establishmentId, establishmentId), eq(orders.status, "SUBMITTED")))
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
+  if (!order) return { ok: false, code: "NOT_FOUND", message: "Não há nenhum pedido à espera de confirmação do POS." };
+  const body = JSON.stringify({ serial: creds.serial, store_id: creds.clientId || creds.storeId, app_order_id: order.id, status: "accept", reason: "teste MESVIO" });
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: creds.appKey, "X-Integration-Signature": signRequest(body, creds.appSecret) },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    return res.ok
+      ? { ok: true, status: res.status, detail, orderCode: order.shortCode }
+      : { ok: false, code: "NETWORK", message: `A ZoneSoft respondeu ${res.status}.`, status: res.status, detail, orderCode: order.shortCode };
+  } catch (err) {
+    return { ok: false, code: "NETWORK", message: err instanceof Error ? err.message : "Sem ligação à ZoneSoft." };
+  }
 }

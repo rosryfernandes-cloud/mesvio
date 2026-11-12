@@ -259,12 +259,37 @@ describe("ZSROI: estado na Central", () => {
       { db, resolvePos: () => mock, now: () => new Date() },
     );
     const orderId = (placed as { order: { id: string } }).order.id;
-    await db.insert(orderEvents).values({ organizationId: owner.organizationId, orderId, toStatus: "REJECTED", source: "pos", detail: { outcome: "rejected", reason: "O POS ZoneSoft está desligado ou sem ligação." } });
+    // Evento de antes da ligação à ZoneSoft: não aparece.
+    await db.insert(orderEvents).values({ organizationId: owner.organizationId, orderId, toStatus: "ACCEPTED", source: "pos", detail: {}, createdAt: new Date(Date.now() - 86_400_000) });
     await link();
+    await db.insert(orderEvents).values({ organizationId: owner.organizationId, orderId, toStatus: "REJECTED", source: "pos", detail: { outcome: "rejected", reason: "O POS ZoneSoft está desligado ou sem ligação." } });
     await zsroiReceiveMenu(db, claims(), EXAMPLE_MENU);
     const st = await getZoneSoftStatus(db, owner.establishmentId);
     expect(st.products).toBeGreaterThanOrEqual(1);
     expect(st.lastCatalogSyncAt).not.toBeNull();
-    expect(st.events[0]).toMatchObject({ status: "REJECTED", reason: "O POS ZoneSoft está desligado ou sem ligação." });
+    expect(st.events.map((e) => e.status)).toEqual(["REJECTED"]);
+    expect(st.events[0].reason).toBe("O POS ZoneSoft está desligado ou sem ligação.");
+  });
+});
+
+describe("ZSROI: simular aceite (conta demo)", () => {
+  it("pede o aceite do último pedido à espera do POS, com o id do nosso pedido", async () => {
+    const { simulateZoneSoftAccept } = await import("./zsroi-service");
+    let sent: string | null = null;
+    const fetchImpl = (async (_u: unknown, init?: RequestInit) => {
+      sent = String(init!.body);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    await link();
+    expect(await simulateZoneSoftAccept(db, owner.establishmentId, { fetchImpl })).toMatchObject({ ok: false, code: "NOT_FOUND" });
+    const placed = await placeOrder(
+      { tableToken: MESA.publicToken, idempotencyKey: randomUUID(), lines: [{ productRef: DEMO_PRODUCTS.find((p) => p.modifierGroups.length === 0)!.posProductRef, quantity: 1 }] },
+      { clientIpHash: randomUUID() },
+      { db, resolvePos: () => new MockPosAdapter(), now: () => new Date() },
+    );
+    const orderId = (placed as { order: { id: string } }).order.id;
+    await db.update(orders).set({ status: "SUBMITTED" }).where(eq(orders.id, orderId));
+    expect(await simulateZoneSoftAccept(db, owner.establishmentId, { fetchImpl })).toMatchObject({ ok: true });
+    expect(JSON.parse(sent!)).toMatchObject({ serial: "D_TESTE01", app_order_id: orderId, status: "accept" });
   });
 });

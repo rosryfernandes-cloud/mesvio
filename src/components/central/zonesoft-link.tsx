@@ -30,6 +30,19 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [pinging, setPinging] = useState(false);
 
+  async function simulateAccept() {
+    setPinging(true);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/simular-aceite`, { method: "POST" }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setPinging(false);
+    setMessage(
+      res?.ok
+        ? { text: `Pedido n.º ${data.orderCode}: a ZoneSoft vai simular o aceite (${data.status}). Atualize a página daqui a uns segundos.${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: false }
+        : { text: `${data.message ?? "Não foi possível."}${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: true },
+    );
+    router.refresh();
+  }
+
   async function ping() {
     setPinging(true);
     const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/ping`, { method: "POST" }).catch(() => null);
@@ -67,7 +80,7 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
       </h2>
       <p className="mt-1 text-sm text-ink-soft">
         {provider === "zonesoft"
-          ? "Ligado. A ementa vem do ZS Rest (\"Sync Menus\" no ZSBMS). O envio de pedidos para o POS ainda não está ativo."
+          ? "Ligado. A ementa vem do ZS Rest (\"Sync Menus\" no ZSBMS) e os pedidos seguem para o POS; a mesa vai nas observações do pedido."
           : "Para ligar: crie o cliente no portal developer.zonesoft.org com os endereços abaixo e cole aqui as chaves do cliente."}
       </p>
       <dl className="mt-3 grid gap-1 text-xs">
@@ -102,6 +115,11 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
       {provider === "zonesoft" && !open && (
         <button type="button" onClick={ping} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-60">
           {pinging ? "A contactar a ZoneSoft…" : "Acordar POS de testes (ping)"}
+        </button>
+      )}
+      {provider === "zonesoft" && !open && (
+        <button type="button" onClick={simulateAccept} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl border border-brand px-4 text-sm font-semibold text-brand disabled:opacity-60">
+          Simular aceite do último pedido (teste)
         </button>
       )}
       {open ? (
