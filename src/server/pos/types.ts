@@ -83,8 +83,11 @@ export interface PosTable {
 export interface PosOrderLine {
   posProductRef: string;
   quantity: number;
+  /** Preço unitário com IVA, já com as opções incluídas. */
   unitPriceCents: number;
-  modifiers: { posModifierRef: string }[];
+  /** Nome do artigo (snapshot do pedido); alguns POS exigem-no (ZoneSoft). */
+  name?: string;
+  modifiers: { posModifierRef: string; name?: string; priceDeltaCents?: number }[];
   notes?: string;
 }
 
@@ -92,6 +95,8 @@ export interface PosOrderRequest {
   /** O nosso id de pedido — usado como chave idempotente quando suportado. */
   externalOrderId: string;
   posTableRef: string;
+  /** Nome da mesa como aparece ao staff (ex.: "Mesa 5"). */
+  tableLabel?: string;
   lines: PosOrderLine[];
   notes?: string;
 }

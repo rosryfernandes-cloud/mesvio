@@ -96,11 +96,11 @@ describe("MockPOS", () => {
 });
 
 describe("ZoneSoft (ZSROI)", () => {
-  it("só declara a ementa; não finge enviar pedidos", async () => {
-    const zs = new ZoneSoftAdapter({ establishmentId: "e1", settings: {} });
+  it("declara ementa, envio e estados; sem credenciais recusa em vez de fingir", async () => {
+    const zs = new ZoneSoftAdapter({ establishmentId: "e1", settings: {} }, { credentials: async () => null });
     const on = Object.entries(zs.capabilities).filter(([, v]) => v).map(([k]) => k);
-    expect(on).toEqual(["catalogSync"]);
+    expect(on).toEqual(["catalogSync", "createOrder", "orderAcknowledgement", "orderStatusUpdates"]);
     expect((await zs.healthCheck()).ok).toBe(false);
-    await expect(zs.submitOrder(ribeye())).rejects.toThrow(/não está implementado/);
+    expect(await zs.submitOrder(ribeye())).toMatchObject({ outcome: "rejected" });
   });
 });

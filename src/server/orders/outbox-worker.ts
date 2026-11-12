@@ -129,6 +129,7 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
       status: orders.status,
       notes: orders.notes,
       posTableRef: diningTables.posTableRef,
+      tableLabel: diningTables.label,
       provider: posIntegrations.provider,
     })
     .from(orders)
@@ -157,11 +158,13 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
         {
           externalOrderId: o.id,
           posTableRef: o.posTableRef!,
+          tableLabel: o.tableLabel,
           lines: items.map((i) => ({
             posProductRef: i.posProductRef,
             quantity: i.quantity,
             unitPriceCents: i.unitPriceCents,
-            modifiers: i.modifiers.map(({ posModifierRef }) => ({ posModifierRef })),
+            name: i.name,
+            modifiers: i.modifiers.map(({ posModifierRef, name, priceDeltaCents }) => ({ posModifierRef, name, priceDeltaCents })),
             notes: i.notes ?? undefined,
           })),
           notes: o.notes ?? undefined,

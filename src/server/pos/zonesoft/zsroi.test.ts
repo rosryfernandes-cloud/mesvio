@@ -179,3 +179,55 @@ describe("ZSROI: estado dos pedidos", () => {
     expect(await zsroiOrderStatus(db, claims(), { order_id: orderId, status: "voar" })).toMatchObject({ ok: false, status: 400 });
   });
 });
+
+describe("ZSROI: enviar pedidos", () => {
+  const order = {
+    externalOrderId: "11111111-2222-3333-4444-555555555555",
+    posTableRef: "5",
+    tableLabel: "Mesa 5",
+    notes: "Sem pressa",
+    lines: [
+      { posProductRef: "1978", name: "Menu Portuguesa", quantity: 2, unitPriceCents: 950, modifiers: [{ posModifierRef: "1978_3_390", name: "FANTA LARANJA", priceDeltaCents: 150 }], notes: "Bem passado" },
+      { posProductRef: "2001", name: "Sumo de laranja", quantity: 1, unitPriceCents: 350, modifiers: [] },
+    ],
+  };
+  const creds = { ...CREDS, clientId: "D95C522A33D" };
+
+  it("monta o pedido como o manual: preço do artigo sem as opções, mesa no cliente e nas observações", async () => {
+    const { buildZsroiOrder, lisbonTime } = await import("./zsroi-order");
+    const p = buildZsroiOrder(order, creds, new Date("2026-07-01T11:30:00Z"));
+    expect(p).toMatchObject({ order_id: order.externalOrderId, store_id: "D95C522A33D", type_order: "PICKUP", currency: "EUR", order_time: "2026-07-01 12:30:00" });
+    expect(p.customer.name).toBe("Mesa 5");
+    expect(p.obs).toBe("MESA 5 · MESVIO · Sem pressa");
+    expect(p.products[0]).toMatchObject({ id: "1978", quantity: 2, price: 800, obs: "Bem passado" });
+    expect(p.products[0].attributes[0]).toMatchObject({ id: "1978_3_390", price: 150 });
+    expect(p.total_customer_to_pay).toBe(2 * 950 + 350);
+    expect(lisbonTime(new Date("2026-01-15T09:05:07Z"))).toBe("2026-01-15 09:05:07");
+  });
+
+  it("assina e envia; 201 fica 'enviado', recusas viram motivo legível, erro de rede fica ambíguo", async () => {
+    const { ZoneSoftAdapter } = await import("./zonesoft-adapter");
+    const { signRequest: sign } = await import("./zsroi-auth");
+    const calls: { headers: Record<string, string>; body: string }[] = [];
+    const reply = (status: number, body: unknown) =>
+      (async (_u: unknown, init?: RequestInit) => {
+        calls.push({ headers: init!.headers as Record<string, string>, body: String(init!.body) });
+        return new Response(JSON.stringify(body), { status });
+      }) as typeof fetch;
+    const mk = (f: typeof fetch) => new ZoneSoftAdapter({ establishmentId: "e1", settings: {} }, { credentials: async () => creds, fetch: f, now: () => new Date("2026-07-01T11:30:00Z") });
+
+    expect(await mk(reply(201, { Response: { StatusCode: 201, StatusMessage: "Created", Content: null } })).submitOrder(order)).toEqual({ outcome: "submitted" });
+    expect(calls[0].headers.Authorization).toBe(creds.appKey);
+    expect(calls[0].headers["X-Integration-Signature"]).toBe(sign(calls[0].body, creds.appSecret));
+
+    const ping = await mk(reply(422, { Response: { StatusCode: 422, Content: "order_rejected_pos_ping_failed" } })).submitOrder(order);
+    expect(ping).toMatchObject({ outcome: "rejected" });
+    expect((ping as { reason: string }).reason).toMatch(/POS ZoneSoft está desligado/);
+    expect(await mk(reply(422, { Response: { StatusCode: 422, Content: "order_rejected_unknown_items: 1978" } })).submitOrder(order)).toMatchObject({ outcome: "rejected" });
+    expect(await mk(reply(502, {})).submitOrder(order)).toMatchObject({ outcome: "unknown" });
+    const offline = (async () => {
+      throw new TypeError("fetch failed");
+    }) as typeof fetch;
+    expect(await mk(offline).submitOrder(order)).toMatchObject({ outcome: "unknown" });
+  });
+});
