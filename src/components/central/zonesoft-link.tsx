@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ZoneSoftStatus } from "@/server/pos/zonesoft/zsroi-service";
 
 const FIELDS = [
   { name: "serial", label: "Serial do cliente (licença)", placeholder: "D_…", secret: false },
@@ -12,11 +13,34 @@ const FIELDS = [
 ] as const;
 
 /** Liga o restaurante à ZoneSoft (ZSROI) com as chaves do cliente criado no portal developer.zonesoft.org. */
-export function ZoneSoftLink({ establishmentId, provider }: { establishmentId: string; provider: string }) {
+const EVENT_LABEL: Record<string, string> = {
+  SUBMITTED: "Enviado ao POS",
+  ACCEPTED: "Aceite no POS",
+  REJECTED: "Recusado",
+  NEEDS_ATTENTION: "Precisa de atenção",
+  FAILED_RETRYING: "A tentar de novo",
+  SERVED: "Pronto",
+};
+const when = (iso: string) => new Date(iso).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" });
+
+export function ZoneSoftLink({ establishmentId, provider, status }: { establishmentId: string; provider: string; status?: ZoneSoftStatus | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [pinging, setPinging] = useState(false);
+
+  async function ping() {
+    setPinging(true);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/ping`, { method: "POST" }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setPinging(false);
+    setMessage(
+      res?.ok
+        ? { text: `POS de testes acordado (${data.status}). Faça agora o pedido de teste.${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: false }
+        : { text: `${data.message ?? "Não foi possível."}${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: true },
+    );
+  }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,6 +78,32 @@ export function ZoneSoftLink({ establishmentId, provider }: { establishmentId: s
           </div>
         ))}
       </dl>
+      {status && (
+        <div className="mt-4 rounded-2xl border border-line p-4 text-sm">
+          <p>
+            <strong>Ementa:</strong> {status.products} artigos ·{" "}
+            {status.lastCatalogSyncAt ? `última sincronização ${when(status.lastCatalogSyncAt)}` : "ainda não sincronizada"}
+          </p>
+          <p className="mt-3 font-semibold">Últimos pedidos enviados à ZoneSoft</p>
+          {status.events.length === 0 ? (
+            <p className="mt-1 text-ink-soft">Nenhum ainda.</p>
+          ) : (
+            <ul className="mt-1 grid gap-1">
+              {status.events.map((e, i) => (
+                <li key={i} className={e.status === "REJECTED" || e.status === "NEEDS_ATTENTION" ? "text-danger" : ""}>
+                  {when(e.at)} · n.º {e.shortCode} · <strong>{EVENT_LABEL[e.status] ?? e.status}</strong>
+                  {e.reason && <span className="text-ink-soft"> · {e.reason}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {provider === "zonesoft" && !open && (
+        <button type="button" onClick={ping} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-60">
+          {pinging ? "A contactar a ZoneSoft…" : "Acordar POS de testes (ping)"}
+        </button>
+      )}
       {open ? (
         <form onSubmit={submit} className="mt-4 grid gap-3" autoComplete="off">
           {FIELDS.map((f) => (

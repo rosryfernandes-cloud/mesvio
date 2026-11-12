@@ -11,6 +11,7 @@ import { AddTablesForm, InviteOwnerForm, OpenPanelButton } from "@/components/ce
 import { formatEur } from "@/lib/money";
 import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
 import { ZoneSoftLink } from "@/components/central/zonesoft-link";
+import { getZoneSoftStatus } from "@/server/pos/zonesoft/zsroi-service";
 import { PlanPicker } from "@/components/central/plan-picker";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
   if (!d) notFound();
   const { criado } = await searchParams;
   const s = d.summary;
+  const zs = s.posProvider === "zonesoft" ? await readWithRetry(() => getZoneSoftStatus(db, id)) : null;
   const zones = [...new Set(d.tables.map((t) => t.zone ?? "Sem zona"))];
 
   return (
@@ -89,7 +91,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
       <PlanPicker establishmentId={id} plan={s.plan} />
 
       <OwnMenuSwitch establishmentId={id} provider={s.posProvider} />
-      <ZoneSoftLink establishmentId={id} provider={s.posProvider} />
+      <ZoneSoftLink establishmentId={id} provider={s.posProvider} status={zs} />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section aria-labelledby="donos" className="rounded-3xl border border-line bg-card p-5">

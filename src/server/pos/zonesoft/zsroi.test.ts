@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
-import { orders, posIntegrations } from "@/server/db/schema";
+import { orderEvents, orders, posIntegrations } from "@/server/db/schema";
 import { DEMO_USERS } from "@/server/db/seed-demo";
 import { DEMO_PRODUCTS, DEMO_TABLES } from "@/server/pos/mock/demo-data";
 import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
@@ -229,5 +229,42 @@ describe("ZSROI: enviar pedidos", () => {
       throw new TypeError("fetch failed");
     }) as typeof fetch;
     expect(await mk(offline).submitOrder(order)).toMatchObject({ outcome: "unknown" });
+  });
+});
+
+describe("ZSROI: ping da conta demo", () => {
+  it("envia o serial e o client ID assinados; sem ligação à ZoneSoft não envia nada", async () => {
+    const { pingZoneSoftDemo } = await import("./zsroi-service");
+    let sent: { body: string; headers: Record<string, string> } | null = null;
+    const fetchImpl = (async (_u: unknown, init?: RequestInit) => {
+      sent = { body: String(init!.body), headers: init!.headers as Record<string, string> };
+      return new Response('{"ok":true}', { status: 200 });
+    }) as typeof fetch;
+    expect(await pingZoneSoftDemo(db, owner.establishmentId, { fetchImpl })).toMatchObject({ ok: false, code: "NO_CREDENTIALS" });
+    expect(sent).toBeNull();
+    await linkZoneSoft(db, "admin-teste", owner.establishmentId, { ...CREDS, clientId: "D95C522A33D" });
+    expect(await pingZoneSoftDemo(db, owner.establishmentId, { fetchImpl })).toMatchObject({ ok: true, status: 200 });
+    expect(JSON.parse(sent!.body)).toEqual({ serial: "D_TESTE01", store_id: "D95C522A33D" });
+    expect(sent!.headers.Authorization).toBe(CREDS.appKey);
+  });
+});
+
+describe("ZSROI: estado na Central", () => {
+  it("mostra a ementa sincronizada e o motivo das recusas", async () => {
+    const { getZoneSoftStatus } = await import("./zsroi-service");
+    const mock = new MockPosAdapter();
+    const placed = await placeOrder(
+      { tableToken: MESA.publicToken, idempotencyKey: randomUUID(), lines: [{ productRef: DEMO_PRODUCTS.find((p) => p.modifierGroups.length === 0)!.posProductRef, quantity: 1 }] },
+      { clientIpHash: randomUUID() },
+      { db, resolvePos: () => mock, now: () => new Date() },
+    );
+    const orderId = (placed as { order: { id: string } }).order.id;
+    await db.insert(orderEvents).values({ organizationId: owner.organizationId, orderId, toStatus: "REJECTED", source: "pos", detail: { outcome: "rejected", reason: "O POS ZoneSoft está desligado ou sem ligação." } });
+    await link();
+    await zsroiReceiveMenu(db, claims(), EXAMPLE_MENU);
+    const st = await getZoneSoftStatus(db, owner.establishmentId);
+    expect(st.products).toBeGreaterThanOrEqual(1);
+    expect(st.lastCatalogSyncAt).not.toBeNull();
+    expect(st.events[0]).toMatchObject({ status: "REJECTED", reason: "O POS ZoneSoft está desligado ou sem ligação." });
   });
 });

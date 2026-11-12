@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { auditLogs, categories, modifierGroups, modifiers, orderEvents, orders, posIntegrations, productModifierGroups, products } from "@/server/db/schema";
@@ -7,7 +7,7 @@ import { withTenant } from "@/server/db/tenant";
 import { guessStation } from "@/lib/station";
 import { open, seal } from "@/server/security/secret-box";
 import type { PosCatalog } from "../types";
-import { issueToken, sameSecret, zoneSoftCredentialsSchema, type ZoneSoftCredentials, type ZsroiTokenClaims } from "./zsroi-auth";
+import { issueToken, sameSecret, signRequest, zoneSoftCredentialsSchema, type ZoneSoftCredentials, type ZsroiTokenClaims } from "./zsroi-auth";
 import { parseZsroiMenu } from "./zsroi-menu";
 
 /**
@@ -274,4 +274,73 @@ export async function linkZoneSoft(db: Db, adminUserId: string, establishmentId:
     });
   });
   return { ok: true };
+}
+
+// ───────────── Testes com a conta demo (Central) ─────────────
+
+export const ZSROI_TEST_PING_URL = "https://zsroi.zonesoft.org/v1.0/testintegration/ping";
+
+export type PingResult = { ok: true; status: number; detail: string } | { ok: false; code: "NOT_FOUND" | "NO_CREDENTIALS" | "NETWORK"; message: string; status?: number; detail?: string };
+
+/**
+ * "Acorda" o POS da conta demo da ZoneSoft: o manual (example_testIntegration) pede um PING antes de
+ * enviar pedidos de teste; sem ele, a ZSROI recusa com "order_rejected_pos_ping_failed".
+ */
+export async function pingZoneSoftDemo(
+  db: Db,
+  establishmentId: string,
+  { fetchImpl = fetch, url = ZSROI_TEST_PING_URL }: { fetchImpl?: typeof fetch; url?: string } = {},
+): Promise<PingResult> {
+  const [row] = await db
+    .select({ provider: posIntegrations.provider, ciphertext: posIntegrations.credentialsCiphertext })
+    .from(posIntegrations)
+    .where(eq(posIntegrations.establishmentId, establishmentId));
+  if (!row) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const creds = row.provider === "zonesoft" ? readCredentials(row.ciphertext) : null;
+  if (!creds) return { ok: false, code: "NO_CREDENTIALS", message: "Este restaurante não está ligado à ZoneSoft." };
+  const body = JSON.stringify({ serial: creds.serial, store_id: creds.clientId || creds.storeId });
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: creds.appKey, "X-Integration-Signature": signRequest(body, creds.appSecret) },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    return res.ok ? { ok: true, status: res.status, detail } : { ok: false, code: "NETWORK", message: `A ZoneSoft respondeu ${res.status}.`, status: res.status, detail };
+  } catch (err) {
+    return { ok: false, code: "NETWORK", message: err instanceof Error ? err.message : "Sem ligação à ZoneSoft." };
+  }
+}
+
+// ───────────── Estado da integração (Central) ─────────────
+
+export interface ZoneSoftStatus {
+  lastCatalogSyncAt: string | null;
+  products: number;
+  /** Últimas respostas do POS aos pedidos (motivo das recusas incluído). */
+  events: { at: string; shortCode: string; status: string; reason: string | null }[];
+}
+
+export async function getZoneSoftStatus(db: Db, establishmentId: string): Promise<ZoneSoftStatus> {
+  const [integration] = await db
+    .select({ lastCatalogSyncAt: posIntegrations.lastCatalogSyncAt })
+    .from(posIntegrations)
+    .where(eq(posIntegrations.establishmentId, establishmentId));
+  const productCount = await db.$count(products, eq(products.establishmentId, establishmentId));
+  const rows = await db
+    .select({ at: orderEvents.createdAt, status: orderEvents.toStatus, detail: orderEvents.detail, shortCode: orders.shortCode })
+    .from(orderEvents)
+    .innerJoin(orders, eq(orders.id, orderEvents.orderId))
+    .where(and(eq(orders.establishmentId, establishmentId), inArray(orderEvents.toStatus, ["SUBMITTED", "ACCEPTED", "REJECTED", "NEEDS_ATTENTION", "FAILED_RETRYING", "SERVED"])))
+    .orderBy(desc(orderEvents.createdAt))
+    .limit(8);
+  return {
+    lastCatalogSyncAt: integration?.lastCatalogSyncAt?.toISOString() ?? null,
+    products: productCount,
+    events: rows.map((r) => {
+      const d = (r.detail ?? {}) as { reason?: unknown };
+      return { at: r.at.toISOString(), shortCode: r.shortCode, status: r.status, reason: typeof d.reason === "string" ? d.reason : null };
+    }),
+  };
 }
