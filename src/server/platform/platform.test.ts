@@ -260,5 +260,7 @@ describe("progresso do arranque", () => {
     expect(setupProgress(base, now)).toMatchObject({ done: 1, daysSinceCreated: 3, next: { id: "menu" } });
     expect(setupProgress({ ...base, products: 30, tables: 8 }, now).next?.id).toBe("logo");
     expect(setupProgress({ ...base, products: 30, tables: 8, hasLogo: true, hasOrders: true }, now)).toMatchObject({ done: 5, next: null });
+    // A ementa do restaurante de demonstração não está na base de dados, mas existe.
+    expect(setupProgress({ ...base, isDemo: true }, now).next?.id).toBe("tables");
   });
 });

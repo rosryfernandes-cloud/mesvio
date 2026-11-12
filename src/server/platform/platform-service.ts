@@ -23,6 +23,7 @@ import type { PlatformAdmin } from "./admin-auth";
 import { isValidNif } from "@/lib/nif";
 import { importCatalog } from "@/server/menu/own-menu";
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
+import { DEMO_ESTABLISHMENT } from "@/server/pos/mock/demo-data";
 
 /**
  * Serviço do painel central: lê e escreve em TODOS os restaurantes (ligação de sistema, fora do
@@ -296,12 +297,14 @@ export interface SetupProgress {
 export const SETUP_STALL_DAYS = 2;
 
 export function setupProgress(
-  e: { owners: number; products: number; tables: number; hasLogo: boolean; hasOrders: boolean; createdAt: Date },
+  e: { owners: number; products: number; tables: number; hasLogo: boolean; hasOrders: boolean; createdAt: Date; isDemo?: boolean },
   now: Date,
 ): SetupProgress {
   const steps: SetupStep[] = [
     { id: "owner", label: "Convidar o dono", done: e.owners > 0 },
-    { id: "menu", label: "Ementa com pratos", done: e.products > 0 },
+    // O restaurante de demonstração tem a ementa no código do POS de testes, sem pratos na base de dados.
+    // Um cliente que ainda esteja nesse POS vê a ementa de demonstração, não a sua: o passo fica por fazer.
+    { id: "menu", label: "Ementa com pratos", done: e.products > 0 || !!e.isDemo },
     { id: "tables", label: "Mesas e QR Codes", done: e.tables > 0 },
     { id: "logo", label: "Logótipo", done: e.hasLogo },
     { id: "first_order", label: "Primeiro pedido", done: e.hasOrders },
@@ -453,6 +456,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
           hasLogo: !!e.brandLogoUrl,
           hasOrders: !!last,
           createdAt: new Date(e.createdAt),
+          isDemo: e.id === DEMO_ESTABLISHMENT.id,
         },
         now,
       ),
@@ -473,7 +477,8 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       alerts.push({ level: "danger", establishmentId: e.id, text: `${e.name}: mensalidade em atraso.` });
     if (planAllowsOrdering(e.plan) && e.daysSinceLastOrder !== null && e.daysSinceLastOrder >= IDLE_ALERT_DAYS)
       alerts.push({ level: "warning", establishmentId: e.id, text: `${e.name}: sem pedidos há ${e.daysSinceLastOrder} dias.` });
-    if (e.setup.next && e.setup.daysSinceCreated >= SETUP_STALL_DAYS)
+    // Depois do primeiro pedido o restaurante já arrancou: o que faltar (ex.: logótipo) não é motivo para ligar.
+    if (e.setup.next && !e.lastOrderAt && e.setup.daysSinceCreated >= SETUP_STALL_DAYS)
       alerts.push({
         level: "warning",
         establishmentId: e.id,
