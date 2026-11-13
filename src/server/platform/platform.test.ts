@@ -12,7 +12,8 @@ import { open } from "@/server/security/secret-box";
 import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment as start, verifyMfa, type PlatformAdmin } from "./admin-auth";
 import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "./activation";
 import { totpCode, stepAt } from "./totp";
-import { addTables, createRestaurant, getPlatformOverview, inviteOwner, setupProgress } from "./platform-service";
+import { addTables, createRestaurant, getPlatformOverview, inviteOwner, setupProgress, staffAddTables, STAFF_MAX_TABLES } from "./platform-service";
+import { DEMO_USERS } from "@/server/db/seed-demo";
 import { PLAN_MONTHLY_CENTS } from "@/lib/plan";
 
 let db: Db;
@@ -171,6 +172,20 @@ describe("criar restaurantes no painel central", () => {
     const labels = (await db.select().from(t.diningTables).where(eq(t.diningTables.establishmentId, r.establishmentId))).map((x) => x.label);
     expect(labels).toContain("Mesa 5");
     expect((await inviteOwner(db, admin, r.establishmentId, { email: "socio@praiaazul.pt" }, users)).ok).toBe(true);
+  });
+});
+
+describe("lugares criados pelo dono no painel", () => {
+  it("numera a seguir aos que existem e respeita os limites", async () => {
+    const owner = (await resolveStaffContext(db, DEMO_USERS[0].userId))!;
+    const before = await db.$count(t.diningTables, eq(t.diningTables.establishmentId, owner.establishmentId));
+    expect(await staffAddTables(db, owner, { count: 3, prefix: "Cama", zone: "Praia", orderingMode: "pay_first" })).toEqual({ ok: true, created: 3 });
+    const labels = (await db.select({ label: t.diningTables.label }).from(t.diningTables).where(eq(t.diningTables.establishmentId, owner.establishmentId))).map((r) => r.label);
+    expect(labels.length).toBe(before + 3);
+    expect(await staffAddTables(db, owner, { count: 0, prefix: "Mesa", orderingMode: "pay_later" })).toMatchObject({ ok: false, code: "INVALID" });
+    expect(await staffAddTables(db, owner, { count: 100, prefix: "Mesa", orderingMode: "pay_later" })).toMatchObject({ ok: true });
+    for (let i = 0; before + 103 + i * 100 + 100 <= STAFF_MAX_TABLES; i++) await staffAddTables(db, owner, { count: 100, prefix: "Extra", orderingMode: "pay_later" });
+    expect(await staffAddTables(db, owner, { count: 100, prefix: "Mesa", orderingMode: "pay_later" })).toMatchObject({ ok: false, code: "CONFLICT" });
   });
 });
 

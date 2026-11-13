@@ -1,0 +1,2 @@
+ALTER TABLE "establishments" ADD COLUMN "weekly_summary_email" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "establishments" ADD COLUMN "weekly_summary_sent_at" timestamp with time zone;

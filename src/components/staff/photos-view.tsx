@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { matchPhotos } from "@/lib/photo-matching";
+import { enhancePixels } from "@/lib/photo-enhance";
 
 type Product = { ref: string; name: string; imageUrl: string | null; category: string };
 type Section = { section: string; categories: { name: string; products: Omit<Product, "category">[] }[] };
@@ -9,8 +10,9 @@ type Section = { section: string; categories: { name: string; products: Omit<Pro
 const MAX_SIDE = 1200;
 
 /**
- * Reduz a foto no telemóvel antes de enviar (≤ 1200 px, WebP ou JPEG ~150 KB). Redesenhar num
- * canvas também apaga os metadados da fotografia (incluindo a localização GPS).
+ * Reduz a foto no telemóvel antes de enviar (≤ 1200 px, WebP ou JPEG ~150 KB) e melhora a luz e a
+ * cor (enhancePixels). Redesenhar num canvas também apaga os metadados da fotografia (incluindo a
+ * localização GPS).
  */
 async function prepare(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
@@ -18,8 +20,16 @@ async function prepare(file: File): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
+  try {
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    enhancePixels(pixels.data);
+    ctx.putImageData(pixels, 0, 0);
+  } catch {
+    // Sem acesso aos píxeis (navegador antigo): envia a foto como está.
+  }
   const encode = (type: string, quality: number) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
   const webp = await encode("image/webp", 0.82);
   if (webp && webp.type === "image/webp") return webp;
@@ -175,7 +185,7 @@ export function PhotosView() {
       <div>
         <h2 className="text-xl">Fotos dos pratos</h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-          Pratos com foto vendem-se melhor. As fotos são reduzidas automaticamente e aparecem logo na ementa.{" "}
+          Pratos com foto vendem-se melhor. As fotos são melhoradas automaticamente (luz e cor) e aparecem logo na ementa.{" "}
           {sections && `${withPhoto} de ${all.length} artigos com foto.`}
         </p>
       </div>

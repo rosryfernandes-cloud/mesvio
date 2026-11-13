@@ -6,7 +6,7 @@ import type { MenuDraft } from "@/server/menu/menu-import";
 
 // Cópias do servidor (menu-import.ts): o componente corre no navegador.
 const MAX_PHOTOS = 8;
-const MAX_TOTAL_BYTES = 3.8 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 3.8 * 1024 * 1024;
 const MAX_SIDE = 1568;
 
 type ItemDraft = { name: string; description: string; price: string; vatRateBps: number; unsure: boolean };
@@ -17,7 +17,7 @@ const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disa
 const secondary = "min-h-10 rounded-xl border border-line bg-card px-3 text-sm";
 
 /** Reduz a foto no telemóvel; redesenhar num canvas também apaga os metadados, incluindo o GPS. */
-async function preparePhoto(file: File, maxBytes: number): Promise<Blob> {
+export async function preparePhoto(file: File, maxBytes: number): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
@@ -111,7 +111,7 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
     setDraft(null);
     setPhotos([]);
     const repeated = data.skipped > 0 ? ` ${data.skipped} já existiam e ficaram como estavam.` : "";
-    await onImported(`Ementa importada: ${data.products} pratos novos.${repeated} Faltam os alergénios: preencha-os em cada prato.`);
+    await onImported(`Ementa importada: ${data.products} pratos novos.${repeated} Use agora as Descrições e os Alergénios com IA, mais abaixo.`);
   }
 
   const alert = error && (

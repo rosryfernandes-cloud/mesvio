@@ -6,6 +6,7 @@ import { activePaymentProvider } from "@/server/payments/provider";
 import { reconcilePendingPayments } from "@/server/payments/table-payments";
 import { hitRateLimit, pruneRateLimits } from "@/server/security/rate-limit";
 import { issuePendingInvoices } from "@/server/invoicing/invoices";
+import { sendWeeklySummaries } from "@/server/staff/weekly-email";
 
 /**
  * Tarefas de fundo: reenvios ao POS, pagamentos por confirmar ou abandonados (cancelados ao fim de
@@ -26,6 +27,8 @@ export async function runMaintenance(db: Db) {
   await pruneDemoRequests(db);
   // Pedidos de demonstração cujo email não saiu à primeira.
   await retryDemoRequestEmails(db).catch(() => 0);
+  // Resumo da semana por email (só às segundas de manhã; nos outros minutos não faz nada).
+  await sendWeeklySummaries(db).catch((err) => console.error("[resumo semanal] falhou", err instanceof Error ? err.message : "erro"));
   return { processed, payments, invoices };
 }
 

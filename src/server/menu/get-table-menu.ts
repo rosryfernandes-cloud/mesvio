@@ -10,6 +10,7 @@ import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 import { translateAllergen, translateTag } from "@/lib/i18n/food-terms";
 import { loadMenuTranslations, type MenuTranslator } from "./menu-translations";
 import { productImageUrls, menuPhotosEnabled } from "./menu-images";
+import { loadPairings } from "./pairings";
 
 /** Forma da ementa enviada ao cliente: só o necessário, sem dados internos. */
 export interface MenuProductView {
@@ -32,6 +33,8 @@ export interface TableMenuView {
   ordering: { enabled: boolean; reason?: string };
   /** Plano "menu": só a ementa (sem pedir, sem chamar o empregado). */
   plan: Plan;
+  /** Para cada artigo, os que os clientes mais pedem com ele (pedidos reais do restaurante). */
+  pairings: Record<string, string[]>;
 }
 
 export async function getTableMenu(
@@ -47,10 +50,13 @@ export async function getTableMenu(
   const catalog = withLocalAvailability(await cachedPosCatalog(found.pos, found.establishmentId), found.locallyUnavailable);
   const locale = deps.locale ?? DEFAULT_LOCALE;
   // Só fora do português há traduções a ler (uma consulta, no tenant do restaurante).
-  const [tr, photos, showPhotos]: [MenuTranslator, Map<string, string>, boolean] = await Promise.all([
+  const canOrder = planAllowsOrdering(found.plan) && found.pos.capabilities.createOrder;
+  const [tr, photos, showPhotos, pairings]: [MenuTranslator, Map<string, string>, boolean, Record<string, string[]>] = await Promise.all([
     loadMenuTranslations(db, found.organizationId, found.establishmentId, locale),
     productImageUrls(db, found.organizationId, found.establishmentId),
     menuPhotosEnabled(db, found.organizationId, found.establishmentId),
+    // Só serve a quem pode pedir pela app; uma falha aqui nunca impede a ementa de abrir.
+    canOrder ? loadPairings(db, found.organizationId, found.establishmentId).catch(() => ({})) : Promise.resolve({}),
   ]);
   const categories = [...catalog.categories]
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -93,6 +99,7 @@ export async function getTableMenu(
         ? { enabled: true }
         : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },
     plan: found.plan,
+    pairings,
   };
 }
 

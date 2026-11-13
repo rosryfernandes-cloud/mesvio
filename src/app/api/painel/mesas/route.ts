@@ -4,6 +4,7 @@ import { listTables } from "@/server/tables/table-sessions";
 import { getPaymentsSetting } from "@/server/staff/staff-service";
 import { assignableStaff, assignmentsEnabled } from "@/server/tables/assignments";
 import { withTenant } from "@/server/db/tenant";
+import { staffAddTables } from "@/server/platform/platform-service";
 
 export const dynamic = "force-dynamic";
 
@@ -20,4 +21,12 @@ export async function GET(request: Request) {
     // Mesas por empregado (em teste): quem sou eu e os nomes da equipa, para "as minhas mesas".
     assignments: assignments ? { me: ctx.userId, staff: await assignableStaff(db, ctx) } : null,
   });
+}
+
+/** Acrescentar lugares (dono/gerente): mesas ou espreguiçadeiras, numeradas a seguir às que já existem. */
+export async function POST(request: Request) {
+  const ctx = await guardStaff(request, { mutating: true, permission: "settings.edit" });
+  if (ctx instanceof Response) return ctx;
+  const r = await staffAddTables(await getDb(), ctx, await request.json().catch(() => null));
+  return r.ok ? json({ created: r.created }) : json({ message: r.message }, r.code === "CONFLICT" ? 409 : 400);
 }

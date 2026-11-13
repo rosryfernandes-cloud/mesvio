@@ -6,6 +6,7 @@ import { formatEur } from "@/lib/money";
 import { guessStation, STATION_LABEL, STATIONS, type Station } from "@/lib/station";
 import type { OwnMenu } from "@/server/menu/own-menu";
 import { AllergenAssistant } from "./allergen-assistant";
+import { DescriptionAssistant } from "./description-assistant";
 import { MenuImport } from "./menu-import";
 
 type Category = OwnMenu["categories"][number];
@@ -154,6 +155,14 @@ export function MenuEditor() {
 
       <MenuImport
         onImported={async (text) => {
+          await load();
+          setMessage({ text, error: false });
+        }}
+      />
+
+      <DescriptionAssistant
+        menu={menu}
+        onSaved={async (text) => {
           await load();
           setMessage({ text, error: false });
         }}

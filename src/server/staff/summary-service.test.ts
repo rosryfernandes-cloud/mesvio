@@ -8,6 +8,7 @@ import { placeOrder, type PlaceOrderDeps } from "@/server/orders/place-order";
 import { resolveStaffContext, type StaffContext } from "./context";
 import { eq } from "drizzle-orm";
 import { orders } from "@/server/db/schema";
+import { setProductSoldOut } from "./staff-service";
 import { getDaySummary, getWeekSummary } from "./summary-service";
 
 const TOKEN = DEMO_TABLES[0].publicToken;
@@ -49,7 +50,7 @@ describe("resumo da semana", () => {
 
   it("sem pedidos: 7 dias a zero", async () => {
     const s = await getWeekSummary(db, owner);
-    expect(s).toMatchObject({ orders: 0, salesCents: 0, previous: { orders: 0, salesCents: 0 }, topProducts: [], notOrdered: [] });
+    expect(s).toMatchObject({ orders: 0, salesCents: 0, previous: { orders: 0, salesCents: 0 }, topProducts: [], notOrdered: [], soldOutOften: [] });
     expect(s.byDay).toHaveLength(7);
     expect(s.byDay.every((d) => d.orders === 0)).toBe(true);
   });
@@ -73,5 +74,13 @@ describe("resumo da semana", () => {
     expect(s.byDay[6]).toMatchObject({ orders: 1, salesCents: 500 });
     expect(s.byDay[3]).toMatchObject({ orders: 1, salesCents: 275 });
     expect(s.topProducts[0]).toEqual({ name: "Imperial 0,2 L", quantity: 2 });
+  });
+
+  it("avisa dos artigos que esgotaram 2 ou mais vezes na semana", async () => {
+    await order([{ productRef: "D361", quantity: 1 }]);
+    for (const soldOut of [true, false, true]) await setProductSoldOut(db, owner, "D361", soldOut);
+    await setProductSoldOut(db, owner, "D301", true);
+    const s = await getWeekSummary(db, owner);
+    expect(s.soldOutOften).toEqual([{ name: "Imperial 0,2 L", times: 2 }]);
   });
 });

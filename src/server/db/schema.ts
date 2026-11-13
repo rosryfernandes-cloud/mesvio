@@ -119,6 +119,10 @@ export const establishments = pgTable(
     reviewsEnabled: boolean("reviews_enabled").notNull().default(false),
     /** Link "escrever avaliação" do Google do restaurante (https); null = sem botão do Google. */
     googleReviewUrl: text("google_review_url"),
+    /** Resumo da semana por email aos donos, às segundas-feiras de manhã (desligado por defeito). */
+    weeklySummaryEmail: boolean("weekly_summary_email").notNull().default(false),
+    /** Último envio do resumo semanal (evita enviar duas vezes na mesma semana). */
+    weeklySummarySentAt: timestamp("weekly_summary_sent_at", { withTimezone: true }),
     /** Mesas por empregado (em teste): cada mesa tem um responsável e fechar com valor em falta pede como foi pago. */
     tableAssignmentsEnabled: boolean("table_assignments_enabled").notNull().default(false),
     /** Cor própria na ementa (#rrggbb, validada para contraste AA em src/lib/brand-color.ts); null = verde MESVIO. */

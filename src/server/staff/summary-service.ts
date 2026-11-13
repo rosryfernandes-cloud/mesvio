@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { establishments, orderEvents, orderItems, orders, products } from "@/server/db/schema";
+import { auditLogs, establishments, orderEvents, orderItems, orders, products } from "@/server/db/schema";
 import { withTenant } from "@/server/db/tenant";
 import { startOfLocalDay } from "@/server/orders/place-order";
 import type { StaffScope } from "./staff-service";
@@ -86,6 +86,8 @@ export interface WeekSummary {
   topProducts: { name: string; quantity: number }[];
   /** Pratos à venda na ementa própria que ninguém pediu esta semana (só com vendas na semana). */
   notOrdered: string[];
+  /** Artigos marcados como esgotados 2 ou mais vezes na semana: sinal para encomendar mais. */
+  soldOutOften: { name: string; times: number }[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -136,6 +138,31 @@ export async function getWeekSummary(root: Db, s: StaffScope, now = new Date()):
           .limit(5)
       : [];
 
+    const soldOutRows = await db
+      .select({ ref: auditLogs.entityId, times: sql<number>`count(*)::int` })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.organizationId, s.organizationId), eq(auditLogs.action, "product.sold_out"), gte(auditLogs.createdAt, since)))
+      .groupBy(auditLogs.entityId)
+      .having(sql`count(*) >= 2`)
+      .orderBy(sql`count(*) desc`)
+      .limit(5);
+    const soldOutRefs = soldOutRows.flatMap((r) => (r.ref ? [r.ref] : []));
+    const [namedProducts, namedItems] = soldOutRefs.length
+      ? await Promise.all([
+          db
+            .select({ ref: products.posProductRef, name: products.name })
+            .from(products)
+            .where(and(eq(products.establishmentId, s.establishmentId), inArray(products.posProductRef, soldOutRefs))),
+          db
+            .selectDistinct({ ref: orderItems.posProductRef, name: orderItems.name })
+            .from(orderItems)
+            .innerJoin(orders, eq(orders.id, orderItems.orderId))
+            .where(and(eq(orders.establishmentId, s.establishmentId), inArray(orderItems.posProductRef, soldOutRefs))),
+        ])
+      : [[], []];
+    const nameOf = new Map([...namedItems, ...namedProducts].map((n) => [n.ref, n.name]));
+    const soldOutOften = soldOutRows.flatMap((r) => (r.ref && nameOf.has(r.ref) ? [{ name: nameOf.get(r.ref)!, times: Number(r.times) }] : []));
+
     const dateOf = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
     const hourOf = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hourCycle: "h23" });
     const days = new Map<string, { orders: number; salesCents: number }>();
@@ -160,6 +187,7 @@ export async function getWeekSummary(root: Db, s: StaffScope, now = new Date()):
       byHour: [...perHour].sort(([a], [b]) => a - b).map(([hour, n]) => ({ hour, orders: n })),
       topProducts: top.map((t) => ({ name: t.name, quantity: Number(t.quantity) })),
       notOrdered: notOrdered.map((p) => p.name),
+      soldOutOften,
     };
   });
 }

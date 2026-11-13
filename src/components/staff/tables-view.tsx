@@ -286,6 +286,7 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span aria-hidden="true">→</span>
         </a>
       )}
+      {canEditSettings && <AddPlacesCard paymentsInPlan={paymentsInPlan} onAdded={() => void load()} />}
       <p className="text-sm text-ink-soft">
         {occupied.length === 0 ? "Todas as mesas estão livres." : `${occupied.length} de ${tables.length} mesas com conta aberta.`} Quando os clientes
         pagarem, feche a mesa para a limpar para os próximos.
@@ -572,5 +573,94 @@ function CallBadges({ calls }: { calls: TableOverview["calls"] }) {
       {calls.includes("waiter") && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-ink">🙋 Chama</span>}
       {calls.includes("paid") && <span className="rounded-full bg-ok px-2 py-0.5 text-xs font-semibold text-white">💳 Pagou no telemóvel</span>}
     </span>
+  );
+}
+
+/** Acrescentar mesas ou espreguiçadeiras pelo painel (dono/gerente), numeradas a seguir às que existem. */
+function AddPlacesCard({ paymentsInPlan, onAdded }: { paymentsInPlan: boolean; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"pay_later" | "pay_first">("pay_later");
+  const [count, setCount] = useState("5");
+  const [prefix, setPrefix] = useState("Mesa");
+  const [zone, setZone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
+  const field = "mt-1 block min-h-11 w-full rounded-xl border border-line bg-paper px-3";
+
+  async function submit() {
+    setBusy(true);
+    setNote(null);
+    const res = await fetch("/api/painel/mesas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count: Number(count), prefix: prefix.trim(), zone: zone.trim() || undefined, orderingMode: mode }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res?.ok) return setNote({ text: d.message ?? "Sem ligação. Tente de novo.", error: true });
+    setNote({ text: `${d.created} ${d.created === 1 ? "lugar criado" : "lugares criados"}. Imprima os QR novos em "QR Codes dos lugares".`, error: false });
+    onAdded();
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 text-left hover:border-brand">
+        <span>
+          <span className="block font-semibold">Acrescentar mesas ou espreguiçadeiras</span>
+          <span className="block text-sm text-ink-soft">Ficam numeradas a seguir às que já existem, cada uma com o seu QR.</span>
+        </span>
+        <span aria-hidden="true">+</span>
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="grid gap-3 rounded-2xl border border-line bg-card p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      <p className="font-semibold">Acrescentar lugares</p>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <label className="text-sm font-semibold">
+          Quantos
+          <input type="number" min={1} max={100} value={count} onChange={(e) => setCount(e.target.value)} required className={field} />
+        </label>
+        <label className="text-sm font-semibold">
+          Tipo
+          <select
+            value={mode}
+            onChange={(e) => {
+              const next = e.target.value as "pay_later" | "pay_first";
+              setMode(next);
+              setPrefix(next === "pay_first" ? "Cama" : "Mesa");
+            }}
+            className={field}
+          >
+            <option value="pay_later">Mesas (pagam no fim)</option>
+            <option value="pay_first">{paymentsInPlan ? "Espreguiçadeiras (pagam ao pedir)" : "Espreguiçadeiras"}</option>
+          </select>
+        </label>
+        <label className="text-sm font-semibold">
+          Nome
+          <input value={prefix} onChange={(e) => setPrefix(e.target.value)} maxLength={30} required className={field} />
+        </label>
+        <label className="text-sm font-semibold">
+          Zona <span className="font-normal text-ink-soft">(opcional)</span>
+          <input value={zone} onChange={(e) => setZone(e.target.value)} maxLength={40} placeholder={mode === "pay_first" ? "Praia" : "Esplanada"} className={field} />
+        </label>
+      </div>
+      {note && <p className={`text-sm ${note.error ? "text-danger" : "text-ok"}`}>{note.text}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={busy} className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+          {busy ? "A criar…" : "Criar lugares"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-xl px-4 text-sm text-ink-soft underline">
+          Fechar
+        </button>
+      </div>
+    </form>
   );
 }

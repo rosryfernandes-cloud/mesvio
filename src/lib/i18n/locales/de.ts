@@ -54,6 +54,7 @@ export const de: Messages = {
     payLaterNote: "Sie bezahlen im Restaurant, am Ende der Mahlzeit.",
     offline: "Keine Verbindung. Prüfen Sie das Netz und versuchen Sie es erneut – die Bestellung wird nicht doppelt gesendet.",
     sendFailed: "Die Bestellung konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+    goesWellWith: "Wird oft dazu bestellt",
   },
   issue: {
     soldOut: (name) => `${name} ist ausverkauft.`,

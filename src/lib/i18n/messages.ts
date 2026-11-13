@@ -72,6 +72,7 @@ const pt = {
     payLaterNote: "O pagamento é feito no restaurante, no fim da refeição.",
     offline: "Sem ligação. Verifique a rede e tente de novo — o pedido não será duplicado.",
     sendFailed: "Não foi possível enviar o pedido. Tente de novo.",
+    goesWellWith: "Costuma acompanhar",
   },
   issue: {
     soldOut: (name: string) => `${name} está esgotado.`,
@@ -268,6 +269,7 @@ const en: Messages = {
     payLaterNote: "You pay at the restaurant at the end of your meal.",
     offline: "No connection. Check your network and try again — your order will not be duplicated.",
     sendFailed: "We couldn't send your order. Please try again.",
+    goesWellWith: "Often ordered with this",
   },
   issue: {
     soldOut: (name) => `${name} is sold out.`,

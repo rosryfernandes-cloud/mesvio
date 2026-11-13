@@ -20,6 +20,7 @@ import { generateTableToken } from "@/server/tables/table-token";
 import type { UserDirectory } from "@/server/auth/user-directory";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { PlatformAdmin } from "./admin-auth";
+import { withTenant } from "@/server/db/tenant";
 import { isValidNif } from "@/lib/nif";
 import { importCatalog } from "@/server/menu/own-menu";
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
@@ -68,6 +69,37 @@ export const createRestaurantSchema = z.object({
 export type CreateRestaurantInput = z.input<typeof createRestaurantSchema>;
 
 export const addTablesSchema = tablesInput;
+
+/** Pelo painel, o dono/gerente acrescenta até 100 lugares de cada vez e até 400 no total. */
+export const STAFF_MAX_TABLES_PER_REQUEST = 100;
+export const STAFF_MAX_TABLES = 400;
+
+/** O dono/gerente acrescenta lugares pelo painel, sem depender da MESVIO. */
+export async function staffAddTables(
+  db: Db,
+  s: { organizationId: string; establishmentId: string; userId: string },
+  raw: unknown,
+): Promise<PlatformResult<{ created: number }>> {
+  const parsed = tablesInput.extend({ count: z.int().min(1).max(STAFF_MAX_TABLES_PER_REQUEST) }).safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: `Indique quantos lugares (1 a ${STAFF_MAX_TABLES_PER_REQUEST}) e um nome.` };
+  return withTenant(db, { organizationId: s.organizationId, userId: s.userId }, async (tx) => {
+    const current = await tx.$count(diningTables, eq(diningTables.establishmentId, s.establishmentId));
+    if (current + parsed.data.count > STAFF_MAX_TABLES) {
+      return { ok: false, code: "CONFLICT", message: `O máximo são ${STAFF_MAX_TABLES} lugares. Para mais, fale com a MESVIO.` } as const;
+    }
+    const created = await insertTables(tx, s.organizationId, s.establishmentId, parsed.data);
+    await tx.insert(auditLogs).values({
+      organizationId: s.organizationId,
+      actorType: "user",
+      actorId: s.userId,
+      action: "tables.added",
+      entityType: "establishment",
+      entityId: s.establishmentId,
+      after: { ...parsed.data, created },
+    });
+    return { ok: true, created } as const;
+  });
+}
 export const inviteOwnerSchema = createRestaurantSchema.shape.owner;
 
 export type PlatformResult<T = object> = ({ ok: true } & T) | { ok: false; code: "INVALID" | "CONFLICT" | "NOT_FOUND"; message: string };
@@ -76,7 +108,7 @@ const audit = (tx: Db, admin: PlatformAdmin, organizationId: string, action: str
   tx.insert(auditLogs).values({ organizationId, actorType: "admin", actorId: admin.userId, action, entityType: "establishment", entityId, after });
 
 /** Cria mesas numeradas a seguir às que já existem com o mesmo prefixo (ex.: "Mesa 11", "Mesa 12"…). */
-async function insertTables(tx: Db, organizationId: string, establishmentId: string, input: z.infer<typeof tablesInput>): Promise<number> {
+export async function insertTables(tx: Db, organizationId: string, establishmentId: string, input: z.infer<typeof tablesInput>): Promise<number> {
   if (input.count === 0) return 0;
   const existing = await tx
     .select({ label: diningTables.label, posTableRef: diningTables.posTableRef })

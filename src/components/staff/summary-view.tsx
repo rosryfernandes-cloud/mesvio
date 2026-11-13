@@ -29,7 +29,7 @@ const hourRange = (h: number) => `${String(h).padStart(2, "0")}h–${String((h +
 export function SummaryView() {
   const [period, setPeriod] = useState<Period>("dia");
   const [day, setDay] = useState<DaySummary | null>(null);
-  const [week, setWeek] = useState<WeekSummary | null>(null);
+  const [week, setWeek] = useState<(WeekSummary & { weeklyEmail?: boolean }) | null>(null);
 
   const load = useCallback(async (p: Period) => {
     const res = await fetch(p === "semana" ? "/api/painel/resumo?periodo=semana" : "/api/painel/resumo", { cache: "no-store" }).catch(() => null);
@@ -64,7 +64,7 @@ export function SummaryView() {
           </button>
         ))}
       </div>
-      {period === "dia" ? <DayView data={day} /> : <WeekView data={week} />}
+      {period === "dia" ? <DayView data={day} /> : <WeekView data={week} onReload={() => load("semana")} />}
     </div>
   );
 }
@@ -145,7 +145,30 @@ function DayView({ data }: { data: DaySummary | null }) {
   );
 }
 
-function WeekView({ data }: { data: WeekSummary | null }) {
+function WeeklyEmailToggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  async function toggle(next: boolean) {
+    setBusy(true);
+    setError(false);
+    const res = await fetch("/api/painel/resumo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeklyEmail: next }) }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) return setError(true);
+    onChange();
+  }
+  return (
+    <label className="flex items-start gap-3 rounded-2xl border border-line bg-card p-4">
+      <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)} className="mt-1 size-5 accent-[var(--color-brand)]" />
+      <span>
+        <span className="font-semibold">Receber este resumo por email às segundas-feiras</span>
+        <span className="block text-sm text-ink-soft">Vai para o email dos donos do restaurante, às 8h, com os números da semana.</span>
+        {error && <span className="block text-sm text-danger">Não foi possível guardar. Tente de novo.</span>}
+      </span>
+    </label>
+  );
+}
+
+function WeekView({ data, onReload }: { data: (WeekSummary & { weeklyEmail?: boolean }) | null; onReload: () => void }) {
   if (!data) return <p className="text-ink-soft">A carregar…</p>;
   const best = data.orders ? data.byDay.reduce((a, b) => (b.salesCents > a.salesCents ? b : a)) : null;
   const busiest = data.byHour.length ? data.byHour.reduce((a, b) => (b.orders > a.orders ? b : a)) : null;
@@ -184,6 +207,20 @@ function WeekView({ data }: { data: WeekSummary | null }) {
             />
             <Bars title="Pedidos por hora" rows={data.byHour.map((h) => ({ key: String(h.hour), label: `${String(h.hour).padStart(2, "0")}h`, value: h.orders }))} />
             <Top title="Mais pedidos da semana" items={data.topProducts} />
+            {data.soldOutOften.length > 0 && (
+              <section className="rounded-2xl border border-danger bg-danger-soft p-5" aria-label="Esgotou várias vezes">
+                <h2 className="font-semibold text-danger">Esgotou várias vezes</h2>
+                <p className="mt-1 text-sm">Está a vender mais do que o stock: vale a pena encomendar mais.</p>
+                <ul className="mt-3 grid gap-1">
+                  {data.soldOutOften.map((p) => (
+                    <li key={p.name} className="flex justify-between gap-3">
+                      <span>{p.name}</span>
+                      <span className="font-semibold tabular-nums">{p.times}×</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {data.notOrdered.length > 0 && (
               <section className="rounded-2xl border border-line bg-card p-5" aria-label="Ninguém pediu esta semana">
                 <h2 className="font-semibold">Ninguém pediu esta semana</h2>
@@ -198,6 +235,7 @@ function WeekView({ data }: { data: WeekSummary | null }) {
           </div>
         </>
       )}
+      <WeeklyEmailToggle on={!!data.weeklyEmail} onChange={onReload} />
       <p className="text-sm text-ink-soft">
         Últimos 7 dias, hoje incluído, comparados com os 7 dias anteriores. Contam os pedidos que chegaram à cozinha. Valores com IVA.
       </p>

@@ -54,6 +54,7 @@ export const fr: Messages = {
     payLaterNote: "Le paiement se fait au restaurant, à la fin du repas.",
     offline: "Pas de connexion. Vérifiez le réseau et réessayez : la commande ne sera pas envoyée deux fois.",
     sendFailed: "Impossible d'envoyer la commande. Veuillez réessayer.",
+    goesWellWith: "Souvent commandé avec",
   },
   issue: {
     soldOut: (name) => `${name} est épuisé.`,

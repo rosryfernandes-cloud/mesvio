@@ -8,8 +8,8 @@ import type { PosProviderId } from "@/server/pos/types";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { switchToOwnMenu } from "@/server/platform/platform-service";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
-import { type AllergenBatch, suggestAllergens, suggestTranslations, type TranslateBatch } from "./menu-ai";
-import { getOwnMenu, saveAllergens } from "./own-menu";
+import { type AllergenBatch, type DescribeBatch, suggestAllergens, suggestDescriptions, suggestTranslations, type TranslateBatch } from "./menu-ai";
+import { getOwnMenu, saveAllergens, saveDescriptions } from "./own-menu";
 
 describe("traduções sugeridas", () => {
   const sources = [
@@ -76,6 +76,20 @@ describe("alergénios sugeridos", () => {
   });
 });
 
+describe("descrições sugeridas", () => {
+  it("devolve as descrições preenchidas e conta as que ficaram sem (bebidas, marcas)", async () => {
+    const describe: DescribeBatch = async (items) => items.map((i) => ({ id: i.id, description: i.name === "Coca-Cola" ? null : `  ${i.name} grelhado.  ` }));
+    const r = await suggestDescriptions(
+      [
+        { productId: "a", name: "Polvo", category: "Peixe" },
+        { productId: "b", name: "Coca-Cola", category: "Bebidas" },
+      ],
+      describe,
+    );
+    expect(r).toEqual({ ok: true, skipped: 1, suggestions: [{ productId: "a", description: "Polvo grelhado." }] });
+  });
+});
+
 describe("gravar alergénios revistos", () => {
   let db: Db;
   let owner: StaffContext;
@@ -104,5 +118,13 @@ describe("gravar alergénios revistos", () => {
     expect(after.find((p) => p.id === a.id)!.allergens).toEqual(["glúten", "sulfitos"]);
     expect(after.find((p) => p.id === b.id)!.allergens).toEqual([]);
     expect(await saveAllergens(db, owner, [{ id: a.id, allergens: ["inventado"] }])).toMatchObject({ ok: false, code: "INVALID" });
+  });
+
+  it("grava descrições revistas", async () => {
+    expect(await saveDescriptions(db, owner, [{ id: randomUUID(), description: "x" }])).toMatchObject({ ok: false, code: "NOT_OWN_MENU" });
+    await switchToOwnMenu(db, (await findPlatformAdmin(db, DEMO_PLATFORM_ADMIN.userId))!, owner.establishmentId, resolvePos);
+    const [a] = (await getOwnMenu(db, owner))!.categories.flatMap((c) => c.products);
+    expect(await saveDescriptions(db, owner, [{ id: a.id, description: " Pão do dia com manteiga. " }])).toEqual({ ok: true, value: { saved: 1 } });
+    expect((await getOwnMenu(db, owner))!.categories.flatMap((c) => c.products).find((p) => p.id === a.id)!.description).toBe("Pão do dia com manteiga.");
   });
 });

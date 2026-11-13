@@ -83,3 +83,14 @@ describe("avaliações no fim da conta (em teste)", () => {
     expect(await getReviewsOverview(db, owner)).toMatchObject({ enabled: false, googleReviewUrl: null });
   });
 });
+
+describe("resposta a avaliações do Google", () => {
+  it("devolve o rascunho do escritor e falha sem rebentar quando a API falha", async () => {
+    const { suggestReviewReply } = await import("./reply-ai");
+    expect(await suggestReviewReply({ review: "Ótimo polvo!", stars: 5, restaurant: "Casa" }, async () => "  Obrigado!  ")).toEqual({ ok: true, reply: "Obrigado!" });
+    const broken = async () => {
+      throw new Error("rede");
+    };
+    expect(await suggestReviewReply({ review: "Mau", stars: 1, restaurant: "Casa" }, broken)).toMatchObject({ ok: false, code: "UNAVAILABLE" });
+  });
+});

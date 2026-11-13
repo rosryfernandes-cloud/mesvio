@@ -105,6 +105,8 @@ export function ReviewsView() {
         )}
       </section>
 
+      <GoogleReplyHelper />
+
       {data.recent.length > 0 && (
         <ul className="grid gap-2">
           {data.recent.map((r) => (
@@ -121,5 +123,73 @@ export function ReviewsView() {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Rascunho com IA para responder a uma avaliação do Google: o dono cola, copia e responde lá. */
+function GoogleReplyHelper() {
+  const [review, setReview] = useState("");
+  const [rating, setRating] = useState<number | null>(null);
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
+
+  async function write() {
+    setBusy(true);
+    setNote(null);
+    const res = await fetch("/api/painel/avaliacoes/resposta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ review: review.trim(), stars: rating }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res?.ok) return setNote({ text: d.message ?? "Não foi possível escrever a resposta.", error: true });
+    setReply(d.reply);
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(reply);
+      setNote({ text: "Copiado. Cole a resposta no Google.", error: false });
+    } catch {
+      setNote({ text: "Não foi possível copiar: selecione o texto e copie à mão.", error: true });
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-line bg-card p-4">
+      <p className="font-semibold">Responder a uma avaliação do Google</p>
+      <p className="mt-1 text-sm text-ink-soft">
+        Cole aqui a avaliação e a MESVIO escreve um rascunho de resposta, na língua do cliente. Reveja, copie e responda no Google.
+      </p>
+      <textarea value={review} onChange={(e) => setReview(e.target.value)} maxLength={3000} rows={3} placeholder="Cole aqui o texto da avaliação" aria-label="Texto da avaliação" className={field} />
+      <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label="Estrelas da avaliação">
+        <span className="mr-1 text-sm text-ink-soft">Estrelas:</span>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={rating === n}
+            onClick={() => setRating(rating === n ? null : n)}
+            className={`min-h-10 min-w-10 rounded-xl border px-2 text-sm ${rating === n ? "border-brand bg-brand text-white" : "border-line bg-paper"}`}
+          >
+            {n}★
+          </button>
+        ))}
+        <button type="button" onClick={write} disabled={busy || review.trim().length < 3} className="ml-auto min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+          {busy ? "A escrever…" : "Escrever resposta"}
+        </button>
+      </div>
+      {reply && (
+        <div className="mt-3">
+          <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4} aria-label="Resposta sugerida" className={field} />
+          <button type="button" onClick={copy} className="mt-2 min-h-10 rounded-xl border border-brand px-4 text-sm font-semibold text-brand">
+            Copiar resposta
+          </button>
+        </div>
+      )}
+      {note && <p className={`mt-2 text-sm ${note.error ? "text-danger" : "text-ok"}`}>{note.text}</p>}
+    </section>
   );
 }

@@ -13,6 +13,7 @@ import { SummaryView } from "./summary-view";
 import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
 import { TranslationsView } from "./translations-view";
+import { HelpAssistant } from "./help-assistant";
 import { PhotosView } from "./photos-view";
 import { MenuEditor } from "./menu-editor";
 import { usePolling } from "../use-polling";
@@ -281,6 +282,10 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       )}
       <InstallPrompt />
       <NotificationsCard />
+
+      <div className="mb-2 flex justify-end">
+        <HelpAssistant />
+      </div>
 
       <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
         {(

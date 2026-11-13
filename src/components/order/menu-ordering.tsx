@@ -35,6 +35,14 @@ export function MenuOrdering({ menu, tableToken }: Props) {
   const qtyByProduct = new Map<string, number>();
   for (const l of cart.lines) qtyByProduct.set(l.productRef, (qtyByProduct.get(l.productRef) ?? 0) + l.quantity);
 
+  // "Costuma acompanhar": até 2 artigos que os clientes pedem com o que está no carrinho. Só os que se
+  // juntam com um toque (disponíveis, sem escolhas obrigatórias) e que ainda não estão no pedido.
+  const suggestions = [...new Set(cart.lines.flatMap((l) => menu.pairings[l.productRef] ?? []))]
+    .filter((ref) => !qtyByProduct.has(ref))
+    .map((ref) => products.get(ref))
+    .filter((p): p is MenuProductView => !!p && p.available && p.modifierGroups.every((g) => g.minSelect === 0))
+    .slice(0, 2);
+
   // Secções da ementa (ex.: Comida / Bebidas / Bar & Cocktails) mostradas uma de cada vez, em separadores.
   // Chave estável (nome original da secção), para o separador escolhido sobreviver à mudança de língua.
   const sections = useMemo(() => [...new Set(menu.categories.flatMap((c) => (c.sectionKey ? [c.sectionKey] : [])))], [menu]);
@@ -179,6 +187,8 @@ export function MenuOrdering({ menu, tableToken }: Props) {
           lines={pricedLines}
           totalCents={totalCents}
           onQuantity={cart.setQuantity}
+          suggestions={suggestions}
+          onAddSuggestion={(ref) => cart.add(ref, 1, [])}
           onClose={() => setCartOpen(false)}
           onSubmit={async (notes) => {
             const res = await fetch("/api/orders", {
@@ -383,9 +393,13 @@ function CartSheet({
   lines,
   totalCents,
   onQuantity,
+  suggestions,
+  onAddSuggestion,
   onClose,
   onSubmit,
 }: {
+  suggestions: MenuProductView[];
+  onAddSuggestion: (ref: string) => void;
   payFirst: boolean;
   tableLabel: string;
   lines: {
@@ -461,7 +475,31 @@ function CartSheet({
           ))}
         </ul>
 
-        <label className="mt-2 block text-sm font-semibold" htmlFor="obs-pedido">
+        {suggestions.length > 0 && (
+          <section aria-label={t.cart.goesWellWith} className="mt-2 rounded-2xl bg-brand-soft p-4">
+            <h3 className="text-sm font-semibold text-brand">{t.cart.goesWellWith}</h3>
+            <ul className="mt-2 grid gap-2">
+              {suggestions.map((p) => (
+                <li key={p.ref} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{p.name}</span>
+                    <span className="text-sm text-ink-soft tabular-nums">{formatEur(p.priceCents)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onAddSuggestion(p.ref)}
+                    aria-label={t.product.add(p.name)}
+                    className="min-h-10 shrink-0 rounded-xl border border-brand bg-card px-4 text-sm font-semibold text-brand"
+                  >
+                    + {t.product.addButton}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <label className="mt-4 block text-sm font-semibold" htmlFor="obs-pedido">
           {t.cart.noteForRestaurant} <span className="font-normal text-ink-soft">{t.product.optional}</span>
         </label>
         <textarea
