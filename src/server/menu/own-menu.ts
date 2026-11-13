@@ -328,7 +328,11 @@ const importedMenuSchema = z.object({
         name: text(60),
         section: optionalText(40),
         products: z
-          .array(productInputSchema.pick({ name: true, description: true, priceCents: true, vatRateBps: true }))
+          .array(
+            productInputSchema
+              .pick({ name: true, description: true, priceCents: true, vatRateBps: true })
+              .extend({ imageUrl: z.url({ protocol: /^https?$/ }).max(2000).nullish() }),
+          )
           .min(1)
           .max(200),
       }),
@@ -342,7 +346,11 @@ const importedMenuSchema = z.object({
  * já existe. Categorias com o mesmo nome juntam-se e pratos repetidos ignoram-se, por isso
  * confirmar duas vezes não duplica a ementa.
  */
-export async function importMenuDraft(db: Db, s: Scope, raw: unknown): Promise<OwnMenuResult<{ categories: number; products: number; skipped: number }>> {
+export async function importMenuDraft(
+  db: Db,
+  s: Scope,
+  raw: unknown,
+): Promise<OwnMenuResult<{ categories: number; products: number; skipped: number; photos: { ref: string; imageUrl: string }[] }>> {
   const parsed = importedMenuSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, code: "INVALID", message: "Confirme que todos os pratos têm nome e preço." };
   const key = (name: string) => name.trim().toLocaleLowerCase("pt-PT");
@@ -353,6 +361,7 @@ export async function importMenuDraft(db: Db, s: Scope, raw: unknown): Promise<O
     let createdCategories = 0;
     let createdProducts = 0;
     let skipped = 0;
+    const photos: { ref: string; imageUrl: string }[] = [];
     for (const c of parsed.data.categories) {
       let categoryId = catIds.get(key(c.name));
       if (!categoryId) {
@@ -379,11 +388,13 @@ export async function importMenuDraft(db: Db, s: Scope, raw: unknown): Promise<O
           skipped++;
           continue;
         }
+        const ref = newRef("P");
+        if (p.imageUrl) photos.push({ ref, imageUrl: p.imageUrl });
         await tx.insert(products).values({
           organizationId: s.organizationId,
           establishmentId: s.establishmentId,
           categoryId,
-          posProductRef: newRef("P"),
+          posProductRef: ref,
           name: p.name,
           description: p.description,
           priceCents: p.priceCents,
@@ -398,8 +409,8 @@ export async function importMenuDraft(db: Db, s: Scope, raw: unknown): Promise<O
       }
     }
     const summary = { categories: createdCategories, products: createdProducts, skipped };
-    await audit(tx, s, "menu.imported_from_photos", s.establishmentId, summary);
-    return { ok: true, value: summary };
+    await audit(tx, s, "menu.imported_from_photos", s.establishmentId, { ...summary, photos: photos.length });
+    return { ok: true, value: { ...summary, photos } };
   });
 }
 

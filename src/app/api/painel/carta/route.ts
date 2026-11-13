@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
+import { importProductPhotos } from "@/server/menu/import-photos";
 import { deleteCategory, deleteProduct, getOwnMenu, importMenuDraft, move, saveAllergens, saveCategory, saveDescriptions, saveProduct } from "@/server/menu/own-menu";
 
 export const dynamic = "force-dynamic";
+/** Importar uma ementa com fotos do site pode levar algum tempo a trazer as fotos. */
+export const maxDuration = 120;
 
 /** Ementa própria (restaurantes sem POS), para o editor do painel. */
 export async function GET(request: Request) {
@@ -50,5 +53,10 @@ export async function POST(request: Request) {
                   ? await saveDescriptions(db, ctx, a.products)
                   : await move(db, ctx, a.kind, a.id, a.direction);
   if (!result.ok) return json({ code: result.code, message: result.message }, STATUS[result.code]);
+  // Fotos dos pratos vindas do site do restaurante (leitura por link): trazidas depois de gravar os pratos.
+  if (a.action === "import_menu" && result.value && "photos" in result.value) {
+    const { photos, ...rest } = result.value;
+    return json({ ok: true, ...rest, photos: photos.length ? await importProductPhotos(db, ctx, photos) : 0 });
+  }
   return json({ ok: true, ...(result.value ?? {}) });
 }

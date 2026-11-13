@@ -34,7 +34,12 @@ export function QuickDemo() {
     setTranslations({});
     try {
       const form = new FormData();
-      for (const p of photos) form.append("photos", await preparePhoto(p, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+      for (const p of photos) {
+        if (p.type === "application/pdf") {
+          if (p.size > MAX_TOTAL_BYTES) return setError("Este PDF tem mais de 4 MB.");
+          form.append("photos", p, "ementa.pdf");
+        } else form.append("photos", await preparePhoto(p, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+      }
       const res = await fetch("/api/central/demonstracao", { method: "POST", body: form }).catch(() => null);
       const data = res ? await res.json().catch(() => ({})) : {};
       if (!res?.ok) return setError(data.message ?? "Sem ligação. Tente de novo.");
@@ -77,11 +82,10 @@ export function QuickDemo() {
         <h2 className="text-lg">1. Fotos da ementa</h2>
         <p className="mt-1 text-sm text-ink-soft">Uma foto por página, de frente e com boa luz. Até {MAX_PHOTOS} fotos.</p>
         <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-brand px-4 font-semibold text-brand">
-          {photos.length ? "Juntar mais fotos" : "Tirar ou escolher fotos"}
+          {photos.length ? "Juntar mais" : "Tirar fotos ou escolher PDF"}
           <input
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/*,application/pdf"
             multiple
             className="sr-only"
             onChange={(e) => {

@@ -28,7 +28,7 @@ Separadores (alguns só para dono e gerente):
 - Imprimir os QR: botão "Abrir QR Codes" nos Primeiros passos, ou a página /painel/qr. Um QR por mesa ou espreguiçadeira.
 - Esgotados: tirar um prato só por hoje (fica esgotado até o voltar a ligar).
 - Equipa: convidar pessoas por email, cada uma com o seu papel (dono, gerente, empregado). Cada pessoa entra com o seu email.
-- Ementa (dono/gerente, restaurantes sem POS): categorias, pratos, preços, IVA, alergénios, opções e posto do talão (cozinha ou bar). "Importar a ementa em papel": fotografar cada página e a MESVIO lê os pratos e preços para confirmar. "Descrições com IA" escreve uma frase para cada prato sem descrição. "Alergénios com IA" sugere os 14 alergénios e o dono confirma com a cozinha antes de guardar. Restaurantes ligados a um POS mudam pratos e preços no POS.
+- Ementa (dono/gerente, restaurantes sem POS): categorias, pratos, preços, IVA, alergénios, opções e posto do talão (cozinha ou bar). "Importar a ementa": fotografar cada página, enviar o PDF ou colar o link da ementa no site do restaurante (traz também as fotos dos pratos do site); a MESVIO lê os pratos e preços para confirmar. "Descrições com IA" escreve uma frase para cada prato sem descrição. "Alergénios com IA" sugere os 14 alergénios e o dono confirma com a cozinha antes de guardar. Restaurantes ligados a um POS mudam pratos e preços no POS.
 - Fotos: fotos dos pratos, uma a uma, em massa ou em sessão com a câmara. As fotos são melhoradas automaticamente (luz e cor).
 - Aparência: logótipo e cores da ementa.
 - Línguas: traduzir a ementa para inglês, espanhol, francês e alemão. Escolher a língua e carregar em "Traduzir o que falta"; rever e Guardar. O cliente vê a ementa na língua do telemóvel e pode mudar no topo.

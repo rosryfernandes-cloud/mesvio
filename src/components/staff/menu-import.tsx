@@ -9,7 +9,7 @@ const MAX_PHOTOS = 8;
 export const MAX_TOTAL_BYTES = 3.8 * 1024 * 1024;
 const MAX_SIDE = 1568;
 
-type ItemDraft = { name: string; description: string; price: string; vatRateBps: number; unsure: boolean };
+type ItemDraft = { name: string; description: string; price: string; vatRateBps: number; unsure: boolean; imageUrl: string | null; usePhoto: boolean };
 type CategoryDraft = { name: string; section: string | null; items: ItemDraft[] };
 
 const input = "min-h-11 rounded-xl border border-line bg-card px-3";
@@ -42,6 +42,8 @@ const toEditable = (draft: MenuDraft): CategoryDraft[] =>
       price: p.priceCents === null ? "" : toEuros(p.priceCents),
       vatRateBps: p.vatRateBps,
       unsure: p.unsure,
+      imageUrl: p.imageUrl ?? null,
+      usePhoto: !!p.imageUrl,
     })),
   }));
 
@@ -51,6 +53,7 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
   const [draft, setDraft] = useState<CategoryDraft[] | null>(null);
   const [busy, setBusy] = useState<"reading" | "saving" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState("");
 
   function addPhotos(files: FileList | null) {
     setError(null);
@@ -64,7 +67,13 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
     setError(null);
     try {
       const form = new FormData();
-      for (const photo of photos) form.append("photos", await preparePhoto(photo, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+      for (const photo of photos) {
+        if (photo.type === "application/pdf") {
+          // PDFs seguem como estão (não se podem reduzir no telemóvel).
+          if (photo.size > MAX_TOTAL_BYTES) return setError("Este PDF tem mais de 4 MB. Envie só as páginas da ementa, ou capturas de ecrã.");
+          form.append("photos", photo, "ementa.pdf");
+        } else form.append("photos", await preparePhoto(photo, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+      }
       const res = await fetch("/api/painel/carta/importar", { method: "POST", body: form }).catch(() => null);
       if (!res) return setError("Sem ligação. Tente de novo.");
       const data = await res.json().catch(() => ({}));
@@ -75,6 +84,21 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
     } finally {
       setBusy(null);
     }
+  }
+
+  async function readLink() {
+    setBusy("reading");
+    setError(null);
+    const res = await fetch("/api/painel/carta/importar-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: link.trim() }),
+    }).catch(() => null);
+    setBusy(null);
+    if (!res) return setError("Sem ligação. Tente de novo.");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setError(data.message ?? "Não foi possível ler a ementa neste link.");
+    setDraft(toEditable(data.draft));
   }
 
   const setCategory = (ci: number, patch: Partial<CategoryDraft>) => setDraft((d) => d && d.map((c, k) => (k === ci ? { ...c, ...patch } : c)));
@@ -94,7 +118,7 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
         const priceCents = toCents(it.price);
         if (!it.name.trim()) return setError(`Falta o nome de um prato em "${c.name}".`);
         if (priceCents === null) return setError(`Falta o preço de "${it.name}". Preencha-o ou retire o prato.`);
-        products.push({ name: it.name, description: it.description, priceCents, vatRateBps: it.vatRateBps });
+        products.push({ name: it.name, description: it.description, priceCents, vatRateBps: it.vatRateBps, imageUrl: it.usePhoto ? it.imageUrl : null });
       }
       categories.push({ name: c.name, section: c.section ?? "", products });
     }
@@ -111,7 +135,8 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
     setDraft(null);
     setPhotos([]);
     const repeated = data.skipped > 0 ? ` ${data.skipped} já existiam e ficaram como estavam.` : "";
-    await onImported(`Ementa importada: ${data.products} pratos novos.${repeated} Use agora as Descrições e os Alergénios com IA, mais abaixo.`);
+    const withPhotos = data.photos > 0 ? ` ${data.photos} com a foto do site.` : "";
+    await onImported(`Ementa importada: ${data.products} pratos novos.${withPhotos}${repeated} Use agora as Descrições e os Alergénios com IA, mais abaixo.`);
   }
 
   const alert = error && (
@@ -142,6 +167,15 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
             {c.items.map((it, ii) => (
               <div key={ii} className={`grid grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border p-3 ${it.unsure || !it.price.trim() ? "border-[#d9a441] bg-[#fdf6e3]" : "border-line"}`}>
                 {(it.unsure || !it.price.trim()) && <p className="text-xs font-semibold">Confirme este prato: pode não ter sido bem lido.</p>}
+                {it.imageUrl && (
+                  <label className="flex items-center gap-3 text-sm">
+                    {/* Foto do prato no site do restaurante (pré-visualização; só é importada se ficar marcada). */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={it.imageUrl} alt="" referrerPolicy="no-referrer" className={`size-16 shrink-0 rounded-lg object-cover ${it.usePhoto ? "" : "opacity-40"}`} />
+                    <input type="checkbox" checked={it.usePhoto} onChange={(e) => setItem(ci, ii, { usePhoto: e.target.checked })} className="size-4 accent-[var(--color-brand)]" />
+                    Usar esta foto do site
+                  </label>
+                )}
                 <input aria-label="Nome do prato" className={`${input} w-full`} value={it.name} maxLength={80} onChange={(e) => setItem(ci, ii, { name: e.target.value })} />
                 <input aria-label="Descrição" placeholder="Descrição (opcional)" className={`${input} w-full text-sm`} value={it.description} maxLength={300} onChange={(e) => setItem(ci, ii, { description: e.target.value })} />
                 <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[8rem_minmax(0,1fr)_auto]">
@@ -177,17 +211,18 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
   return (
     <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-line bg-card p-4">
       <div>
-        <h3 className="text-lg font-semibold">Importar a ementa em papel</h3>
+        <h3 className="text-lg font-semibold">Importar a ementa</h3>
         <p className="mt-1 text-sm text-ink-soft">
-          Tire uma foto a cada página, de frente e com boa luz. A MESVIO lê os pratos e os preços, e confirma consigo antes de guardar. Pode demorar até um minuto.
+          Tire uma foto a cada página (de frente e com boa luz), envie o PDF, ou cole o link da ementa no seu site. A MESVIO lê os pratos e os
+          preços (e, num site, as fotos dos pratos) e confirma consigo antes de guardar. Pode demorar até um minuto.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <label className={`${secondary} flex cursor-pointer items-center font-semibold`}>
-          {photos.length ? "Juntar mais fotos" : "Escolher fotos"}
+          {photos.length ? "Juntar mais" : "Fotos ou PDF"}
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             className="sr-only"
             onChange={(e) => {
@@ -198,7 +233,7 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
         </label>
         {photos.length > 0 && (
           <>
-            <span className="text-sm text-ink-soft">{photos.length === 1 ? "1 foto" : `${photos.length} fotos`}</span>
+            <span className="text-sm text-ink-soft">{photos.length === 1 ? "1 ficheiro" : `${photos.length} ficheiros`}</span>
             <button type="button" className={secondary} disabled={busy !== null} onClick={() => setPhotos([])}>
               Limpar
             </button>
@@ -208,6 +243,28 @@ export function MenuImport({ onImported }: { onImported: (message: string) => Pr
           </>
         )}
       </div>
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void readLink();
+        }}
+      >
+        <input
+          type="text"
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="Ou cole o link da ementa (ex.: https://restaurante.pt/menu)"
+          aria-label="Link da ementa"
+          className={`${input} min-w-0 flex-1`}
+        />
+        <button type="submit" className={secondary} disabled={busy !== null || link.trim().length < 4}>
+          {busy === "reading" ? "A ler…" : "Ler link"}
+        </button>
+      </form>
       {alert}
     </section>
   );

@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   for (const file of files) {
     const data = Buffer.from(await file.arrayBuffer());
     const mediaType = detectPhotoType(data);
-    if (!mediaType) return json({ message: "Só aceitamos fotos em JPEG, PNG ou WebP." }, 400);
+    if (!mediaType) return json({ message: "Só aceitamos fotos (JPEG, PNG ou WebP) ou PDF." }, 400);
     photos.push({ mediaType, data });
   }
   const limit = await hitRateLimit(await getDb(), `central-demo:${admin.userId}`, CENTRAL_DEMO_RATE_LIMIT);
