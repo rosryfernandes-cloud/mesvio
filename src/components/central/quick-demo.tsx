@@ -18,10 +18,11 @@ const MAX_PHOTOS = 8;
 
 type Translated = Record<string, { name: string; description?: string }>;
 
-/** Demonstração rápida: fotos da ementa → ementa digital em 5 línguas, sem gravar nada. */
+/** Demonstração rápida: link, PDF ou fotos da ementa → ementa digital em 5 línguas, sem gravar nada. */
 export function QuickDemo() {
   const router = useRouter();
   const [photos, setPhotos] = useState<File[]>([]);
+  const [link, setLink] = useState("");
   const [draft, setDraft] = useState<MenuDraft | null>(null);
   const [translations, setTranslations] = useState<Partial<Record<Lang, Translated>>>({});
   const [lang, setLang] = useState<Lang>("pt");
@@ -41,14 +42,24 @@ export function QuickDemo() {
     setTranslations({});
     setSavedUrl(null);
     try {
-      const form = new FormData();
-      for (const p of photos) {
-        if (p.type === "application/pdf") {
-          if (p.size > MAX_TOTAL_BYTES) return setError("Este PDF tem mais de 4 MB.");
-          form.append("photos", p, "ementa.pdf");
-        } else form.append("photos", await preparePhoto(p, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+      let res: Response | null;
+      if (photos.length === 0) {
+        // Link: é o servidor que o descarrega (página do site → texto, PDF → como um PDF enviado).
+        res = await fetch("/api/central/demonstracao/link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: link.trim() }),
+        }).catch(() => null);
+      } else {
+        const form = new FormData();
+        for (const p of photos) {
+          if (p.type === "application/pdf") {
+            if (p.size > MAX_TOTAL_BYTES) return setError("Este PDF tem mais de 4 MB. Se estiver no site do restaurante, cole antes o link do PDF.");
+            form.append("photos", p, "ementa.pdf");
+          } else form.append("photos", await preparePhoto(p, MAX_TOTAL_BYTES / photos.length), "pagina.jpg");
+        }
+        res = await fetch("/api/central/demonstracao", { method: "POST", body: form }).catch(() => null);
       }
-      const res = await fetch("/api/central/demonstracao", { method: "POST", body: form }).catch(() => null);
       const data = res ? await res.json().catch(() => ({})) : {};
       if (!res?.ok) return setError(data.message ?? "Sem ligação. Tente de novo.");
       const read: MenuDraft = data.draft;
@@ -124,8 +135,35 @@ export function QuickDemo() {
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
       <section className="h-fit rounded-3xl border border-line bg-card p-5">
-        <h2 className="text-lg">1. Fotos da ementa</h2>
-        <p className="mt-1 text-sm text-ink-soft">Uma foto por página, de frente e com boa luz. Até {MAX_PHOTOS} fotos.</p>
+        <h2 className="text-lg">1. A ementa do restaurante</h2>
+        <form
+          className="mt-3 grid gap-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy && link.trim().length >= 4) void run();
+          }}
+        >
+          <label htmlFor="demo-link" className="text-sm font-semibold">
+            Link da ementa (site ou PDF)
+          </label>
+          <input
+            id="demo-link"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            value={link}
+            onChange={(e) => {
+              setLink(e.target.value);
+              if (e.target.value) setPhotos([]);
+            }}
+            maxLength={2000}
+            placeholder="https://restaurante.pt/menu"
+            className="min-h-11 rounded-xl border border-line bg-paper px-3 text-sm"
+          />
+        </form>
+        <p className="mt-3 text-center text-sm text-ink-soft">ou</p>
+        <p className="mt-1 text-sm text-ink-soft">Fotos ou PDF: uma foto por página, de frente e com boa luz. Até {MAX_PHOTOS} fotos.</p>
         <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-brand px-4 font-semibold text-brand">
           {photos.length ? "Juntar mais" : "Tirar fotos ou escolher PDF"}
           <input
@@ -135,6 +173,7 @@ export function QuickDemo() {
             className="sr-only"
             onChange={(e) => {
               setPhotos((p) => [...p, ...Array.from(e.target.files ?? [])].slice(0, MAX_PHOTOS));
+              setLink("");
               e.target.value = "";
             }}
           />
@@ -149,7 +188,7 @@ export function QuickDemo() {
             </button>
           </p>
         )}
-        <button type="button" onClick={run} disabled={busy || photos.length === 0} className="mt-4 min-h-12 w-full rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+        <button type="button" onClick={run} disabled={busy || (photos.length === 0 && link.trim().length < 4)} className="mt-4 min-h-12 w-full rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
           {busy ? (draft ? "A traduzir…" : "A ler a ementa…") : "2. Criar a ementa digital"}
         </button>
         {error && (
@@ -157,7 +196,7 @@ export function QuickDemo() {
             {error}
           </p>
         )}
-        <p className="mt-3 text-xs text-ink-soft">Os preços vêm da foto e podem ter erros de leitura. Nada fica guardado até criar o link.</p>
+        <p className="mt-3 text-xs text-ink-soft">Os preços vêm da ementa e podem ter erros de leitura. Nada fica guardado até criar o link.</p>
 
         {draft && (
           <div className="mt-5 border-t border-line pt-4">

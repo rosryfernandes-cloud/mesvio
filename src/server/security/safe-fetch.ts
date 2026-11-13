@@ -7,7 +7,7 @@ import { isIP } from "node:net";
  * ataques SSRF: só http(s) nas portas normais, nunca endereços internos (rede local, loopback,
  * metadados da cloud), redirecionamentos verificados um a um, tamanho e tempo limitados.
  */
-export type SafeFetchResult = { ok: true; url: string; contentType: string; bytes: Buffer } | { ok: false; reason: "INVALID_URL" | "BLOCKED" | "TOO_LARGE" | "HTTP_ERROR" | "NETWORK" };
+export type SafeFetchResult = { ok: true; url: string; contentType: string; bytes: Buffer } | { ok: false; reason: "INVALID_URL" | "BLOCKED" | "TOO_LARGE" | "HTTP_ERROR" | "NETWORK"; status?: number };
 
 function ipv4ToInt(ip: string): number {
   return ip.split(".").reduce((n, part) => (n << 8) + Number(part), 0) >>> 0;
@@ -75,7 +75,8 @@ export async function safeFetch(
 ): Promise<SafeFetchResult> {
   let current = raw;
   const deadline = AbortSignal.timeout(timeoutMs);
-  for (let hop = 0; hop <= 3; hop++) {
+  // Até 5 redirecionamentos: http → https → www → /pt/ → página final é comum.
+  for (let hop = 0; hop <= 5; hop++) {
     const url = await checkPublicUrl(current, resolve);
     if (!url) return { ok: false, reason: hop === 0 && !/^https?:\/\//i.test(current) ? "INVALID_URL" : "BLOCKED" };
     let res: Response;
@@ -94,7 +95,7 @@ export async function safeFetch(
       current = new URL(location, url).toString();
       continue;
     }
-    if (!res.ok || !res.body) return { ok: false, reason: "HTTP_ERROR" };
+    if (!res.ok || !res.body) return { ok: false, reason: "HTTP_ERROR", status: res.status };
     const declared = Number(res.headers.get("content-length") ?? 0);
     if (declared > maxBytes) return { ok: false, reason: "TOO_LARGE" };
     const chunks: Uint8Array[] = [];

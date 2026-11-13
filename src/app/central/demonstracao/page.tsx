@@ -19,7 +19,7 @@ export default async function DemoPage() {
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
       <h1 className="text-3xl tracking-tight">Demonstração rápida</h1>
       <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-        Fotografe a ementa do restaurante (ou use o PDF) e mostre ao dono a ementa digital dele, em 5 línguas, em menos de um minuto. Pode
+        Cole o link da ementa do restaurante (página do site ou PDF), ou fotografe-a, e mostre ao dono a ementa digital dele, em 5 línguas, em menos de um minuto. Pode
         também criar um link privado para lhe enviar por email, WhatsApp ou Instagram. Para o restaurante passar a cliente, crie-o em
         &quot;Novo restaurante&quot;.
       </p>

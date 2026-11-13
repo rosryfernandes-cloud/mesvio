@@ -147,8 +147,10 @@ export async function readMenu(source: MenuSource, reader?: MenuReader): Promise
       ok: false,
       code: "UNREADABLE",
       message: source.webText
-        ? "Não encontrámos a ementa nesta página. Tire capturas de ecrã da ementa e envie-as como fotos."
-        : "Não conseguimos ler uma ementa nestas fotos. Tire-as de frente, com boa luz, e tente de novo.",
+        ? "Não encontrámos a ementa nesta página. Se o site tiver a ementa em PDF, cole o link do PDF; se não, envie capturas de ecrã da ementa."
+        : source.pages.some((p) => p.mediaType === "application/pdf")
+          ? "Não conseguimos ler uma ementa neste PDF. Confirme que é a ementa, ou envie fotos ou capturas de ecrã das páginas."
+          : "Não conseguimos ler uma ementa nestas fotos. Tire-as de frente, com boa luz, e tente de novo.",
     };
   }
   return { ok: true, draft };
