@@ -5,7 +5,7 @@ import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { switchToOwnMenu } from "@/server/platform/platform-service";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
-import { detectPhotoType, type MenuPhoto, type MenuReading, parseReading, readMenuPhotos, toMenuDraft } from "./menu-import";
+import { describeKeyValue, detectPhotoType, extractApiKey, type MenuPhoto, type MenuReading, parseReading, readMenuPhotos, toMenuDraft } from "./menu-import";
 import { getOwnMenu, importMenuDraft } from "./own-menu";
 
 const PHOTO: MenuPhoto = { mediaType: "image/jpeg", data: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
@@ -130,5 +130,20 @@ describe("resposta da leitura", () => {
     expect(parseReading(JSON.stringify(ok), "end_turn")).toEqual(ok);
     expect(parseReading(JSON.stringify(ok).slice(0, 40), "end_turn")).toBeNull();
     expect(parseReading(JSON.stringify({ readable: true }), "end_turn")).toBeNull();
+  });
+});
+
+describe("chave da Anthropic", () => {
+  const key = "sk-ant-api03-" + "a".repeat(40) + "_B-c";
+  it("aproveita só a chave, mesmo com espaços, aspas ou o comando de exemplo à volta", () => {
+    expect(extractApiKey(key)).toBe(key);
+    expect(extractApiKey(` "${key}"\n`)).toBe(key);
+    expect(extractApiKey(`curl https://api.anthropic.com/v1/messages -H "x-api-key: ${key}"`)).toBe(key);
+  });
+  it("sem chave devolve null e descreve o valor sem o mostrar", () => {
+    expect(extractApiKey("curl https://api.anthropic.com/v1/messages -H \"x-api-key: $ANTHROPIC_API_KEY\"")).toBeNull();
+    expect(extractApiKey(undefined)).toBeNull();
+    const d = describeKeyValue("curl https://x");
+    expect(d).toEqual({ length: 14, startsWithSkAnt: false, hasSpaces: true, hasQuotes: false, looksLikeCommand: true });
   });
 });

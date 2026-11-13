@@ -82,8 +82,24 @@ export function parseReading(text: string, stopReason: string | null): MenuReadi
   return parsed.data;
 }
 
+/** Tira a chave do valor da variável, mesmo que venha com espaços, aspas ou o comando de exemplo à volta. */
+export function extractApiKey(value: string | undefined): string | null {
+  return value?.match(/sk-ant-[A-Za-z0-9_-]{20,}/)?.[0] ?? null;
+}
+
+/** Descreve o valor sem o mostrar: serve para o registo dizer porque não há chave. */
+export function describeKeyValue(value: string) {
+  return {
+    length: value.length,
+    startsWithSkAnt: value.trim().startsWith("sk-ant-"),
+    hasSpaces: /\s/.test(value),
+    hasQuotes: /["']/.test(value),
+    looksLikeCommand: /curl|https?:/i.test(value),
+  };
+}
+
 const anthropicReader: MenuReader = async (photos) => {
-  const client = new Anthropic({ timeout: 110_000, maxRetries: 1 });
+  const client = new Anthropic({ apiKey: extractApiKey(process.env.ANTHROPIC_API_KEY), timeout: 110_000, maxRetries: 1 });
   const message = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 16000,
@@ -151,7 +167,8 @@ export function toMenuDraft(reading: MenuReading): MenuDraft {
 }
 
 export async function readMenuPhotos(photos: MenuPhoto[], reader?: MenuReader): Promise<ReadMenuResult> {
-  if (!reader && !process.env.ANTHROPIC_API_KEY) {
+  if (!reader && !extractApiKey(process.env.ANTHROPIC_API_KEY)) {
+    if (process.env.ANTHROPIC_API_KEY) console.error("[menu-import] ANTHROPIC_API_KEY sem chave válida", describeKeyValue(process.env.ANTHROPIC_API_KEY));
     return { ok: false, code: "NOT_CONFIGURED", message: "A leitura de ementas por fotografia ainda não está ativa. Crie os pratos à mão ou fale com a MESVIO." };
   }
   let output: ReaderOutput;
