@@ -665,6 +665,36 @@ export const demoRequests = pgTable(
   (t) => [index("demo_requests_created_idx").on(t.createdAt), check("demo_requests_status_check", sql`${t.status} in ('new', 'contacted', 'demo', 'client', 'lost')`)],
 );
 
+/**
+ * Pré-visualizações da ementa para potenciais clientes (Demonstração da Central): a ementa do
+ * restaurante, lida e traduzida, num link privado que expira. Sem acesso pela API pública nem RLS
+ * de tenant: só o servidor lê (a página /p/[token] procura pelo token).
+ */
+export const menuPreviews = pgTable(
+  "menu_previews",
+  {
+    id: id(),
+    token: text("token").notNull().unique(),
+    restaurantName: text("restaurant_name").notNull(),
+    /** Ementa lida: categorias com pratos (nome, descrição, preço em cêntimos, foto do site). */
+    menu: jsonb("menu").$type<{ categories: { name: string; products: { name: string; description: string | null; priceCents: number | null; imageUrl: string | null }[] }[] }>().notNull(),
+    /** Traduções por língua: ref ("c0", "p0-1") → nome e descrição. */
+    translations: jsonb("translations").$type<Record<string, Record<string, { name: string; description?: string }>>>().notNull().default({}),
+    /** Notas da equipa MESVIO (ex.: contacto, quando ligar). */
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    viewCount: integer("view_count").notNull().default(0),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+    /** O dono carregou em "Quero ativar" (com o contacto que deixou, opcional). */
+    activationRequestedAt: timestamp("activation_requested_at", { withTimezone: true }),
+    activationContact: text("activation_contact"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("menu_previews_created_idx").on(t.createdAt)],
+);
+
 // ───────────────────────── Reconciliação e comissões ─────────────────────────
 /** Documentos de venda reportados pelo POS e ligados a pedidos da plataforma. */
 export const posSales = pgTable(

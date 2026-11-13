@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatEur } from "@/lib/money";
 import type { MenuDraft } from "@/server/menu/menu-import";
 import { MAX_TOTAL_BYTES, preparePhoto } from "@/components/staff/menu-import";
@@ -19,12 +20,18 @@ type Translated = Record<string, { name: string; description?: string }>;
 
 /** Demonstração rápida: fotos da ementa → ementa digital em 5 línguas, sem gravar nada. */
 export function QuickDemo() {
+  const router = useRouter();
   const [photos, setPhotos] = useState<File[]>([]);
   const [draft, setDraft] = useState<MenuDraft | null>(null);
   const [translations, setTranslations] = useState<Partial<Record<Lang, Translated>>>({});
   const [lang, setLang] = useState<Lang>("pt");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restaurantName, setRestaurantName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedUrl, setSavedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const refOf = (ci: number, pi?: number) => (pi === undefined ? `c${ci}` : `p${ci}-${pi}`);
 
@@ -32,6 +39,7 @@ export function QuickDemo() {
     setBusy(true);
     setError(null);
     setTranslations({});
+    setSavedUrl(null);
     try {
       const form = new FormData();
       for (const p of photos) {
@@ -67,6 +75,43 @@ export function QuickDemo() {
       setError("Não foi possível abrir uma destas fotos.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/central/previsualizacoes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurantName: restaurantName.trim(),
+        notes: notes.trim() || undefined,
+        menu: {
+          categories: draft.categories.map((c) => ({
+            name: c.name,
+            products: c.products.map((p) => ({ name: p.name, description: p.description, priceCents: p.priceCents, imageUrl: p.imageUrl ?? null })),
+          })),
+        },
+        translations,
+      }),
+    }).catch(() => null);
+    setSaving(false);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return setError(d.message ?? "Não foi possível guardar.");
+    setSavedUrl(d.url);
+    router.refresh();
+  }
+
+  async function copy() {
+    if (!savedUrl) return;
+    try {
+      await navigator.clipboard.writeText(savedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Não foi possível copiar: selecione o link e copie à mão.");
     }
   }
 
@@ -112,7 +157,35 @@ export function QuickDemo() {
             {error}
           </p>
         )}
-        <p className="mt-3 text-xs text-ink-soft">Os preços vêm da foto e podem ter erros de leitura: é uma demonstração, não fica guardada.</p>
+        <p className="mt-3 text-xs text-ink-soft">Os preços vêm da foto e podem ter erros de leitura. Nada fica guardado até criar o link.</p>
+
+        {draft && (
+          <div className="mt-5 border-t border-line pt-4">
+            <h2 className="text-lg">3. Link para enviar ao dono</h2>
+            <p className="mt-1 text-sm text-ink-soft">Uma página privada com a ementa dele, durante 30 dias. Recebe um aviso quando ele a abrir ou pedir para ativar.</p>
+            {savedUrl ? (
+              <div className="mt-3 grid gap-2">
+                <input readOnly value={savedUrl} onFocus={(e) => e.target.select()} aria-label="Link da pré-visualização" className="min-h-11 rounded-xl border border-line bg-paper px-3 text-sm" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={copy} className="min-h-11 flex-1 rounded-xl bg-brand px-4 font-semibold text-white">
+                    {copied ? "Copiado ✓" : "Copiar link"}
+                  </button>
+                  <a href={savedUrl} target="_blank" rel="noopener" className="flex min-h-11 items-center rounded-xl border border-line px-4 font-semibold">
+                    Abrir
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 grid gap-2">
+                <input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} maxLength={120} placeholder="Nome do restaurante" aria-label="Nome do restaurante" className="min-h-11 rounded-xl border border-line bg-paper px-3" />
+                <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} placeholder="Notas (opcional): contacto, quando ligar…" aria-label="Notas" className="min-h-11 rounded-xl border border-line bg-paper px-3 text-sm" />
+                <button type="button" onClick={save} disabled={saving || busy || restaurantName.trim().length < 2} className="min-h-11 rounded-xl bg-brand px-4 font-semibold text-white disabled:opacity-50">
+                  {saving ? "A guardar…" : busy ? "À espera das traduções…" : "Guardar e criar link"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <section aria-label="Ementa digital" className="min-w-0">
@@ -148,7 +221,11 @@ export function QuickDemo() {
                       const t = text(refOf(ci, pi), p.name, p.description);
                       return (
                         <li key={pi} className="flex items-start justify-between gap-3 rounded-2xl border border-line bg-card p-3">
-                          <span className="min-w-0">
+                          {p.imageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.imageUrl} alt="" referrerPolicy="no-referrer" className="size-16 shrink-0 rounded-xl object-cover" />
+                          )}
+                          <span className="min-w-0 flex-1">
                             <span className="block font-semibold">{t.name}</span>
                             {t.description && <span className="mt-0.5 block text-sm text-ink-soft">{t.description}</span>}
                           </span>

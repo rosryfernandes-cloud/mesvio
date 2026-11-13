@@ -7,6 +7,7 @@ import { reconcilePendingPayments } from "@/server/payments/table-payments";
 import { hitRateLimit, pruneRateLimits } from "@/server/security/rate-limit";
 import { issuePendingInvoices } from "@/server/invoicing/invoices";
 import { sendWeeklySummaries } from "@/server/staff/weekly-email";
+import { prunePreviews } from "@/server/platform/menu-previews";
 
 /**
  * Tarefas de fundo: reenvios ao POS, pagamentos por confirmar ou abandonados (cancelados ao fim de
@@ -25,6 +26,7 @@ export async function runMaintenance(db: Db) {
   });
   await pruneRateLimits(db);
   await pruneDemoRequests(db);
+  await prunePreviews(db).catch(() => undefined);
   // Pedidos de demonstração cujo email não saiu à primeira.
   await retryDemoRequestEmails(db).catch(() => 0);
   // Resumo da semana por email (só às segundas de manhã; nos outros minutos não faz nada).
