@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardPlatform } from "@/server/platform/admin-auth";
-import { createPreview, deletePreview, markPreviewEmailed } from "@/server/platform/menu-previews";
+import { createPreview, deletePreview, markDoNotContact, markPreviewEmailed, markPreviewFollowedUp } from "@/server/platform/menu-previews";
 import { json } from "@/server/staff/http";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,23 @@ export async function DELETE(request: Request) {
   return json({ ok: await deletePreview(await getDb(), id.data) });
 }
 
-/** Marca que o email para este restaurante foi aberto no Gmail: ?id=… */
+/**
+ * Seguimento de uma pré-visualização: ?id=…&acao=email (email aberto no Gmail), seguimento (email de
+ * seguimento aberto) ou nao-contactar (pediu para não ser contactado: entra na lista e o link é apagado).
+ */
 export async function PATCH(request: Request) {
   const admin = await guardPlatform(request, { mutating: true });
   if (admin instanceof Response) return admin;
-  const id = z.uuid().safeParse(new URL(request.url).searchParams.get("id"));
+  const params = new URL(request.url).searchParams;
+  const id = z.uuid().safeParse(params.get("id"));
   if (!id.success) return json({ message: "Pedido inválido." }, 400);
-  return json({ ok: await markPreviewEmailed(await getDb(), id.data) });
+  const db = await getDb();
+  const action = params.get("acao") ?? "email";
+  const ok =
+    action === "seguimento"
+      ? await markPreviewFollowedUp(db, id.data)
+      : action === "nao-contactar"
+        ? await markDoNotContact(db, admin, id.data)
+        : await markPreviewEmailed(db, id.data);
+  return json({ ok });
 }

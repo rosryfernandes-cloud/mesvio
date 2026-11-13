@@ -1,9 +1,9 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { desc, eq, lt, sql } from "drizzle-orm";
+import { desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { menuPreviews } from "@/server/db/schema";
+import { doNotContact, menuPreviews } from "@/server/db/schema";
 import { notifyPlatformAdmins, queuePush } from "@/server/notifications/push";
 import type { PlatformAdmin } from "./admin-auth";
 import type { MenuDraft, MenuReader } from "@/server/menu/menu-import";
@@ -90,6 +90,7 @@ export async function listPreviews(db: Db) {
       notes: menuPreviews.notes,
       contactEmail: menuPreviews.contactEmail,
       emailedAt: menuPreviews.emailedAt,
+      followedUpAt: menuPreviews.followedUpAt,
       createdAt: menuPreviews.createdAt,
       expiresAt: menuPreviews.expiresAt,
       viewCount: menuPreviews.viewCount,
@@ -153,6 +154,56 @@ export async function markPreviewEmailed(db: Db, id: string, now = new Date()): 
   return (await db.update(menuPreviews).set({ emailedAt: now }).where(eq(menuPreviews.id, id)).returning({ id: menuPreviews.id })).length > 0;
 }
 
+/** Regista que a equipa abriu o email de seguimento. */
+export async function markPreviewFollowedUp(db: Db, id: string, now = new Date()): Promise<boolean> {
+  return (await db.update(menuPreviews).set({ followedUpAt: now }).where(eq(menuPreviews.id, id)).returning({ id: menuPreviews.id })).length > 0;
+}
+
+// ---------- Não contactar ----------
+
+/** Nome do restaurante comparável: minúsculas, sem acentos, sem pontuação nem espaços a mais. */
+export const nameKey = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** Este restaurante pediu para não ser contactado? (pelo email ou pelo nome) */
+export async function isDoNotContact(db: Db, name: string, email?: string | null): Promise<boolean> {
+  const conditions = [eq(doNotContact.nameKey, nameKey(name))];
+  if (email) conditions.push(eq(doNotContact.email, email.trim().toLowerCase()));
+  const [row] = await db.select({ id: doNotContact.id }).from(doNotContact).where(or(...conditions)).limit(1);
+  return !!row;
+}
+
+/** Nomes (normalizados) e emails de quem não quer ser contactado, para marcar a lista da Central. */
+export async function listDoNotContact(db: Db): Promise<{ names: Set<string>; emails: Set<string> }> {
+  const rows = await db.select({ nameKey: doNotContact.nameKey, email: doNotContact.email }).from(doNotContact);
+  return { names: new Set(rows.map((r) => r.nameKey)), emails: new Set(rows.flatMap((r) => (r.email ? [r.email] : []))) };
+}
+
+/**
+ * Marca o restaurante de uma pré-visualização como "não contactar" (ex.: respondeu "não"). Por
+ * defeito apaga também o link, que deixa de funcionar.
+ */
+export async function markDoNotContact(db: Db, admin: PlatformAdmin, previewId: string, { keepLink = false, reason }: { keepLink?: boolean; reason?: string } = {}): Promise<boolean> {
+  const [p] = await db.select().from(menuPreviews).where(eq(menuPreviews.id, previewId)).limit(1);
+  if (!p) return false;
+  if (!(await isDoNotContact(db, p.restaurantName, p.contactEmail))) {
+    await db.insert(doNotContact).values({
+      email: p.contactEmail?.toLowerCase() ?? null,
+      nameKey: nameKey(p.restaurantName),
+      name: p.restaurantName,
+      reason: reason ?? "Pediu para não ser contactado",
+      createdBy: admin.userId,
+    });
+  }
+  if (!keepLink) await db.delete(menuPreviews).where(inArray(menuPreviews.id, [p.id]));
+  return true;
+}
+
 export async function deletePreview(db: Db, id: string): Promise<boolean> {
   return (await db.delete(menuPreviews).where(eq(menuPreviews.id, id)).returning({ id: menuPreviews.id })).length > 0;
 }
@@ -195,6 +246,9 @@ export async function createPreviewFromLink(
 ): Promise<{ ok: true; token: string; products: number } | { ok: false; message: string }> {
   const parsed = linkPreviewSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: "Falta o nome, o link ou o email não é válido." };
+  if (await isDoNotContact(db, parsed.data.restaurantName, parsed.data.contactEmail)) {
+    return { ok: false, message: "Este restaurante pediu para não ser contactado." };
+  }
   const read = await readMenuFromLink(parsed.data.url, { reader: deps.reader, resolve: deps.resolve });
   if (!read.ok) return { ok: false, message: read.message };
   const { menu, items } = previewFromDraft(read.draft);

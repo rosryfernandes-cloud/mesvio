@@ -15,7 +15,7 @@ export const PLAN_LABEL: Record<Plan, string> = {
 };
 
 export const PLAN_DESCRIPTION: Record<Plan, string> = {
-  menu: "Os clientes veem a ementa pelo QR (fotos, inglês, alergénios). Não pedem pela app.",
+  menu: "Os clientes veem a ementa pelo QR (fotos, 5 línguas, alergénios). Não pedem pela app.",
   orders: "Pedem na mesa, os talões saem na cozinha/bar e podem chamar o empregado e pedir a conta. Pagam no restaurante.",
   payments: "Tudo, e pagam no telemóvel (Apple Pay, MB WAY, cartão), com gorjeta. As camas pagam ao pedir.",
 };
@@ -42,7 +42,7 @@ export const PLAN_LAUNCH_PRICE: Partial<Record<Plan, true>> = { orders: true };
 
 /** O que cada plano inclui (página de preços). Cada plano inclui também tudo o do anterior. */
 export const PLAN_FEATURES: Record<Plan, string[]> = {
-  menu: ["QR Code em cada lugar", "Ementa com fotos, alergénios e inglês", "Esgotados e preços mudados num minuto", "Cores e logótipo do restaurante"],
+  menu: ["QR Code em cada lugar", "Ementa em 5 línguas, com fotos e alergénios", "Esgotados e preços mudados num minuto", "Cores e logótipo do restaurante"],
   orders: ["Pedidos na mesa, sem esperar", "Talão na cozinha e no bar", "\"Pedir a conta\" e \"Chamar empregado\"", "Painel da equipa em tempo real"],
   payments: ["Pagar no telemóvel: Apple Pay, MB WAY, cartão", "Gorjetas para a equipa", "Camas e espreguiçadeiras pagam ao pedir", "Dinheiro direto na conta do restaurante"],
 };

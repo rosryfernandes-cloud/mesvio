@@ -42,6 +42,7 @@ export default async function DemoPage() {
           rows={previews.map(({ firstViewedAt: _first, ...p }) => ({
             ...p,
             emailedAt: p.emailedAt?.toISOString() ?? null,
+            followedUpAt: p.followedUpAt?.toISOString() ?? null,
             createdAt: p.createdAt.toISOString(),
             expiresAt: p.expiresAt.toISOString(),
             lastViewedAt: p.lastViewedAt?.toISOString() ?? null,

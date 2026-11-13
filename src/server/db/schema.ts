@@ -687,6 +687,8 @@ export const menuPreviews = pgTable(
     sourceUrl: text("source_url"),
     /** Quando a equipa abriu o email para este restaurante (botão "Enviar pelo Gmail"). */
     emailedAt: timestamp("emailed_at", { withTimezone: true }),
+    /** Quando a equipa abriu o email de seguimento (só um, uns dias depois do primeiro). */
+    followedUpAt: timestamp("followed_up_at", { withTimezone: true }),
     createdBy: text("created_by").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     viewCount: integer("view_count").notNull().default(0),
@@ -698,6 +700,26 @@ export const menuPreviews = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("menu_previews_created_idx").on(t.createdAt)],
+);
+
+/**
+ * Restaurantes que pediram para não ser contactados pela MESVIO (ex.: responderam "não"). A Central
+ * não cria links nem mostra botões de envio para eles. Só o servidor lê (sem RLS de tenant).
+ */
+export const doNotContact = pgTable(
+  "do_not_contact",
+  {
+    id: id(),
+    /** Email em minúsculas (pode faltar, quando só se sabe o nome). */
+    email: text("email"),
+    /** Nome do restaurante normalizado (minúsculas, sem acentos), para apanhar listas sem email. */
+    nameKey: text("name_key").notNull(),
+    name: text("name").notNull(),
+    reason: text("reason"),
+    createdBy: text("created_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("do_not_contact_email_idx").on(t.email), index("do_not_contact_name_idx").on(t.nameKey)],
 );
 
 // ───────────────────────── Reconciliação e comissões ─────────────────────────

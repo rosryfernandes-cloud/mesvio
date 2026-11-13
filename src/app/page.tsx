@@ -40,7 +40,7 @@ const BENEFITS = [
   { icon: IconGrid, title: "Gestão centralizada", text: "Pedidos, mesas, esgotados e equipa num só painel." },
   { icon: IconMenu, title: "Ementa sempre certa", text: "Um prato esgotado ou um preço novo mudam-se num minuto, sem voltar a imprimir." },
   { icon: IconPulse, title: "Acompanhamento de pedidos", text: "O cliente vê o estado do pedido; a equipa vê tudo em tempo real." },
-  { icon: IconSmile, title: "Simples para os clientes", text: "Fotografias, alergénios, extras e conta da mesa, claros e legíveis." },
+  { icon: IconSmile, title: "Em 5 línguas, com alergénios", text: "Português, inglês, espanhol, francês e alemão, na língua do telemóvel de cada cliente, com fotos e os 14 alergénios." },
 ];
 
 const SOLUTIONS = [

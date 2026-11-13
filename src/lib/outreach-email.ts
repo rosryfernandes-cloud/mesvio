@@ -60,3 +60,30 @@ Se não quiser receber mais mensagens nossas, responda "não" e não voltamos a 
 
   return { subject: outreachSubject(restaurant), html, text };
 }
+
+/** Email de seguimento (um só, uns dias depois do primeiro, a quem não respondeu). Curto e sem imagens. */
+export function outreachFollowUp({ restaurant, url, sender }: { restaurant: string; url: string; sender: string }): { subject: string; html: string; text: string } {
+  const r = escapeHtml(restaurant);
+  const link = escapeHtml(url);
+  const s = escapeHtml(sender);
+  const subject = `Re: ${outreachSubject(restaurant)}`;
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#10211D;max-width:560px;font-size:15px;line-height:1.6">
+<p style="margin:0 0 14px">Olá,</p>
+<p style="margin:0 0 14px">Escrevo só para saber se chegou a ver a ementa digital do <strong>restaurante ${r}</strong> que preparámos: <a href="${link}" style="color:#0f7a5c;font-weight:bold">${link}</a></p>
+<p style="margin:0 0 14px">Fica em português, inglês, espanhol, francês e alemão, e os clientes podem pedir pelo telemóvel. Se quiser, passo aí 10 minutos esta semana para lhe mostrar, sem compromisso.</p>
+<p style="margin:0 0 22px">Obrigado,<br><strong>${s}</strong><br>MESVIO · <a href="https://mesvio.pt" style="color:#0f7a5c">mesvio.pt</a></p>
+<p style="font-size:12px;color:#5b6b66;margin:0">Este é o último email que lhe envio sobre isto. Se não tiver interesse, não precisa de responder.</p>
+</div>`;
+  const text = `Olá,
+
+Escrevo só para saber se chegou a ver a ementa digital do restaurante ${restaurant} que preparámos: ${url}
+
+Fica em português, inglês, espanhol, francês e alemão, e os clientes podem pedir pelo telemóvel. Se quiser, passo aí 10 minutos esta semana para lhe mostrar, sem compromisso.
+
+Obrigado,
+${sender}
+MESVIO · mesvio.pt
+
+Este é o último email que lhe envio sobre isto. Se não tiver interesse, não precisa de responder.`;
+  return { subject, html, text };
+}

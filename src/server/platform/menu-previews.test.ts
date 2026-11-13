@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { DEMO_PLATFORM_ADMIN } from "@/server/db/seed-demo";
 import { findPlatformAdmin, type PlatformAdmin } from "./admin-auth";
-import { createPreview, createPreviewFromLink, deletePreview, markPreviewEmailed, getPreviewByToken, listPreviews, prunePreviews, recordPreviewView, requestActivation } from "./menu-previews";
+import { createPreview, createPreviewFromLink, deletePreview, isDoNotContact, markDoNotContact, markPreviewEmailed, markPreviewFollowedUp, nameKey, getPreviewByToken, listPreviews, prunePreviews, recordPreviewView, requestActivation } from "./menu-previews";
 
 let db: Db;
 let admin: PlatformAdmin;
@@ -82,5 +82,27 @@ describe("links criados em lote a partir do link da ementa", () => {
 
   it("recusa emails inválidos", async () => {
     expect(await createPreviewFromLink(db, admin, { restaurantName: "X Y", url: "https://x.pt", contactEmail: "não-é-email" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("seguimento e não contactar", () => {
+  it("regista o seguimento; quem pede para não ser contactado sai da lista e não entra em novos lotes", async () => {
+    const r = await createPreview(db, admin, { restaurantName: "Praia Princesa", contactEmail: "Reservas@PraiaPrincesa.com", menu: MENU });
+    const [row] = await listPreviews(db);
+    expect(await markPreviewFollowedUp(db, row.id)).toBe(true);
+    expect((await listPreviews(db))[0].followedUpAt).not.toBeNull();
+
+    expect(await markDoNotContact(db, admin, row.id)).toBe(true);
+    expect(await getPreviewByToken(db, r.ok ? r.token : "")).toBeNull();
+    expect(await isDoNotContact(db, "praia princesa")).toBe(true);
+    expect(await isDoNotContact(db, "Outro nome", "reservas@praiaprincesa.com")).toBe(true);
+    expect(await createPreviewFromLink(db, admin, { restaurantName: "Praia  Princesa!", url: "https://praiaprincesa.com/menu" })).toEqual({
+      ok: false,
+      message: "Este restaurante pediu para não ser contactado.",
+    });
+  });
+
+  it("compara nomes sem acentos nem pontuação", () => {
+    expect(nameKey("  Bicho d'Água ")).toBe("bicho d agua");
   });
 });

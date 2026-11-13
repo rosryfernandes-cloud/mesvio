@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   outreachEmail,
+  outreachFollowUp,
   outreachShortText,
   outreachSubject,
 } from "@/lib/outreach-email";
@@ -15,6 +16,7 @@ export type PreviewRow = {
   notes: string | null;
   contactEmail: string | null;
   emailedAt: string | null;
+  followedUpAt: string | null;
   createdAt: string;
   expiresAt: string;
   viewCount: number;
@@ -22,6 +24,9 @@ export type PreviewRow = {
   activationRequestedAt: string | null;
   activationContact: string | null;
 };
+
+/** O seguimento aparece 3 dias depois do primeiro email (a quem não respondeu nem pediu para ativar). */
+const FOLLOW_UP_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("pt-PT", {
@@ -87,13 +92,11 @@ export function PreviewList({
    * Abre um email novo no Gmail, já com o destinatário e o assunto, e copia o texto formatado (com as
    * imagens e o link): no Gmail basta colar (Cmd+V), confirmar o remetente e enviar.
    */
-  async function sendWithGmail(r: PreviewRow) {
-    const { html, text, subject } = outreachEmail({
-      restaurant: r.restaurantName,
-      url: `${baseUrl}/p/${r.token}`,
-      sender,
-      baseUrl,
-    });
+  async function sendWithGmail(r: PreviewRow, followUp = false) {
+    const url = `${baseUrl}/p/${r.token}`;
+    const { html, text, subject } = followUp
+      ? outreachFollowUp({ restaurant: r.restaurantName, url, sender })
+      : outreachEmail({ restaurant: r.restaurantName, url, sender, baseUrl });
     // Copiar primeiro (com a página em foco) e só depois abrir o Gmail: assim o email formatado, com as
     // imagens, fica mesmo na área de transferência.
     let rich = true;
@@ -110,14 +113,36 @@ export function PreviewList({
     }
     setNotice(
       rich
-        ? `Email do ${r.restaurantName} copiado com as imagens. No Gmail, clique no texto da mensagem e cole com Cmd+V.`
+        ? `${followUp ? "Seguimento" : "Email"} do ${r.restaurantName} copiado${followUp ? "" : " com as imagens"}. No Gmail, clique no texto da mensagem e cole com Cmd+V.`
         : "Este navegador só copiou o texto simples. Use o Chrome para copiar o email com as imagens.",
     );
     const compose = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.contactEmail ?? "")}&su=${encodeURIComponent(subject)}`;
     window.open(compose, "_blank", "noopener");
-    void fetch(`/api/central/previsualizacoes?id=${r.id}`, { method: "PATCH" })
+    void fetch(
+      `/api/central/previsualizacoes?id=${r.id}&acao=${followUp ? "seguimento" : "email"}`,
+      { method: "PATCH" },
+    )
       .then(() => router.refresh())
       .catch(() => undefined);
+  }
+
+  /** "Não contactar": entra na lista (nunca mais em lotes) e o link é apagado. */
+  async function markDoNotContact(r: PreviewRow) {
+    if (
+      !window.confirm(
+        `${r.restaurantName} pediu para não ser contactado? Entra na lista de não contactar e o link é apagado.`,
+      )
+    )
+      return;
+    setBusy(r.id);
+    await fetch(`/api/central/previsualizacoes?id=${r.id}&acao=nao-contactar`, {
+      method: "PATCH",
+    }).catch(() => null);
+    setBusy(null);
+    setNotice(
+      `${r.restaurantName} não volta a ser contactado nem entra em novos lotes.`,
+    );
+    router.refresh();
   }
 
   async function remove(id: string) {
@@ -195,6 +220,11 @@ export function PreviewList({
                       {r.emailedAt && (
                         <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">
                           Email aberto {when(r.emailedAt)}
+                        </span>
+                      )}
+                      {r.followedUpAt && (
+                        <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">
+                          Seguimento {when(r.followedUpAt)}
                         </span>
                       )}
                     </p>
@@ -278,6 +308,29 @@ export function PreviewList({
                       </a>
                     </>
                   )}
+                  {!expired &&
+                    r.contactEmail &&
+                    r.emailedAt &&
+                    !r.followedUpAt &&
+                    !r.activationRequestedAt &&
+                    now - new Date(r.emailedAt).getTime() >=
+                      FOLLOW_UP_AFTER_MS && (
+                      <button
+                        type="button"
+                        onClick={() => sendWithGmail(r, true)}
+                        className="min-h-10 rounded-xl border border-brand bg-paper px-3 text-sm font-semibold text-brand"
+                      >
+                        Enviar seguimento
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    onClick={() => markDoNotContact(r)}
+                    disabled={busy === r.id}
+                    className="min-h-10 rounded-xl px-3 text-sm text-ink-soft underline"
+                  >
+                    Não contactar
+                  </button>
                   <button
                     type="button"
                     onClick={() => remove(r.id)}
