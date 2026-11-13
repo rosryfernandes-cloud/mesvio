@@ -48,6 +48,7 @@ export function BatchPreviews() {
 
   const chosen = rows?.filter((r) => r.use).length ?? 0;
   const done = Object.values(status).filter((s) => s.state === "done").length;
+  const pending = rows?.filter((r, i) => r.use && status[i]?.state !== "done").length ?? 0;
   const icon = (s?: Status) => (!s ? "" : s.state === "working" ? "⏳" : s.state === "done" ? "✓" : s.state === "error" ? "✗" : "");
 
   return (
@@ -106,8 +107,8 @@ export function BatchPreviews() {
             ))}
           </ul>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={run} disabled={running || chosen === 0} className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
-              {running ? `A criar… (${done} de ${chosen})` : done > 0 ? "Tentar os que faltam" : `Criar ${chosen} links`}
+            <button type="button" onClick={run} disabled={running || pending === 0} className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+              {running ? `A criar… (${done} de ${chosen})` : pending === 0 && done > 0 ? "Concluído ✓" : done > 0 ? `Tentar os ${pending} que faltam` : `Criar ${chosen} links`}
             </button>
             <button type="button" onClick={() => setRows(null)} disabled={running} className="min-h-11 rounded-xl px-4 text-sm text-ink-soft underline">
               Outra lista
