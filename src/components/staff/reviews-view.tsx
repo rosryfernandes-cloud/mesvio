@@ -46,14 +46,15 @@ export function ReviewsView() {
   return (
     <div className="grid gap-4">
       <section className="rounded-2xl border border-line bg-card p-4">
-        <p className="font-semibold">⭐ Avaliações no fim da conta <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">em teste</span></p>
+        <p className="font-semibold">⭐ Avaliações dos clientes <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">em teste</span></p>
         <p className="mt-1 text-sm text-ink-soft">
-          Depois de pagar no telemóvel, o cliente dá 1 a 5 estrelas e pode deixar um comentário, que só o restaurante vê. Todos veem também o botão
-          para avaliar no Google, seja qual for a nota.
+          O cliente dá 1 a 5 estrelas e pode deixar um comentário, que só o restaurante vê: no botão &quot;Deixar uma avaliação&quot; da
+          ementa e da conta, e logo depois de pagar no telemóvel. Funciona em todos os planos, mesmo para quem paga no balcão. Todos veem
+          também o botão para avaliar no Google, seja qual for a nota.
         </p>
         <label className="mt-3 flex items-center gap-3">
           <input type="checkbox" className="size-5" checked={data.enabled} disabled={busy} onChange={(e) => save(e.target.checked)} />
-          <span className="font-semibold">Pedir avaliação depois de pagar</span>
+          <span className="font-semibold">Pedir avaliações aos clientes</span>
         </label>
         <form
           className="mt-3"

@@ -9,6 +9,7 @@ import { getRequestLocale } from "@/server/i18n/request-locale";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { MESSAGES } from "@/lib/i18n/messages";
 import { CallStaff } from "@/components/order/call-staff";
+import { ReviewButton } from "@/components/order/review-prompt";
 
 // A ementa depende do token e do estado do POS — nunca gerada estaticamente.
 export const dynamic = "force-dynamic";
@@ -85,6 +86,12 @@ export default async function TableMenuPage({ params }: Props) {
       )}
 
       <MenuOrdering menu={menu} tableToken={token} />
+
+      {menu.reviews.enabled && (
+        <div className="mt-10 px-4 text-center">
+          <ReviewButton tableToken={token} googleUrl={menu.reviews.googleUrl} />
+        </div>
+      )}
 
       <footer className="mt-12 px-4 text-center text-xs text-ink-soft">
         {t.menu.vatIncluded} {payFirst ? t.menu.payInApp : t.menu.payAtRestaurant}

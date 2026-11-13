@@ -169,6 +169,7 @@ export const es: Messages = {
   },
   review: {
     title: "¿Qué tal ha ido?",
+    cta: "Dejar una valoración",
     starLabel: (n) => `${n} ${n === 1 ? "estrella" : "estrellas"}`,
     commentGood: "¿Quiere dejar un comentario? (opcional)",
     commentBad: "¿Qué podemos mejorar? (opcional)",

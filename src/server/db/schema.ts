@@ -281,8 +281,8 @@ export const serviceRequests = pgTable(
 );
 
 /**
- * Avaliação deixada no telemóvel depois de pagar a conta (1–5 estrelas e comentário opcional).
- * Só o restaurante as vê no painel; o cliente pode, além disso, avaliar no Google.
+ * Avaliação deixada no telemóvel (1–5 estrelas e comentário opcional), em qualquer plano: no fim da
+ * conta ou pela ementa. Só o restaurante as vê no painel; o cliente pode, além disso, avaliar no Google.
  */
 export const reviews = pgTable(
   "reviews",
@@ -291,7 +291,8 @@ export const reviews = pgTable(
     organizationId: orgId(),
     establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
     tableId: uuid("table_id").notNull().references(() => diningTables.id),
-    tableSessionId: uuid("table_session_id").notNull().references(() => tableSessions.id),
+    /** Conta da mesa aberta no momento, se houver (sem conta: avaliação feita só a partir da ementa). */
+    tableSessionId: uuid("table_session_id").references(() => tableSessions.id),
     stars: integer("stars").notNull(),
     comment: text("comment"),
     createdAt: createdAt(),

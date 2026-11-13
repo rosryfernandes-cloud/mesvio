@@ -35,6 +35,8 @@ export interface TableMenuView {
   plan: Plan;
   /** Para cada artigo, os que os clientes mais pedem com ele (pedidos reais do restaurante). */
   pairings: Record<string, string[]>;
+  /** Avaliações ligadas no painel: botão "Avaliar" na ementa (em todos os planos). */
+  reviews: { enabled: boolean; googleUrl: string | null };
 }
 
 export async function getTableMenu(
@@ -100,6 +102,7 @@ export async function getTableMenu(
         : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },
     plan: found.plan,
     pairings,
+    reviews: found.reviews ?? { enabled: false, googleUrl: null },
   };
 }
 

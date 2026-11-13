@@ -169,6 +169,7 @@ export const de: Messages = {
   },
   review: {
     title: "Wie war es?",
+    cta: "Bewertung abgeben",
     starLabel: (n) => `${n} ${n === 1 ? "Stern" : "Sterne"}`,
     commentGood: "Möchten Sie einen Kommentar hinterlassen? (optional)",
     commentBad: "Was können wir besser machen? (optional)",

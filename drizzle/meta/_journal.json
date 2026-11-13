@@ -225,6 +225,13 @@
       "when": 1794577123309,
       "tag": "0031_resumo_semanal_email",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794578814092,
+      "tag": "0032_avaliacoes_sem_conta",
+      "breakpoints": true
     }
   ]
 }

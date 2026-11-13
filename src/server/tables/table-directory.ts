@@ -28,6 +28,8 @@ export interface ResolvedTable {
   zone: string | null;
   /** Conta Stripe Connect do restaurante (acct_…), ou null se ainda não ligou pagamentos. */
   stripeAccountId: string | null;
+  /** Avaliações dos clientes ligadas no painel e link do Google (opcional nos diretórios de teste). */
+  reviews?: { enabled: boolean; googleUrl: string | null };
   /** Artigos marcados como esgotados no painel (lidos na mesma transação, sem ida extra à BD). */
   locallyUnavailable: Set<string>;
   pos: PosAdapter;
@@ -60,6 +62,8 @@ export function createDbTableDirectory(db: Db, resolvePos: PosResolver = resolve
             plan: establishments.plan,
             zone: diningTables.zone,
             stripeAccountId: establishments.stripeAccountId,
+            reviewsEnabled: establishments.reviewsEnabled,
+            googleReviewUrl: establishments.googleReviewUrl,
             provider: posIntegrations.provider,
           })
           .from(diningTables)
@@ -71,9 +75,10 @@ export function createDbTableDirectory(db: Db, resolvePos: PosResolver = resolve
       });
       // Sem mesa do POS mapeada não é possível encaminhar pedidos: tratar como inexistente.
       if (!row || !row.posTableRef) return null;
-      const { provider, establishmentAddress, posTableRef, ...rest } = row;
+      const { provider, establishmentAddress, posTableRef, reviewsEnabled, googleReviewUrl, ...rest } = row;
       return {
         ...rest,
+        reviews: { enabled: reviewsEnabled, googleUrl: googleReviewUrl },
         orderingMode: effectiveOrderingMode(row.plan, row.orderingMode),
         posTableRef,
         establishmentAddress: establishmentAddress ?? undefined,

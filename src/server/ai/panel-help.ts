@@ -32,7 +32,7 @@ Separadores (alguns só para dono e gerente):
 - Fotos: fotos dos pratos, uma a uma, em massa ou em sessão com a câmara. As fotos são melhoradas automaticamente (luz e cor).
 - Aparência: logótipo e cores da ementa.
 - Línguas: traduzir a ementa para inglês, espanhol, francês e alemão. Escolher a língua e carregar em "Traduzir o que falta"; rever e Guardar. O cliente vê a ementa na língua do telemóvel e pode mudar no topo.
-- Avaliações: ligar o pedido de avaliação depois de pagar, link do Google, ver o que os clientes disseram, e "Responder a uma avaliação do Google" (colar a avaliação e copiar o rascunho de resposta).
+- Avaliações: ligar as avaliações dos clientes (em todos os planos: botão "Deixar uma avaliação" na ementa e na conta, e logo depois de pagar na app), link do Google, ver o que os clientes disseram, e "Responder a uma avaliação do Google" (colar a avaliação e copiar o rascunho de resposta).
 
 Outros: "Primeiros passos" no topo do painel para restaurantes novos; ligar as notificações neste aparelho; instalar a app no telemóvel (no iPhone, as notificações só funcionam com a app instalada). Mudar de plano, ligar a um POS, passar para ementa própria ou problemas de faturação: falar com a equipa MESVIO.
 `;

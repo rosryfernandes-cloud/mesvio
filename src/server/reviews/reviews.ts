@@ -7,12 +7,13 @@ import { auditLogs, diningTables, establishments, reviews } from "@/server/db/sc
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { hitRateLimit } from "@/server/security/rate-limit";
 import type { StaffContext } from "@/server/staff/context";
-import { currentSession, isOpen, loadBill } from "@/server/tables/table-sessions";
+import { currentSession, isOpen } from "@/server/tables/table-sessions";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 
 /**
- * Avaliações no fim da conta (em teste, ligadas por restaurante no painel). Depois de pagar, o
- * cliente dá 1–5 estrelas e um comentário opcional, que só o restaurante vê. O botão "Avaliar no
+ * Avaliações dos clientes (ligadas por restaurante no painel), em todos os planos: no fim da conta
+ * paga na app e, para quem paga no balcão ou só vê a ementa, pelo botão "Avaliar" da ementa e da conta.
+ * O cliente dá 1–5 estrelas e um comentário opcional, que só o restaurante vê. O botão "Avaliar no
  * Google" aparece a TODOS, seja qual for a nota: mostrá-lo só a quem gostou ("review gating") é
  * proibido pelo Google e pelas regras de defesa do consumidor.
  */
@@ -39,7 +40,7 @@ type SubmitResult =
   | { ok: true }
   | { ok: false; code: "INVALID_INPUT" | "TABLE_NOT_FOUND" | "NOT_ALLOWED" | "RATE_LIMITED"; message: string };
 
-/** O cliente (com o QR/NFC da mesa) avalia, depois de a conta estar paga. */
+/** O cliente (com o QR/NFC da mesa) avalia. Os limites por mesa e por IP travam abusos. */
 export async function submitReview(db: Db, token: string, raw: unknown, { ipHash, now = new Date() }: { ipHash: string; now?: Date }): Promise<SubmitResult> {
   const parsed = reviewInputSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, code: "INVALID_INPUT", message: "Escolha de 1 a 5 estrelas." };
@@ -57,17 +58,13 @@ export async function submitReview(db: Db, token: string, raw: unknown, { ipHash
   return withTenant(db, { organizationId: t.organizationId }, async (tx): Promise<SubmitResult> => {
     const [est] = await tx.select({ enabled: establishments.reviewsEnabled }).from(establishments).where(eq(establishments.id, t.establishmentId));
     if (!est?.enabled) return { ok: false, code: "NOT_ALLOWED", message: "Este restaurante não recebe avaliações pela app." };
-    // Só avalia quem está numa conta paga (evita avaliações de quem só leu o QR).
+    // Fica ligada à conta aberta da mesa, se houver; num plano só com ementa não há conta.
     const session = await currentSession(tx, t.tableId);
-    const bill = session && isOpen(session, now) ? await loadBill(tx, t.tableId, now) : null;
-    if (!session || !bill || bill.totalCents === 0 || bill.dueCents > 0) {
-      return { ok: false, code: "NOT_ALLOWED", message: "Pode avaliar depois de pagar a conta." };
-    }
     await tx.insert(reviews).values({
       organizationId: t.organizationId,
       establishmentId: t.establishmentId,
       tableId: t.tableId,
-      tableSessionId: session.id,
+      tableSessionId: session && isOpen(session, now) ? session.id : null,
       stars: parsed.data.stars,
       comment: parsed.data.comment,
     });

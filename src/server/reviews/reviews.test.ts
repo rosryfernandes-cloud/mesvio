@@ -49,18 +49,19 @@ describe("avaliações no fim da conta (em teste)", () => {
     expect(await review({ stars: 5 })).toMatchObject({ ok: false, code: "NOT_ALLOWED" });
   });
 
-  it("ligadas: só depois de a conta estar paga; o painel vê a média, a distribuição e os comentários", async () => {
+  it("ligadas: em qualquer plano, mesmo sem pagar na app nem pedir; o painel vê a média, a distribuição e os comentários", async () => {
     expect(await saveReviewSettings(db, owner, { enabled: true, googleReviewUrl: "https://g.page/r/swara/review" })).toEqual({ ok: true });
+    expect(await review({ stars: 4 })).toEqual({ ok: true }); // só viu a ementa (sem conta aberta)
     await order();
-    expect(await review({ stars: 5 })).toMatchObject({ ok: false, code: "NOT_ALLOWED" }); // ainda por pagar
+    expect(await review({ stars: 3 })).toEqual({ ok: true }); // conta por pagar (paga no balcão)
     await payBill();
     expect((await getTableBillByToken(db, T1.publicToken))!.reviews).toEqual({ enabled: true, googleUrl: "https://g.page/r/swara/review" });
 
     expect(await review({ stars: 5, comment: "  Ótimo serviço!  " })).toEqual({ ok: true });
     expect(await review({ stars: 2, comment: "Demorou muito" })).toEqual({ ok: true });
     const o = await getReviewsOverview(db, owner);
-    expect(o).toMatchObject({ enabled: true, count: 2, average: 3.5, distribution: [0, 1, 0, 0, 1] });
-    expect(o.recent.map((r) => r.comment).sort()).toEqual(["Demorou muito", "Ótimo serviço!"]);
+    expect(o).toMatchObject({ enabled: true, count: 4, average: 3.5, distribution: [0, 1, 1, 1, 1] });
+    expect(o.recent.flatMap((r) => (r.comment ? [r.comment] : [])).sort()).toEqual(["Demorou muito", "Ótimo serviço!"]);
     expect(o.recent[0].tableLabel).toBeTruthy();
   });
 
