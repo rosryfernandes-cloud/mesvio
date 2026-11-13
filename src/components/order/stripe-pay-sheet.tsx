@@ -58,7 +58,7 @@ export function StripePaySheet({
           stripe={stripeFor(accountId)}
           options={{
             clientSecret,
-            locale: locale === "en" ? "en" : "pt",
+            locale,
             appearance: { theme: "stripe", variables: { colorPrimary: brand || "#062d25", borderRadius: "12px" } },
           }}
         >

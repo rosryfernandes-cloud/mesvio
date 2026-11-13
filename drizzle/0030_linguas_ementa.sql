@@ -1,0 +1,2 @@
+ALTER TABLE "menu_translations" DROP CONSTRAINT "menu_translations_locale";--> statement-breakpoint
+ALTER TABLE "menu_translations" ADD CONSTRAINT "menu_translations_locale" CHECK ("menu_translations"."locale" in ('en', 'es', 'fr', 'de'));

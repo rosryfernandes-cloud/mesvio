@@ -6,7 +6,9 @@ import { DEMO_TABLES } from "@/server/pos/mock/demo-data";
 import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { placeOrder, type PlaceOrderDeps } from "@/server/orders/place-order";
 import { resolveStaffContext, type StaffContext } from "./context";
-import { getDaySummary } from "./summary-service";
+import { eq } from "drizzle-orm";
+import { orders } from "@/server/db/schema";
+import { getDaySummary, getWeekSummary } from "./summary-service";
 
 const TOKEN = DEMO_TABLES[0].publicToken;
 const OWNER = DEMO_USERS[0].userId;
@@ -38,5 +40,38 @@ describe("resumo do dia", () => {
     expect(s.byHour.reduce((n, h) => n + h.orders, 0)).toBe(2);
     expect(s.topProducts[0]).toEqual({ name: "Imperial 0,2 L", quantity: 3 });
     expect(s.secondsToKitchen).not.toBeNull();
+  });
+});
+
+describe("resumo da semana", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const backdate = async (id: string, daysAgo: number) => db.update(orders).set({ createdAt: new Date(Date.now() - daysAgo * DAY) }).where(eq(orders.id, id));
+
+  it("sem pedidos: 7 dias a zero", async () => {
+    const s = await getWeekSummary(db, owner);
+    expect(s).toMatchObject({ orders: 0, salesCents: 0, previous: { orders: 0, salesCents: 0 }, topProducts: [], notOrdered: [] });
+    expect(s.byDay).toHaveLength(7);
+    expect(s.byDay.every((d) => d.orders === 0)).toBe(true);
+  });
+
+  it("soma os últimos 7 dias por dia e compara com a semana anterior", async () => {
+    const a = await order([{ productRef: "D361", quantity: 2 }]); // hoje, 5,00 €
+    const b = await order([{ productRef: "D301", quantity: 1 }]); // há 3 dias, 2,75 €
+    const c = await order([{ productRef: "D361", quantity: 1 }]); // há 9 dias: semana anterior
+    const d = await order([{ productRef: "D361", quantity: 1 }]); // há 20 dias: fora
+    for (const r of [a, b, c, d]) expect(r.ok).toBe(true);
+    const id = (r: typeof a) => (r.ok ? r.order.id : "");
+    await backdate(id(b), 3);
+    await backdate(id(c), 9);
+    await backdate(id(d), 20);
+
+    const s = await getWeekSummary(db, owner);
+    expect(s.orders).toBe(2);
+    expect(s.salesCents).toBe(500 + 275);
+    expect(s.previous).toEqual({ orders: 1, salesCents: 250 });
+    expect(s.byDay).toHaveLength(7);
+    expect(s.byDay[6]).toMatchObject({ orders: 1, salesCents: 500 });
+    expect(s.byDay[3]).toMatchObject({ orders: 1, salesCents: 275 });
+    expect(s.topProducts[0]).toEqual({ name: "Imperial 0,2 L", quantity: 2 });
   });
 });

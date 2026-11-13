@@ -4,15 +4,18 @@
  * Nomes de pratos e categorias não estão aqui: vêm do restaurante (menu_translations).
  */
 import type { SelectionIssue } from "@/lib/order-pricing";
+import { de } from "./locales/de";
+import { es } from "./locales/es";
+import { fr } from "./locales/fr";
 
-export const LOCALES = ["pt", "en"] as const;
+export const LOCALES = ["pt", "en", "es", "fr", "de"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "pt";
 export const LOCALE_COOKIE = "mesvio_lang";
 
-export const LOCALE_NAMES: Record<Locale, string> = { pt: "Português", en: "English" };
+export const LOCALE_NAMES: Record<Locale, string> = { pt: "Português", en: "English", es: "Español", fr: "Français", de: "Deutsch" };
 /** Para datas/horas (Intl). */
-export const LOCALE_TAGS: Record<Locale, string> = { pt: "pt-PT", en: "en-GB" };
+export const LOCALE_TAGS: Record<Locale, string> = { pt: "pt-PT", en: "en-GB", es: "es-ES", fr: "fr-FR", de: "de-DE" };
 
 type StatusCopy = { title: string; body: string };
 
@@ -413,14 +416,14 @@ const en: Messages = {
   },
 };
 
-export const MESSAGES: Record<Locale, Messages> = { pt, en };
+export const MESSAGES: Record<Locale, Messages> = { pt, en, es, fr, de };
 
 export const isLocale = (v: unknown): v is Locale => typeof v === "string" && (LOCALES as readonly string[]).includes(v);
 
 /**
  * Língua a usar: a escolhida pelo cliente (cookie) ou, na primeira visita, a do telemóvel
- * (Accept-Language, por ordem de preferência). Telemóveis em português ficam em português;
- * em qualquer outra língua, inglês (é a que um turista lê melhor).
+ * (Accept-Language, por ordem de preferência): a primeira que a MESVIO tenha. Telemóveis numa
+ * língua que não temos ficam em inglês (é a que um turista lê melhor).
  */
 export function pickLocale(cookieValue: string | undefined, acceptLanguage: string | null): Locale {
   if (isLocale(cookieValue)) return cookieValue;
@@ -434,7 +437,7 @@ export function pickLocale(cookieValue: string | undefined, acceptLanguage: stri
     .filter((x) => x.lang && x.q > 0)
     .sort((a, b) => b.q - a.q);
   if (wanted.length === 0) return DEFAULT_LOCALE;
-  return wanted[0].lang === "pt" ? "pt" : "en";
+  return (wanted.map((w) => w.lang).find(isLocale) as Locale | undefined) ?? "en";
 }
 
 /** Texto de um motivo de recusa do carrinho na língua do cliente. */

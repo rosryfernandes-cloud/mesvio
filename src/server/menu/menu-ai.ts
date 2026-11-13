@@ -34,7 +34,7 @@ async function inBatches<I, O>(tag: string, items: I[], run: (batch: I[]) => Pro
 
 // ---------- Traduções ----------
 
-export const AI_LOCALES = { en: "English" } as const;
+export const AI_LOCALES = { en: "English", es: "Spanish (Spain)", fr: "French", de: "German" } as const;
 export type AiLocale = keyof typeof AI_LOCALES;
 
 export interface TranslationSource {

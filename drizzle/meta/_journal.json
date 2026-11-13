@@ -211,6 +211,13 @@
       "when": 1794431714229,
       "tag": "0029_origem_pedidos_demo",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794574743786,
+      "tag": "0030_linguas_ementa",
+      "breakpoints": true
     }
   ]
 }

@@ -89,6 +89,16 @@ describe("traduções no painel", () => {
     expect(menu!.categories.find((c) => c.ref === "F-ENTRADAS")!.name).toBe("Entradas");
   });
 
+  it("espanhol: usa a tradução em espanhol; o que falta aparece em inglês e, sem inglês, no original", async () => {
+    await saveTranslations(db, manager, { locale: "es", changes: [{ kind: "product", ref: "F111", name: "Tempura de verduras" }] });
+    const menu = await getTableMenu(T1.publicToken, { db, locale: "es" });
+    expect(product(menu, "F111").name).toBe("Tempura de verduras");
+    expect(product(menu, "F162").name).toBe("Swara burger (180 g)");
+    expect(product(menu, "F162").allergens).toContain("gluten");
+    expect(product(menu, "F101").allergens).toEqual(["gluten", "leche"]);
+    expect((await listTranslatable(db, manager, "es")).find((i) => i.ref === "F162")!.translated).toBeNull();
+  });
+
   it("as traduções de um restaurante não se veem a partir de outro (RLS)", async () => {
     const otherOrg = "00000000-0000-4000-8000-00000000c001";
     await db.insert(t.organizations).values({ id: otherOrg, legalName: "Outro, Lda.", nif: "999999992", status: "active" });

@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TranslatableItem, TranslationLocale } from "@/server/staff/translations-service";
 
-/** Hoje só há inglês; o resto da ementa fica em português. */
-const LOCALE: TranslationLocale = "en";
+/** Línguas para que o restaurante pode traduzir a ementa (o original fica em português). */
+const LANGS: { id: TranslationLocale; label: string; flag: string }[] = [
+  { id: "en", label: "inglês", flag: "🇬🇧" },
+  { id: "es", label: "espanhol", flag: "🇪🇸" },
+  { id: "fr", label: "francês", flag: "🇫🇷" },
+  { id: "de", label: "alemão", flag: "🇩🇪" },
+];
 
 type Filter = "product" | "category" | "option";
 const FILTERS: { id: Filter; label: string }[] = [
@@ -23,7 +28,7 @@ const keyOf = (i: Pick<TranslatableItem, "kind" | "ref">) => `${i.kind}|${i.ref}
 
 /** Traduções da ementa feitas pelo restaurante (dono/gerente). */
 export function TranslationsView() {
-  const locale = LOCALE;
+  const [locale, setLocale] = useState<TranslationLocale>("en");
   const [filter, setFilter] = useState<Filter>("product");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [query, setQuery] = useState("");
@@ -130,21 +135,43 @@ export function TranslationsView() {
     await load(locale);
   }
 
-  const langLabel = "inglês";
+  const langLabel = LANGS.find((l) => l.id === locale)!.label;
+
+  function changeLocale(next: TranslationLocale) {
+    if (next === locale) return;
+    if (drafts.size > 0 && !window.confirm("Há traduções por guardar nesta língua. Mudar de língua e perdê-las?")) return;
+    setMessage(null);
+    setLocale(next);
+  }
 
   return (
     <div className="grid gap-5 pb-24">
       <div>
-        <h2 className="text-xl">Ementa em inglês</h2>
+        <h2 className="text-xl">Ementa noutras línguas</h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-          Clientes com o telemóvel noutra língua veem a ementa em inglês (e podem mudar para português). Botões, alergénios e avisos
-          já estão traduzidos; aqui traduz os nomes e descrições da sua ementa. O que ficar por traduzir aparece em português.
+          Cada cliente vê a ementa na língua do telemóvel (inglês, espanhol, francês ou alemão; noutras línguas, inglês) e pode
+          mudar no topo da ementa. Botões, alergénios e avisos já estão traduzidos; aqui traduz os nomes e descrições da sua
+          ementa. O que faltar em espanhol, francês ou alemão aparece em inglês e, sem inglês, em português.
         </p>
+      </div>
+
+      <div role="group" aria-label="Língua" className="flex flex-wrap gap-2">
+        {LANGS.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => changeLocale(l.id)}
+            aria-pressed={locale === l.id}
+            className={`min-h-11 rounded-xl border px-4 font-semibold capitalize ${locale === l.id ? "border-brand bg-brand text-white" : "border-line bg-card"}`}
+          >
+            <span aria-hidden="true">{l.flag}</span> {l.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card p-4">
         <div className="min-w-56 flex-1">
-          <p className="font-semibold">Traduzir com IA</p>
+          <p className="font-semibold">Traduzir para {langLabel} com IA</p>
           <p className="text-sm text-ink-soft">Traduz em segundos tudo o que falta. Nada aparece aos clientes antes de rever e guardar.</p>
         </div>
         <button

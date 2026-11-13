@@ -502,7 +502,7 @@ export const productAvailabilityOverrides = pgTable(
 export const menuTranslationKind = pgEnum("menu_translation_kind", ["section", "category", "product", "group", "modifier"]);
 
 /**
- * Traduções da ementa para inglês feitas pelo restaurante (o POS só tem português). Chave:
+ * Traduções da ementa (inglês, espanhol, francês, alemão) feitas pelo restaurante (o POS só tem português). Chave:
  * referência do POS; o que não estiver traduzido aparece no original.
  */
 export const menuTranslations = pgTable(
@@ -519,7 +519,7 @@ export const menuTranslations = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.establishmentId, t.locale, t.kind, t.ref] }),
-    check("menu_translations_locale", sql`${t.locale} = 'en'`),
+    check("menu_translations_locale", sql`${t.locale} in ('en', 'es', 'fr', 'de')`),
   ],
 );
 

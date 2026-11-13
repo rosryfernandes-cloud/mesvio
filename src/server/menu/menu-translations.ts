@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { withTenant } from "@/server/db/tenant";
 import { menuTranslations } from "@/server/db/schema";
@@ -19,20 +19,23 @@ export type MenuTranslator = (
 export const untranslated: MenuTranslator = (_kind, _ref, name, description) => ({ name, description });
 const identity = untranslated;
 
-/** Traduções do restaurante para a língua pedida (hoje, só inglês). Em português não há nada a ler. */
+/**
+ * Traduções do restaurante para a língua pedida. Em espanhol, francês ou alemão, o que não estiver
+ * traduzido aparece em inglês (se houver) e só depois no original. Em português não há nada a ler.
+ */
 export async function loadMenuTranslations(db: Db, organizationId: string, establishmentId: string, locale: Locale): Promise<MenuTranslator> {
   if (locale === DEFAULT_LOCALE) return identity;
   const rows = await withTenant(db, { organizationId }, (tx) =>
     tx
       .select({ locale: menuTranslations.locale, kind: menuTranslations.kind, ref: menuTranslations.ref, name: menuTranslations.name, description: menuTranslations.description })
       .from(menuTranslations)
-      .where(and(eq(menuTranslations.establishmentId, establishmentId), eq(menuTranslations.locale, locale))),
+      .where(and(eq(menuTranslations.establishmentId, establishmentId), inArray(menuTranslations.locale, [...new Set([locale, "en"])]))),
   );
   if (rows.length === 0) return identity;
   const key = (l: string, kind: string, ref: string) => `${l}|${kind}|${ref}`;
   const map = new Map(rows.map((r) => [key(r.locale, r.kind, r.ref), r]));
   return (kind, ref, name, description) => {
-    const hit = map.get(key(locale, kind, ref));
+    const hit = map.get(key(locale, kind, ref)) ?? map.get(key("en", kind, ref));
     if (!hit) return { name, description };
     // Se o restaurante só traduziu o nome, mantém-se a descrição original (os ingredientes ajudam).
     return { name: hit.name, description: hit.description ?? description };
