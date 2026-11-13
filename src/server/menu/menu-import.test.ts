@@ -5,8 +5,9 @@ import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { switchToOwnMenu } from "@/server/platform/platform-service";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
-import { describeKeyValue, detectPhotoType, extractApiKey, type MenuPhoto, type MenuReading, parseReading, readMenuPhotos, toMenuDraft } from "./menu-import";
+import { detectPhotoType, type MenuPhoto, type MenuReading, parseReading, readMenuPhotos, toMenuDraft } from "./menu-import";
 import { getOwnMenu, importMenuDraft } from "./own-menu";
+import { describeKeyValue, extractApiKey } from "@/server/ai/claude";
 
 const PHOTO: MenuPhoto = { mediaType: "image/jpeg", data: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
 

@@ -31,6 +31,7 @@ export function TranslationsView() {
   const [drafts, setDrafts] = useState<Map<string, Draft>>(new Map());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
 
   const load = useCallback(async (l: TranslationLocale) => {
     setItems(null);
@@ -78,6 +79,34 @@ export function TranslationsView() {
     });
   }
 
+  /** Pede à IA as traduções do que falta e põe-nas por guardar: o dono revê antes de publicar. */
+  async function suggest() {
+    if (!items) return;
+    setSuggesting(true);
+    setMessage(null);
+    const res = await fetch("/api/painel/traducoes/sugerir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale }),
+    }).catch(() => null);
+    setSuggesting(false);
+    const data = await res?.json().catch(() => null);
+    if (!res?.ok) return setMessage({ text: data?.message ?? "Não foi possível traduzir agora. Tente de novo.", error: true });
+    const suggestions: { kind: TranslatableItem["kind"]; ref: string; name: string; description?: string }[] = data.suggestions;
+    if (suggestions.length === 0) return setMessage({ text: `Já está tudo traduzido em ${langLabel}.`, error: false });
+    setDrafts((d) => {
+      const next = new Map(d);
+      // Não mexe no que o dono já está a escrever.
+      for (const s of suggestions) if (!next.has(keyOf(s))) next.set(keyOf(s), { name: s.name, description: s.description ?? "" });
+      return next;
+    });
+    setOnlyMissing(false);
+    setMessage({
+      text: `A IA traduziu ${suggestions.length} ${suggestions.length === 1 ? "elemento" : "elementos"} (com o contorno destacado). Reveja e carregue em Guardar para os clientes verem.${data.missing ? ` Ficaram ${data.missing} por traduzir: repita ou traduza à mão.` : ""}`,
+      error: false,
+    });
+  }
+
   async function save() {
     if (!items || drafts.size === 0) return;
     setBusy(true);
@@ -111,6 +140,21 @@ export function TranslationsView() {
           Clientes com o telemóvel noutra língua veem a ementa em inglês (e podem mudar para português). Botões, alergénios e avisos
           já estão traduzidos; aqui traduz os nomes e descrições da sua ementa. O que ficar por traduzir aparece em português.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card p-4">
+        <div className="min-w-56 flex-1">
+          <p className="font-semibold">Traduzir com IA</p>
+          <p className="text-sm text-ink-soft">Traduz em segundos tudo o que falta. Nada aparece aos clientes antes de rever e guardar.</p>
+        </div>
+        <button
+          type="button"
+          onClick={suggest}
+          disabled={!items || suggesting || busy}
+          className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
+        >
+          {suggesting ? "A traduzir…" : "Traduzir o que falta"}
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

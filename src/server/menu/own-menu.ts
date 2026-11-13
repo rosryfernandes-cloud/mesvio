@@ -270,6 +270,32 @@ export async function saveProduct(db: Db, s: Scope, raw: unknown): Promise<OwnMe
   });
 }
 
+const allergensInputSchema = z
+  .array(z.object({ id: z.uuid(), allergens: z.array(z.enum(ALLERGENS)).max(14) }))
+  .min(1)
+  .max(500);
+
+/** Grava os alergénios revistos pelo dono (vários pratos de uma vez). Só mexe em pratos deste restaurante. */
+export async function saveAllergens(db: Db, s: Scope, raw: unknown): Promise<OwnMenuResult<{ saved: number }>> {
+  const parsed = allergensInputSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: "Verifique os alergénios." };
+  return withTenant(db, tenantOf(s), async (tx) => {
+    if (!(await usesOwnMenu(tx, s.establishmentId))) return notOwnMenu;
+    let saved = 0;
+    for (const p of parsed.data) {
+      const allergens = ALLERGENS.filter((a) => p.allergens.includes(a));
+      const updated = await tx
+        .update(products)
+        .set({ allergens })
+        .where(and(eq(products.id, p.id), eq(products.establishmentId, s.establishmentId)))
+        .returning({ id: products.id });
+      saved += updated.length;
+    }
+    await audit(tx, s, "menu.allergens_reviewed", s.establishmentId, { saved });
+    return { ok: true, value: { saved } };
+  });
+}
+
 const importedMenuSchema = z.object({
   categories: z
     .array(

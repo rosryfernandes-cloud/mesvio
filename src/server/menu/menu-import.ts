@@ -1,7 +1,6 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { aiApiKey, askClaudeJson, describeAiError, parseJson } from "@/server/ai/claude";
 
 /**
  * Lê fotografias de uma ementa em papel e devolve uma proposta para o dono rever. Não grava nada:
@@ -13,8 +12,6 @@ export const MAX_MENU_PHOTOS = 8;
 export const MAX_MENU_UPLOAD_BYTES = 4 * 1024 * 1024;
 /** Cada leitura custa dinheiro: chega para repetir várias vezes, trava abusos. */
 export const MENU_IMPORT_RATE_LIMIT = { limit: 20, windowSeconds: 60 * 60 };
-
-const MODEL = "claude-opus-5-5";
 
 const VAT_BY_KIND = {
   food: 1300,
@@ -59,74 +56,26 @@ export type MenuPhoto = { mediaType: "image/jpeg" | "image/png" | "image/webp"; 
 export type ReaderOutput = { stopReason: string | null; reading: MenuReading | null };
 export type MenuReader = (photos: MenuPhoto[]) => Promise<ReaderOutput>;
 
-/** O formato pedido à API, sem a função de leitura do SDK: a resposta é validada por nós. */
-const OUTPUT_FORMAT = (() => {
-  const { type, schema } = betaZodOutputFormat(readingSchema);
-  return { type, schema };
-})();
-
 /** Texto da resposta → leitura validada; null (com o motivo no registo) se não vier no formato pedido. */
 export function parseReading(text: string, stopReason: string | null): MenuReading | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    console.error("[menu-import] resposta sem JSON válido", { stopReason, length: text.length });
-    return null;
-  }
-  const parsed = readingSchema.safeParse(raw);
-  if (!parsed.success) {
-    console.error("[menu-import] resposta fora do formato", { stopReason, issue: parsed.error.issues[0]?.message, path: parsed.error.issues[0]?.path?.join(".") });
-    return null;
-  }
-  return parsed.data;
-}
-
-/** Tira a chave do valor da variável, mesmo que venha com espaços, aspas ou o comando de exemplo à volta. */
-export function extractApiKey(value: string | undefined): string | null {
-  return value?.match(/sk-ant-[A-Za-z0-9_-]{20,}/)?.[0] ?? null;
-}
-
-/** Descreve o valor sem o mostrar: serve para o registo dizer porque não há chave. */
-export function describeKeyValue(value: string) {
-  return {
-    length: value.length,
-    startsWithSkAnt: value.trim().startsWith("sk-ant-"),
-    hasSpaces: /\s/.test(value),
-    hasQuotes: /["']/.test(value),
-    looksLikeCommand: /curl|https?:/i.test(value),
-  };
+  return parseJson(readingSchema, text, stopReason, "menu-import");
 }
 
 const anthropicReader: MenuReader = async (photos) => {
-  const client = new Anthropic({ apiKey: extractApiKey(process.env.ANTHROPIC_API_KEY), timeout: 110_000, maxRetries: 1 });
-  const message = await client.beta.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "medium", format: OUTPUT_FORMAT },
+  const { stopReason, data } = await askClaudeJson(readingSchema, {
+    tag: "menu-import",
     system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: [
-          ...photos.map((p) => ({
-            type: "image" as const,
-            source: { type: "base64" as const, media_type: p.mediaType, data: p.data.toString("base64") },
-          })),
-          { type: "text" as const, text: "Transcribe this menu." },
-        ],
-      },
+    maxTokens: 16000,
+    effort: "medium",
+    content: [
+      ...photos.map((p) => ({
+        type: "image" as const,
+        source: { type: "base64" as const, media_type: p.mediaType, data: p.data.toString("base64") },
+      })),
+      { type: "text" as const, text: "Transcribe this menu." },
     ],
   });
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-  if (message.stop_reason === "max_tokens") return { stopReason: message.stop_reason, reading: null };
-  if (!text) {
-    console.error("[menu-import] resposta sem texto", { stopReason: message.stop_reason, blocks: message.content.map((b) => b.type) });
-    return { stopReason: message.stop_reason, reading: null };
-  }
-  return { stopReason: message.stop_reason, reading: parseReading(text, message.stop_reason) };
+  return { stopReason, reading: data };
 };
 
 export type MenuDraft = {
@@ -167,25 +116,14 @@ export function toMenuDraft(reading: MenuReading): MenuDraft {
 }
 
 export async function readMenuPhotos(photos: MenuPhoto[], reader?: MenuReader): Promise<ReadMenuResult> {
-  if (!reader && !extractApiKey(process.env.ANTHROPIC_API_KEY)) {
-    if (process.env.ANTHROPIC_API_KEY) console.error("[menu-import] ANTHROPIC_API_KEY sem chave válida", describeKeyValue(process.env.ANTHROPIC_API_KEY));
+  if (!reader && !aiApiKey("menu-import")) {
     return { ok: false, code: "NOT_CONFIGURED", message: "A leitura de ementas por fotografia ainda não está ativa. Crie os pratos à mão ou fale com a MESVIO." };
   }
   let output: ReaderOutput;
   try {
     output = await (reader ?? anthropicReader)(photos);
   } catch (error) {
-    // Só o tipo e a mensagem do erro: nunca a chave nem as fotos.
-    // A mensagem de um erro de cabeçalho traz o valor da chave: nesse caso só se diz que a chave está mal colada.
-    const detail =
-      error instanceof Anthropic.APIError
-        ? `${error.status} ${error.name}`
-        : error instanceof Error && /header/i.test(error.message)
-          ? `${error.name}: ANTHROPIC_API_KEY mal formatada (deve ser só a chave, sk-ant-…)`
-          : error instanceof Error
-            ? `${error.name}: ${error.message.slice(0, 120)}`
-            : "erro desconhecido";
-    console.error("[menu-import] falha na leitura", detail);
+    console.error("[menu-import] falha na leitura", describeAiError(error));
     return { ok: false, code: "UNAVAILABLE", message: "Não foi possível ler a ementa agora. Tente de novo daqui a pouco." };
   }
   if (output.stopReason === "max_tokens") {
