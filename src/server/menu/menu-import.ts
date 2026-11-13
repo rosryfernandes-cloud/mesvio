@@ -159,7 +159,15 @@ export async function readMenuPhotos(photos: MenuPhoto[], reader?: MenuReader): 
     output = await (reader ?? anthropicReader)(photos);
   } catch (error) {
     // Só o tipo e a mensagem do erro: nunca a chave nem as fotos.
-    const detail = error instanceof Anthropic.APIError ? `${error.status} ${error.name}` : error instanceof Error ? `${error.name}: ${error.message.slice(0, 300)}` : "erro desconhecido";
+    // A mensagem de um erro de cabeçalho traz o valor da chave: nesse caso só se diz que a chave está mal colada.
+    const detail =
+      error instanceof Anthropic.APIError
+        ? `${error.status} ${error.name}`
+        : error instanceof Error && /header/i.test(error.message)
+          ? `${error.name}: ANTHROPIC_API_KEY mal formatada (deve ser só a chave, sk-ant-…)`
+          : error instanceof Error
+            ? `${error.name}: ${error.message.slice(0, 120)}`
+            : "erro desconhecido";
     console.error("[menu-import] falha na leitura", detail);
     return { ok: false, code: "UNAVAILABLE", message: "Não foi possível ler a ementa agora. Tente de novo daqui a pouco." };
   }
