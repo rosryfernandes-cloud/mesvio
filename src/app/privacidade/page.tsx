@@ -41,13 +41,36 @@ export default function PrivacyPage() {
             legítimo na segurança do formulário (al. f)).
           </li>
           <li>
-            <strong>Conservação:</strong> 12 meses após o pedido; depois, são apagados automaticamente. Se te tornares cliente, os dados de contacto passam a seguir as regras do ponto 3.
+            <strong>Conservação:</strong> 12 meses após o pedido; depois, são apagados automaticamente. Se te tornares cliente, os dados de contacto passam a seguir as regras do ponto 4.
           </li>
         </ul>
       </section>
 
       <section>
-        <h2>3. Equipas dos restaurantes (painel)</h2>
+        <h2>3. Pré-visualizações da ementa enviadas pela MESVIO</h2>
+        <ul>
+          <li>
+            <strong>Dados:</strong> o nome do restaurante e a ementa que ele já publica (no site, em PDF ou em papel), usados para
+            preparar uma pré-visualização num link privado; se a pessoa que a abre carregar em &ldquo;Quero ativar&rdquo;, o contacto
+            que escolher deixar (telefone ou email, opcional). Registamos também quantas vezes o link foi aberto e quando, sem
+            identificar quem o abriu.
+          </li>
+          <li>
+            <strong>Finalidade:</strong> mostrar ao restaurante como ficaria a sua ementa na MESVIO e responder ao pedido de ativação.
+          </li>
+          <li>
+            <strong>Fundamento:</strong> interesse legítimo em apresentar o serviço a restaurantes (art. 6.º, n.º 1, al. f) do RGPD) e,
+            para o contacto deixado, diligências pré-contratuais a pedido da pessoa (al. b)).
+          </li>
+          <li>
+            <strong>Conservação:</strong> o link expira ao fim de 30 dias e os dados são apagados automaticamente 60 dias depois. Podes
+            pedir para os apagarmos antes, a qualquer momento (ver ponto 8).
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4. Equipas dos restaurantes (painel)</h2>
         <ul>
           <li>
             <strong>Dados:</strong> email, nome apresentado, perfil (dono, gerente ou staff), estabelecimento e registo das ações
@@ -69,7 +92,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>4. Clientes que pedem pela ementa digital</h2>
+        <h2>5. Clientes que pedem pela ementa digital</h2>
         <p>
           Quando fazes um pedido num restaurante que usa a MESVIO, <strong>o responsável pelo tratamento é o restaurante</strong>.
           A MESVIO trata esses dados por conta dele, como subcontratante (art. 28.º do RGPD), apenas para que o pedido chegue à
@@ -98,7 +121,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>5. Cookies</h2>
+        <h2>6. Cookies</h2>
         <p>
           Não usamos cookies de publicidade nem de análise, por isso não há aviso de cookies. Usamos apenas cookies estritamente
           necessários para manter a sessão de quem entra no painel do restaurante.
@@ -106,12 +129,17 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>6. Prestadores que nos ajudam</h2>
+        <h2>7. Prestadores que nos ajudam</h2>
         <p>Recorremos a prestadores que tratam dados por nossa conta, com contrato e garantias adequadas:</p>
         <ul>
           <li>Alojamento da aplicação (Vercel), com execução na União Europeia.</li>
           <li>Base de dados e autenticação (Supabase), alojadas na União Europeia.</li>
-          <li>Envio de emails (por exemplo, Resend), para os códigos de entrada no painel e os avisos de pedidos de demonstração.</li>
+          <li>Envio de emails (por exemplo, Resend), para os códigos de entrada no painel, os avisos de pedidos de demonstração e o resumo semanal que o restaurante pode ligar.</li>
+          <li>
+            Inteligência artificial (Anthropic), para ler ementas a partir de fotos, PDF ou links, sugerir traduções, descrições e
+            alergénios, responder às perguntas de ajuda do painel e escrever rascunhos de resposta a avaliações. Recebe o conteúdo da
+            ementa e os textos que o restaurante escreve ou cola; não é usado para treinar modelos.
+          </li>
           <li>Prestador de pagamentos, quando os pagamentos no telemóvel estiverem disponíveis.</li>
         </ul>
         <p>
@@ -121,7 +149,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>7. Os teus direitos</h2>
+        <h2>8. Os teus direitos</h2>
         <p>
           Podes pedir o acesso, a retificação, o apagamento, a limitação ou a portabilidade dos teus dados, e opor-te ao seu
           tratamento, escrevendo para <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>. Respondemos no prazo de um mês. Tens
@@ -134,7 +162,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>8. Segurança</h2>
+        <h2>9. Segurança</h2>
         <p>
           Os dados de cada restaurante estão isolados dos restantes na base de dados, as ligações são cifradas e o acesso ao
           painel é feito por convite, com perfis e permissões. Não vendemos dados pessoais.
@@ -142,7 +170,7 @@ export default function PrivacyPage() {
       </section>
 
       <section>
-        <h2>9. Alterações</h2>
+        <h2>10. Alterações</h2>
         <p>
           Se esta política mudar, publicamos aqui a nova versão com a data de atualização. Ver também os{" "}
           <Link href="/termos">Termos de Utilização</Link>.

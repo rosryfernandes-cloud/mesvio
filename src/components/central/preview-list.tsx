@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { outreachEmail, outreachShortText, outreachSubject } from "@/lib/outreach-email";
 
 export type PreviewRow = {
   id: string;
@@ -19,19 +20,34 @@ export type PreviewRow = {
 const when = (iso: string) => new Date(iso).toLocaleString("pt-PT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" });
 
 /** Pré-visualizações enviadas: quem abriu, quem quer ativar, copiar o link ou apagar. */
-export function PreviewList({ rows, baseUrl }: { rows: PreviewRow[]; baseUrl: string }) {
+export function PreviewList({ rows, baseUrl, sender }: { rows: PreviewRow[]; baseUrl: string; sender: string }) {
   const router = useRouter();
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const now = Date.now();
 
-  async function copy(token: string) {
+  const flash = (key: string) => {
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  async function copyText(key: string, text: string) {
     try {
-      await navigator.clipboard.writeText(`${baseUrl}/p/${token}`);
-      setCopied(token);
-      setTimeout(() => setCopied(null), 2000);
+      await navigator.clipboard.writeText(text);
+      flash(key);
     } catch {
-      // sem acesso à área de transferência: o link continua visível no botão Abrir
+      window.prompt("Copie o texto:", text);
+    }
+  }
+
+  /** Copia o email já formatado (com as imagens), para colar no Gmail. */
+  async function copyEmail(r: PreviewRow) {
+    const { html, text } = outreachEmail({ restaurant: r.restaurantName, url: `${baseUrl}/p/${r.token}`, sender, baseUrl });
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+      flash(`email-${r.id}`);
+    } catch {
+      await copyText(`email-${r.id}`, text);
     }
   }
 
@@ -76,8 +92,21 @@ export function PreviewList({ rows, baseUrl }: { rows: PreviewRow[]; baseUrl: st
               <div className="flex flex-wrap gap-2">
                 {!expired && (
                   <>
-                    <button type="button" onClick={() => copy(r.token)} className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold">
+                    <button type="button" onClick={() => copyText(r.token, `${baseUrl}/p/${r.token}`)} className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold">
                       {copied === r.token ? "Copiado ✓" : "Copiar link"}
+                    </button>
+                    <button type="button" onClick={() => copyText(`subj-${r.id}`, outreachSubject(r.restaurantName))} className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold">
+                      {copied === `subj-${r.id}` ? "Copiado ✓" : "Assunto"}
+                    </button>
+                    <button type="button" onClick={() => copyEmail(r)} className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white">
+                      {copied === `email-${r.id}` ? "Copiado ✓" : "Copiar email"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(`wa-${r.id}`, outreachShortText({ restaurant: r.restaurantName, url: `${baseUrl}/p/${r.token}`, sender }))}
+                      className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold"
+                    >
+                      {copied === `wa-${r.id}` ? "Copiado ✓" : "WhatsApp / Instagram"}
                     </button>
                     <a href={`/p/${r.token}`} target="_blank" rel="noopener" className="flex min-h-10 items-center rounded-xl border border-line bg-paper px-3 text-sm font-semibold">
                       Abrir

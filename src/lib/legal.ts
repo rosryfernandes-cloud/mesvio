@@ -8,7 +8,7 @@ export const LEGAL = {
   nif: "262823926",
   address: "Praça Gil Vicente, 9, 2.º Esq., 2800-013 Almada",
   email: "geral@mesvio.pt",
-  updatedAt: "12 de novembro de 2026",
+  updatedAt: "13 de novembro de 2026",
 } as const;
 
 /**

@@ -29,8 +29,13 @@ export default async function DemoPage() {
           Links enviados
         </h2>
         <p className="mt-1 text-sm text-ink-soft">Quem pediu para ativar aparece primeiro, depois quem abriu. Ligue a quem abriu há pouco.</p>
+        <p className="mt-1 text-sm text-ink-soft">
+          &quot;Copiar email&quot; copia a mensagem já formatada, com imagens: cole no Gmail e copie também o assunto. &quot;WhatsApp / Instagram&quot; copia
+          uma mensagem curta. Envie do seu email ou telemóvel, a poucos restaurantes por dia e só para contactos de empresa.
+        </p>
         <PreviewList
           baseUrl={baseUrl}
+          sender={(admin.displayName ?? "Rodrigo").split(" ")[0]}
           rows={previews.map(({ firstViewedAt: _first, ...p }) => ({
             ...p,
             createdAt: p.createdAt.toISOString(),
