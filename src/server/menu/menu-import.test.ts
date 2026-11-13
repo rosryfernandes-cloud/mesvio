@@ -5,7 +5,7 @@ import { MockPosAdapter } from "@/server/pos/mock/mock-pos-adapter";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { switchToOwnMenu } from "@/server/platform/platform-service";
 import { resolveStaffContext, type StaffContext } from "@/server/staff/context";
-import { detectPhotoType, type MenuPhoto, type MenuReading, readMenuPhotos, toMenuDraft } from "./menu-import";
+import { detectPhotoType, type MenuPhoto, type MenuReading, parseReading, readMenuPhotos, toMenuDraft } from "./menu-import";
 import { getOwnMenu, importMenuDraft } from "./own-menu";
 
 const PHOTO: MenuPhoto = { mediaType: "image/jpeg", data: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
@@ -121,5 +121,14 @@ describe("confirmar a ementa importada", () => {
     await ownMenu();
     const bad = { categories: [{ name: "X", section: "", products: [{ name: "Y", description: "", priceCents: null, vatRateBps: 1300 }] }] };
     expect(await importMenuDraft(db, owner, bad)).toMatchObject({ ok: false, code: "INVALID" });
+  });
+});
+
+describe("resposta da leitura", () => {
+  it("aceita só JSON no formato pedido e não rebenta com respostas cortadas", () => {
+    const ok = { readable: true, categories: [{ name: "Pratos", section: null, items: [{ name: "Bitoque", description: null, priceEuros: 9.5, kind: "food", unsure: false }] }] };
+    expect(parseReading(JSON.stringify(ok), "end_turn")).toEqual(ok);
+    expect(parseReading(JSON.stringify(ok).slice(0, 40), "end_turn")).toBeNull();
+    expect(parseReading(JSON.stringify({ readable: true }), "end_turn")).toBeNull();
   });
 });

@@ -59,14 +59,37 @@ export type MenuPhoto = { mediaType: "image/jpeg" | "image/png" | "image/webp"; 
 export type ReaderOutput = { stopReason: string | null; reading: MenuReading | null };
 export type MenuReader = (photos: MenuPhoto[]) => Promise<ReaderOutput>;
 
+/** O formato pedido à API, sem a função de leitura do SDK: a resposta é validada por nós. */
+const OUTPUT_FORMAT = (() => {
+  const { type, schema } = betaZodOutputFormat(readingSchema);
+  return { type, schema };
+})();
+
+/** Texto da resposta → leitura validada; null (com o motivo no registo) se não vier no formato pedido. */
+export function parseReading(text: string, stopReason: string | null): MenuReading | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    console.error("[menu-import] resposta sem JSON válido", { stopReason, length: text.length });
+    return null;
+  }
+  const parsed = readingSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error("[menu-import] resposta fora do formato", { stopReason, issue: parsed.error.issues[0]?.message, path: parsed.error.issues[0]?.path?.join(".") });
+    return null;
+  }
+  return parsed.data;
+}
+
 const anthropicReader: MenuReader = async (photos) => {
   const client = new Anthropic({ timeout: 110_000, maxRetries: 1 });
-  const message = await client.beta.messages.parse({
+  const message = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(readingSchema) },
+    output_config: { effort: "medium", format: OUTPUT_FORMAT },
     system: SYSTEM,
     messages: [
       {
@@ -81,7 +104,13 @@ const anthropicReader: MenuReader = async (photos) => {
       },
     ],
   });
-  return { stopReason: message.stop_reason, reading: message.parsed_output ?? null };
+  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  if (message.stop_reason === "max_tokens") return { stopReason: message.stop_reason, reading: null };
+  if (!text) {
+    console.error("[menu-import] resposta sem texto", { stopReason: message.stop_reason, blocks: message.content.map((b) => b.type) });
+    return { stopReason: message.stop_reason, reading: null };
+  }
+  return { stopReason: message.stop_reason, reading: parseReading(text, message.stop_reason) };
 };
 
 export type MenuDraft = {
@@ -129,7 +158,9 @@ export async function readMenuPhotos(photos: MenuPhoto[], reader?: MenuReader): 
   try {
     output = await (reader ?? anthropicReader)(photos);
   } catch (error) {
-    console.error("[menu-import]", error instanceof Anthropic.APIError ? `${error.status} ${error.name}` : "falha na leitura");
+    // Só o tipo e a mensagem do erro: nunca a chave nem as fotos.
+    const detail = error instanceof Anthropic.APIError ? `${error.status} ${error.name}` : error instanceof Error ? `${error.name}: ${error.message.slice(0, 300)}` : "erro desconhecido";
+    console.error("[menu-import] falha na leitura", detail);
     return { ok: false, code: "UNAVAILABLE", message: "Não foi possível ler a ementa agora. Tente de novo daqui a pouco." };
   }
   if (output.stopReason === "max_tokens") {
