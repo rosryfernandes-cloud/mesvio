@@ -6,6 +6,10 @@ import type { Db } from "@/server/db/client";
 import { menuPreviews } from "@/server/db/schema";
 import { notifyPlatformAdmins, queuePush } from "@/server/notifications/push";
 import type { PlatformAdmin } from "./admin-auth";
+import type { MenuDraft, MenuReader } from "@/server/menu/menu-import";
+import { readMenuFromLink } from "@/server/menu/menu-link";
+import type { Resolver } from "@/server/security/safe-fetch";
+import { suggestTranslations, type TranslateBatch } from "@/server/menu/menu-ai";
 
 /**
  * Pré-visualizações para potenciais clientes: a equipa MESVIO lê a ementa de um restaurante na
@@ -24,6 +28,8 @@ const translation = z.object({ name: z.string().trim().min(1).max(200), descript
 export const createPreviewSchema = z.object({
   restaurantName: z.string().trim().min(2).max(120),
   notes: z.string().trim().max(1000).optional(),
+  contactEmail: z.email().max(200).optional().or(z.literal("")),
+  sourceUrl: z.string().trim().max(2000).optional(),
   menu: z.object({
     categories: z
       .array(
@@ -65,6 +71,8 @@ export async function createPreview(db: Db, admin: PlatformAdmin, raw: unknown, 
     token,
     restaurantName: parsed.data.restaurantName,
     notes: parsed.data.notes || null,
+    contactEmail: parsed.data.contactEmail || null,
+    sourceUrl: parsed.data.sourceUrl || null,
     menu: parsed.data.menu,
     translations: parsed.data.translations,
     createdBy: admin.userId,
@@ -80,6 +88,8 @@ export async function listPreviews(db: Db) {
       token: menuPreviews.token,
       restaurantName: menuPreviews.restaurantName,
       notes: menuPreviews.notes,
+      contactEmail: menuPreviews.contactEmail,
+      emailedAt: menuPreviews.emailedAt,
       createdAt: menuPreviews.createdAt,
       expiresAt: menuPreviews.expiresAt,
       viewCount: menuPreviews.viewCount,
@@ -138,6 +148,11 @@ export async function requestActivation(db: Db, token: string, raw: unknown, now
   return true;
 }
 
+/** Regista que a equipa abriu o email para este restaurante (para a lista mostrar a quem já se escreveu). */
+export async function markPreviewEmailed(db: Db, id: string, now = new Date()): Promise<boolean> {
+  return (await db.update(menuPreviews).set({ emailedAt: now }).where(eq(menuPreviews.id, id)).returning({ id: menuPreviews.id })).length > 0;
+}
+
 export async function deletePreview(db: Db, id: string): Promise<boolean> {
   return (await db.delete(menuPreviews).where(eq(menuPreviews.id, id)).returning({ id: menuPreviews.id })).length > 0;
 }
@@ -145,4 +160,58 @@ export async function deletePreview(db: Db, id: string): Promise<boolean> {
 /** Apaga as pré-visualizações expiradas há mais de 60 dias. */
 export async function prunePreviews(db: Db, now = new Date()): Promise<void> {
   await db.delete(menuPreviews).where(lt(menuPreviews.expiresAt, new Date(now.getTime() - KEEP_AFTER_EXPIRY_DAYS * DAY_MS)));
+}
+
+/** A ementa lida no formato guardado, e os textos a traduzir com as mesmas referências da página ("c0", "p0-1"). */
+export function previewFromDraft(draft: MenuDraft) {
+  const menu = {
+    categories: draft.categories.map((c) => ({
+      name: c.name,
+      products: c.products.map((p) => ({ name: p.name, description: p.description, priceCents: p.priceCents, imageUrl: p.imageUrl ?? null })),
+    })),
+  };
+  const items = draft.categories.flatMap((c, ci) => [
+    { kind: "category" as const, ref: `c${ci}`, context: "Categoria", name: c.name },
+    ...c.products.map((p, pi) => ({ kind: "product" as const, ref: `p${ci}-${pi}`, context: c.name, name: p.name, ...(p.description && { description: p.description }) })),
+  ]);
+  return { menu, items };
+}
+
+export const linkPreviewSchema = z.object({
+  restaurantName: z.string().trim().min(2).max(120),
+  url: z.string().trim().min(4).max(2000),
+  contactEmail: z.email().max(200).optional().or(z.literal("")),
+});
+
+/**
+ * Cria a pré-visualização de um restaurante a partir do link da ementa (site, PDF ou imagem): lê a
+ * ementa, traduz para as 4 línguas e guarda. Usado na criação em lote da Central.
+ */
+export async function createPreviewFromLink(
+  db: Db,
+  admin: PlatformAdmin,
+  raw: unknown,
+  deps: { reader?: MenuReader; translate?: TranslateBatch; resolve?: Resolver } = {},
+): Promise<{ ok: true; token: string; products: number } | { ok: false; message: string }> {
+  const parsed = linkPreviewSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, message: "Falta o nome, o link ou o email não é válido." };
+  const read = await readMenuFromLink(parsed.data.url, { reader: deps.reader, resolve: deps.resolve });
+  if (!read.ok) return { ok: false, message: read.message };
+  const { menu, items } = previewFromDraft(read.draft);
+  const translations: Record<string, Record<string, { name: string; description?: string }>> = {};
+  await Promise.all(
+    PREVIEW_LOCALES.map(async (locale) => {
+      const r = await suggestTranslations(items, locale, deps.translate);
+      if (r.ok) translations[locale] = Object.fromEntries(r.suggestions.map((t) => [t.ref, { name: t.name, ...(t.description && { description: t.description }) }]));
+    }),
+  );
+  const created = await createPreview(db, admin, {
+    restaurantName: parsed.data.restaurantName,
+    contactEmail: parsed.data.contactEmail,
+    sourceUrl: parsed.data.url,
+    menu,
+    translations,
+  });
+  if (!created.ok) return created;
+  return { ok: true, token: created.token, products: menu.categories.reduce((n, c) => n + c.products.length, 0) };
 }

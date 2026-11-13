@@ -682,6 +682,11 @@ export const menuPreviews = pgTable(
     translations: jsonb("translations").$type<Record<string, Record<string, { name: string; description?: string }>>>().notNull().default({}),
     /** Notas da equipa MESVIO (ex.: contacto, quando ligar). */
     notes: text("notes"),
+    /** Email de empresa do restaurante (público), para enviar o link; e o link da ementa original. */
+    contactEmail: text("contact_email"),
+    sourceUrl: text("source_url"),
+    /** Quando a equipa abriu o email para este restaurante (botão "Enviar pelo Gmail"). */
+    emailedAt: timestamp("emailed_at", { withTimezone: true }),
     createdBy: text("created_by").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     viewCount: integer("view_count").notNull().default(0),

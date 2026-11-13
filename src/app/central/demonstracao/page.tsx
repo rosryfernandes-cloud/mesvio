@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { CentralShell } from "@/components/central/central-shell";
 import { QuickDemo } from "@/components/central/quick-demo";
 import { PreviewList } from "@/components/central/preview-list";
+import { BatchPreviews } from "@/components/central/batch-previews";
 import { getDb } from "@/server/db/client";
 import { readWithRetry } from "@/server/db/read-retry";
 import { listPreviews } from "@/server/platform/menu-previews";
@@ -24,13 +25,15 @@ export default async function DemoPage() {
         &quot;Novo restaurante&quot;.
       </p>
       <QuickDemo />
+      <BatchPreviews />
       <section aria-labelledby="enviadas" className="mt-10">
         <h2 id="enviadas" className="text-xl">
           Links enviados
         </h2>
         <p className="mt-1 text-sm text-ink-soft">Quem pediu para ativar aparece primeiro, depois quem abriu. Ligue a quem abriu há pouco.</p>
         <p className="mt-1 text-sm text-ink-soft">
-          &quot;Copiar email&quot; copia a mensagem já formatada, com imagens: cole no Gmail e copie também o assunto. &quot;WhatsApp / Instagram&quot; copia
+          &quot;Enviar pelo Gmail&quot; abre um email já com o destinatário e o assunto e copia a mensagem formatada: no Gmail cole (Cmd+V),
+          confirme que o remetente é geral@mesvio.pt e envie. &quot;Copiar email&quot; só copia a mensagem. &quot;WhatsApp / Instagram&quot; copia
           uma mensagem curta. Envie do seu email ou telemóvel, a poucos restaurantes por dia e só para contactos de empresa.
         </p>
         <PreviewList
@@ -38,6 +41,7 @@ export default async function DemoPage() {
           sender={(admin.displayName ?? "Rodrigo").split(" ")[0]}
           rows={previews.map(({ firstViewedAt: _first, ...p }) => ({
             ...p,
+            emailedAt: p.emailedAt?.toISOString() ?? null,
             createdAt: p.createdAt.toISOString(),
             expiresAt: p.expiresAt.toISOString(),
             lastViewedAt: p.lastViewedAt?.toISOString() ?? null,

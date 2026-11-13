@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, type Db } from "@/server/db/client";
 import { DEMO_PLATFORM_ADMIN } from "@/server/db/seed-demo";
 import { findPlatformAdmin, type PlatformAdmin } from "./admin-auth";
-import { createPreview, deletePreview, getPreviewByToken, listPreviews, prunePreviews, recordPreviewView, requestActivation } from "./menu-previews";
+import { createPreview, createPreviewFromLink, deletePreview, markPreviewEmailed, getPreviewByToken, listPreviews, prunePreviews, recordPreviewView, requestActivation } from "./menu-previews";
 
 let db: Db;
 let admin: PlatformAdmin;
@@ -49,5 +49,38 @@ describe("pré-visualizações para potenciais clientes", () => {
     const [row] = await listPreviews(db);
     expect(await deletePreview(db, row.id)).toBe(true);
     expect(await getPreviewByToken(db, r.ok ? r.token : "")).toBeNull();
+  });
+});
+
+describe("links criados em lote a partir do link da ementa", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("lê a ementa do site, traduz, guarda com o email do restaurante e regista o envio", async () => {
+    const html = `<html><body><h1>Ementa</h1><h2>Pratos</h2><p>Polvo à lagareiro 18,50 €</p><p>Bitoque 11,00 €</p><p>Bacalhau à Brás 14,00 €</p><p>Imperial 2,00 €</p></body></html>`;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })));
+    const r = await createPreviewFromLink(
+      db,
+      admin,
+      { restaurantName: "Casa do Mar", url: "https://casadomar.pt/ementa", contactEmail: "geral@casadomar.pt" },
+      {
+        resolve: async () => ["93.184.216.34"],
+        reader: async () => ({
+          stopReason: "end_turn",
+          reading: { readable: true, categories: [{ name: "Pratos", section: null, items: [{ name: "Polvo", description: null, priceEuros: 18.5, kind: "food", unsure: false, photoId: null }] }] },
+        }),
+        translate: async (items) => items.map((i) => ({ id: i.id, name: `EN ${i.name}`, description: null })),
+      },
+    );
+    expect(r).toMatchObject({ ok: true, products: 1 });
+    const p = (await getPreviewByToken(db, r.ok ? r.token : ""))!;
+    expect(p.contactEmail).toBe("geral@casadomar.pt");
+    expect(p.translations.en["p0-0"].name).toBe("EN Polvo");
+    expect(p.translations.de["c0"].name).toBe("EN Pratos");
+    expect(await markPreviewEmailed(db, p.id)).toBe(true);
+    expect((await listPreviews(db))[0].emailedAt).not.toBeNull();
+  });
+
+  it("recusa emails inválidos", async () => {
+    expect(await createPreviewFromLink(db, admin, { restaurantName: "X Y", url: "https://x.pt", contactEmail: "não-é-email" })).toMatchObject({ ok: false });
   });
 });

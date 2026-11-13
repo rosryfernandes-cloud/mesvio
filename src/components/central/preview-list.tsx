@@ -9,6 +9,8 @@ export type PreviewRow = {
   token: string;
   restaurantName: string;
   notes: string | null;
+  contactEmail: string | null;
+  emailedAt: string | null;
   createdAt: string;
   expiresAt: string;
   viewCount: number;
@@ -51,6 +53,21 @@ export function PreviewList({ rows, baseUrl, sender }: { rows: PreviewRow[]; bas
     }
   }
 
+  /**
+   * Abre um email novo no Gmail, já com o destinatário e o assunto, e copia o texto formatado (com as
+   * imagens e o link): no Gmail basta colar (Cmd+V), confirmar o remetente e enviar.
+   */
+  function sendWithGmail(r: PreviewRow) {
+    const { html, text, subject } = outreachEmail({ restaurant: r.restaurantName, url: `${baseUrl}/p/${r.token}`, sender, baseUrl });
+    // A cópia começa antes de abrir o separador (precisa da página em foco).
+    void navigator.clipboard
+      .write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })])
+      .catch(() => navigator.clipboard.writeText(text).catch(() => undefined));
+    const compose = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.contactEmail ?? "")}&su=${encodeURIComponent(subject)}`;
+    window.open(compose, "_blank", "noopener");
+    void fetch(`/api/central/previsualizacoes?id=${r.id}`, { method: "PATCH" }).then(() => router.refresh()).catch(() => undefined);
+  }
+
   async function remove(id: string) {
     if (!window.confirm("Apagar esta pré-visualização? O link deixa de funcionar.")) return;
     setBusy(id);
@@ -86,6 +103,12 @@ export function PreviewList({ rows, baseUrl, sender }: { rows: PreviewRow[]; bas
                   Criada {when(r.createdAt)} ·{" "}
                   {r.viewCount > 0 ? `Aberta ${r.viewCount}× (última ${when(r.lastViewedAt!)})` : "Ainda não abriu"}
                 </p>
+                {r.contactEmail && (
+                  <p className="text-sm text-ink-soft">
+                    {r.contactEmail}
+                    {r.emailedAt && <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">Email aberto {when(r.emailedAt)}</span>}
+                  </p>
+                )}
                 {r.activationContact && <p className="text-sm font-semibold">Contacto: {r.activationContact}</p>}
                 {r.notes && <p className="text-sm text-ink-soft italic">{r.notes}</p>}
               </div>
@@ -98,7 +121,16 @@ export function PreviewList({ rows, baseUrl, sender }: { rows: PreviewRow[]; bas
                     <button type="button" onClick={() => copyText(`subj-${r.id}`, outreachSubject(r.restaurantName))} className="min-h-10 rounded-xl border border-line bg-paper px-3 text-sm font-semibold">
                       {copied === `subj-${r.id}` ? "Copiado ✓" : "Assunto"}
                     </button>
-                    <button type="button" onClick={() => copyEmail(r)} className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white">
+                    {r.contactEmail && (
+                      <button type="button" onClick={() => sendWithGmail(r)} className="min-h-10 rounded-xl bg-brand px-3 text-sm font-semibold text-white">
+                        Enviar pelo Gmail
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => copyEmail(r)}
+                      className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${r.contactEmail ? "border border-line bg-paper" : "bg-brand text-white"}`}
+                    >
                       {copied === `email-${r.id}` ? "Copiado ✓" : "Copiar email"}
                     </button>
                     <button
