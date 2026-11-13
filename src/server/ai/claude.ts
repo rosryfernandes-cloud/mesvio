@@ -8,6 +8,11 @@ import type { z } from "zod";
  * fotos nem o conteúdo da ementa: só o motivo da falha.
  */
 export const AI_MODEL = "claude-opus-5-5";
+/**
+ * Modelo mais barato para tarefas de texto simples (traduções, descrições, ajuda, respostas a
+ * avaliações). A leitura da ementa (fotos, PDF, sites) e os alergénios ficam no modelo principal.
+ */
+export const AI_MODEL_LIGHT = "claude-sonnet-5-5";
 
 /** Tira a chave do valor da variável, mesmo que venha com espaços, aspas ou o comando de exemplo à volta. */
 export function extractApiKey(value: string | undefined): string | null {
@@ -66,12 +71,12 @@ type Content = Anthropic.Beta.BetaContentBlockParam[];
 /** Uma pergunta à Claude com a resposta no formato do `schema`. Lança se a API falhar. */
 export async function askClaudeJson<T>(
   schema: z.ZodType<T>,
-  opts: { tag: string; system: string; content: Content; maxTokens: number; effort: "low" | "medium" | "high"; timeoutMs?: number },
+  opts: { tag: string; system: string; content: Content; maxTokens: number; effort: "low" | "medium" | "high"; timeoutMs?: number; model?: string },
 ): Promise<AskOutput<T>> {
   const { type, schema: jsonSchema } = betaZodOutputFormat(schema);
   const client = new Anthropic({ apiKey: aiApiKey(opts.tag), timeout: opts.timeoutMs ?? 110_000, maxRetries: 1 });
   const message = await client.beta.messages.create({
-    model: AI_MODEL,
+    model: opts.model ?? AI_MODEL,
     max_tokens: opts.maxTokens,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",

@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { aiApiKey, askClaudeJson, describeAiError } from "./claude";
+import { AI_MODEL_LIGHT, aiApiKey, askClaudeJson, describeAiError } from "./claude";
 
 /**
  * "Precisa de ajuda?" no painel: responde a perguntas sobre como usar o painel, a partir deste guia.
@@ -51,6 +51,7 @@ const claudeHelp: HelpWriter = async ({ question, history }) => {
   const transcript = history.map((h) => `${h.role === "user" ? "Pergunta" : "Resposta"}: ${h.text}`).join("\n");
   const { data } = await askClaudeJson(answerSchema, {
     tag: "panel-help",
+    model: AI_MODEL_LIGHT,
     system: SYSTEM,
     maxTokens: 1500,
     effort: "low",
