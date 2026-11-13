@@ -67,6 +67,7 @@ O que tem de ser feito por si: criar as contas, comprar o domínio e pôr as cha
 | `PLATFORM_SECRET_KEY` | gerar: `openssl rand -base64 32` (cifra o 2FA do painel central; não mudar depois) |
 | `TRUSTED_PROXY` | `vercel` |
 | `DEFAULT_POS_PROVIDER` | `mock` |
+| `ANTHROPIC_API_KEY` | chave da Anthropic, para importar a ementa por fotografia (opcional) |
 | `RESEND_API_KEY` | chave da Resend (opcional, ver secção 6) |
 | `DEMO_REQUESTS_TO` | o seu email (quem recebe os pedidos de demonstração) |
 | `DEMO_REQUESTS_FROM` | ex.: `MESVIO <ola@o-seu-dominio>` |

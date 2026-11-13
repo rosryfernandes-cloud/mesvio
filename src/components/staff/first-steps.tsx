@@ -98,7 +98,7 @@ export function FirstSteps({
   const steps = [
     ...(status.menu === null
       ? []
-      : [{ id: "menu", done: status.menu, title: "Crie a ementa", text: "Categorias, pratos e preços.", action: "Abrir Ementa", tab: "carta" as const }]),
+      : [{ id: "menu", done: status.menu, title: "Crie a ementa", text: "Fotografe a ementa em papel e confirme os pratos, ou crie-os à mão.", action: "Abrir Ementa", tab: "carta" as const }]),
     { id: "logo", done: status.logo, title: "Ponha o logótipo", text: "Para a ementa ficar com a imagem do seu espaço.", action: "Abrir Aparência", tab: "ementa" as const },
     { id: "qr", done: Boolean(saved.qr), title: "Imprima os QR", text: "Um para cada mesa ou espreguiçadeira.", action: "Abrir QR Codes", href: "/painel/qr" },
     { id: "test", done: Boolean(saved.testOrder) || hasOrders, title: "Faça um pedido de teste", text: "Leia um QR com o telemóvel, faça um pedido e confirme que ouve o som aqui." },

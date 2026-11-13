@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toCents, toEuros, VAT_OPTIONS as VAT } from "@/lib/menu-form";
 import { formatEur } from "@/lib/money";
 import { guessStation, STATION_LABEL, STATIONS, type Station } from "@/lib/station";
 import type { OwnMenu } from "@/server/menu/own-menu";
+import { MenuImport } from "./menu-import";
 
 type Category = OwnMenu["categories"][number];
 type Product = Category["products"][number];
@@ -23,23 +25,10 @@ type ProductDraft = {
 
 // Cópia do servidor (own-menu.ts) — o componente corre no browser.
 const ALLERGENS = ["glúten", "crustáceos", "ovos", "peixe", "amendoins", "soja", "leite", "frutos de casca rija", "aipo", "mostarda", "sésamo", "sulfitos", "tremoço", "moluscos"];
-const VAT = [
-  { bps: 1300, label: "13% — comida e refeições" },
-  { bps: 2300, label: "23% — bebidas alcoólicas, refrigerantes e outros" },
-  { bps: 600, label: "6% — água, alguns bens essenciais" },
-];
-
 const input = "min-h-11 rounded-xl border border-line bg-card px-3";
 const field = `${input} w-full`;
 const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-60";
 const secondary = "min-h-10 rounded-xl border border-line bg-card px-3 text-sm";
-
-/** Euros escritos à portuguesa ("12,50") → cêntimos; null se não for um preço. */
-function toCents(v: string): number | null {
-  const n = Number(v.trim().replace(/\s|€/g, "").replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
-}
-const toEuros = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 
 async function post(body: unknown): Promise<{ ok: boolean; message?: string }> {
   const res = await fetch("/api/painel/carta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
@@ -142,7 +131,7 @@ export function MenuEditor() {
   const setGroup = (i: number, patch: Partial<GroupDraft>) => setDraft({ groups: editing!.groups.map((g, k) => (k === i ? { ...g, ...patch } : g)) });
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl">Ementa</h2>
@@ -161,6 +150,13 @@ export function MenuEditor() {
           {message.text}
         </p>
       )}
+
+      <MenuImport
+        onImported={async (text) => {
+          await load();
+          setMessage({ text, error: false });
+        }}
+      />
 
       {menu.categories.length === 0 && (
         <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-ink-soft">

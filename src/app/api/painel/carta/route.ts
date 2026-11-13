@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { guardStaff, json } from "@/server/staff/http";
-import { deleteCategory, deleteProduct, getOwnMenu, move, saveCategory, saveProduct } from "@/server/menu/own-menu";
+import { deleteCategory, deleteProduct, getOwnMenu, importMenuDraft, move, saveCategory, saveProduct } from "@/server/menu/own-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,7 @@ const action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save_product"), product: z.unknown() }),
   z.object({ action: z.literal("delete_product"), id: z.uuid() }),
   z.object({ action: z.literal("move"), kind: z.enum(["category", "product"]), id: z.uuid(), direction: z.enum(["up", "down"]) }),
+  z.object({ action: z.literal("import_menu"), menu: z.unknown() }),
 ]);
 
 const STATUS = { NOT_OWN_MENU: 409, INVALID: 400, NOT_FOUND: 404, NOT_EMPTY: 409 } as const;
@@ -39,7 +40,9 @@ export async function POST(request: Request) {
           ? await saveProduct(db, ctx, a.product)
           : a.action === "delete_product"
             ? await deleteProduct(db, ctx, a.id)
-            : await move(db, ctx, a.kind, a.id, a.direction);
+            : a.action === "import_menu"
+              ? await importMenuDraft(db, ctx, a.menu)
+              : await move(db, ctx, a.kind, a.id, a.direction);
   if (!result.ok) return json({ code: result.code, message: result.message }, STATUS[result.code]);
   return json({ ok: true, ...(result.value ?? {}) });
 }

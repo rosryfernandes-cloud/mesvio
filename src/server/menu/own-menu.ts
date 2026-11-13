@@ -270,6 +270,88 @@ export async function saveProduct(db: Db, s: Scope, raw: unknown): Promise<OwnMe
   });
 }
 
+const importedMenuSchema = z.object({
+  categories: z
+    .array(
+      z.object({
+        name: text(60),
+        section: optionalText(40),
+        products: z
+          .array(productInputSchema.pick({ name: true, description: true, priceCents: true, vatRateBps: true }))
+          .min(1)
+          .max(200),
+      }),
+    )
+    .min(1)
+    .max(40),
+});
+
+/**
+ * Acrescenta à ementa o que o dono confirmou depois de ler as fotos: nunca apaga nem altera o que
+ * já existe. Categorias com o mesmo nome juntam-se e pratos repetidos ignoram-se, por isso
+ * confirmar duas vezes não duplica a ementa.
+ */
+export async function importMenuDraft(db: Db, s: Scope, raw: unknown): Promise<OwnMenuResult<{ categories: number; products: number; skipped: number }>> {
+  const parsed = importedMenuSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: "Confirme que todos os pratos têm nome e preço." };
+  const key = (name: string) => name.trim().toLocaleLowerCase("pt-PT");
+  return withTenant(db, tenantOf(s), async (tx) => {
+    if (!(await usesOwnMenu(tx, s.establishmentId))) return notOwnMenu;
+    const existing = await tx.select({ id: categories.id, name: categories.name }).from(categories).where(eq(categories.establishmentId, s.establishmentId));
+    const catIds = new Map(existing.map((c) => [key(c.name), c.id]));
+    let createdCategories = 0;
+    let createdProducts = 0;
+    let skipped = 0;
+    for (const c of parsed.data.categories) {
+      let categoryId = catIds.get(key(c.name));
+      if (!categoryId) {
+        const [row] = await tx
+          .insert(categories)
+          .values({
+            organizationId: s.organizationId,
+            establishmentId: s.establishmentId,
+            posCategoryRef: newRef("C"),
+            name: c.name,
+            section: c.section,
+            station: guessStation(c.name, c.section),
+            sortOrder: existing.length + createdCategories,
+          })
+          .returning({ id: categories.id });
+        categoryId = row.id;
+        catIds.set(key(c.name), categoryId);
+        createdCategories++;
+      }
+      const current = await tx.select({ name: products.name }).from(products).where(eq(products.categoryId, categoryId));
+      const names = new Set(current.map((p) => key(p.name)));
+      for (const p of c.products) {
+        if (names.has(key(p.name))) {
+          skipped++;
+          continue;
+        }
+        await tx.insert(products).values({
+          organizationId: s.organizationId,
+          establishmentId: s.establishmentId,
+          categoryId,
+          posProductRef: newRef("P"),
+          name: p.name,
+          description: p.description,
+          priceCents: p.priceCents,
+          vatRateBps: p.vatRateBps,
+          allergens: [],
+          tags: [],
+          posAvailable: true,
+          sortOrder: names.size,
+        });
+        names.add(key(p.name));
+        createdProducts++;
+      }
+    }
+    const summary = { categories: createdCategories, products: createdProducts, skipped };
+    await audit(tx, s, "menu.imported_from_photos", s.establishmentId, summary);
+    return { ok: true, value: summary };
+  });
+}
+
 /** Grava as opções do prato: mantém as que vêm com id (e as suas referências), cria as novas, apaga as que saíram. */
 async function syncGroups(tx: Db, s: Scope, productId: string, groups: z.output<typeof groupInput>[]) {
   const current = await tx.select({ groupId: productModifierGroups.groupId }).from(productModifierGroups).where(eq(productModifierGroups.productId, productId));
