@@ -75,15 +75,27 @@ export async function askClaudeJson<T>(
 ): Promise<AskOutput<T>> {
   const { type, schema: jsonSchema } = betaZodOutputFormat(schema);
   const client = new Anthropic({ apiKey: aiApiKey(opts.tag), timeout: opts.timeoutMs ?? 110_000, maxRetries: 1 });
-  const message = await client.beta.messages.create({
-    model: opts.model ?? AI_MODEL,
-    max_tokens: opts.maxTokens,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: opts.effort, format: { type, schema: jsonSchema } },
-    system: opts.system,
-    messages: [{ role: "user", content: opts.content }],
-  });
+  const ask = (model: string) =>
+    client.beta.messages.create({
+      model,
+      max_tokens: opts.maxTokens,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: opts.effort, format: { type, schema: jsonSchema } },
+      system: opts.system,
+      messages: [{ role: "user", content: opts.content }],
+    });
+  const model = opts.model ?? AI_MODEL;
+  let message: Awaited<ReturnType<typeof ask>>;
+  try {
+    message = await ask(model);
+  } catch (error) {
+    // Se o modelo mais barato recusar o pedido (ex.: um parâmetro que não suporta), tenta-se no
+    // principal: quem usa o painel não vê o erro, e o motivo fica no registo para se corrigir.
+    if (model === AI_MODEL || !(error instanceof Anthropic.APIError) || (error.status !== 400 && error.status !== 404)) throw error;
+    console.error(`[${opts.tag}] ${model} recusou o pedido; a repetir com ${AI_MODEL}`, describeAiError(error), error.message.slice(0, 200));
+    message = await ask(AI_MODEL);
+  }
   const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
   if (message.stop_reason === "max_tokens") return { stopReason: message.stop_reason, data: null };
   if (!text) {
