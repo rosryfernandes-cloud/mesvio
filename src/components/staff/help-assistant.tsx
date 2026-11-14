@@ -21,7 +21,9 @@ export function HelpAssistant() {
     if (open && !d.open) d.showModal();
     if (!open && d.open) d.close();
   }, [open]);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [messages, busy]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, busy]);
 
   async function ask(text: string) {
     const q = text.trim();

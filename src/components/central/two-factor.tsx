@@ -160,7 +160,9 @@ export function TwoFactorSetup({ needsActivationCode }: { needsActivationCode: b
   const [activation, setActivation] = useState("");
   const [busy, setBusy] = useState(false);
   const [supported, setSupported] = useState(true);
-  useEffect(() => setSupported(browserSupportsWebAuthn()), []);
+  useEffect(() => {
+    setSupported(browserSupportsWebAuthn());
+  }, []);
 
   const activationOk = !needsActivationCode || activation.replace(/[^a-z0-9]/gi, "").length === 12;
   const finish = (recovery: string[] | null) => (recovery?.length ? setCodes(recovery) : goTo("/central"));
