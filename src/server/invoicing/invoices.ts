@@ -189,29 +189,49 @@ const toLines = (items: (typeof orderItems.$inferSelect)[]): InvoiceLine[] =>
   items.map((i) => ({ name: i.name, quantity: i.quantity, unitGrossCents: Math.round(i.lineGrossCents / i.quantity), vatRateBps: i.vatRateBps }));
 
 /**
- * O que a fatura leva: o pedido (lugares que pagam ao pedir) ou toda a conta da mesa, se este
- * pagamento a pagou de uma vez. Contas pagas em várias partes ficam para o restaurante faturar à
- * mão no programa dele (repartir artigos por pagamentos não é seguro de adivinhar).
+ * O que a fatura leva: o pedido (lugares que pagam ao pedir) ou as rondas da mesa que este
+ * pagamento pagou. A mesa pode pagar várias vezes (ex.: paga, pede mais e volta a pagar): os
+ * pedidos e os pagamentos são emparelhados por ordem de chegada, e cada pagamento leva os pedidos
+ * cujo total bate certo, ao cêntimo, com o que pagou (sem a gorjeta). Se não bater certo (conta
+ * repartida entre pessoas), fica para o restaurante faturar à mão: repartir artigos não se adivinha.
  */
 async function linesFor(systemDb: Db, p: typeof payments.$inferSelect): Promise<InvoiceLine[] | "split"> {
   if (p.orderId) {
     return toLines(await systemDb.select().from(orderItems).where(eq(orderItems.orderId, p.orderId)).orderBy(asc(orderItems.lineNo)));
   }
-  const others = await systemDb.$count(
-    payments,
-    and(eq(payments.tableSessionId, p.tableSessionId), eq(payments.status, "SUCCEEDED"), ne(payments.id, p.id), isNull(payments.orderId)),
-  );
+  const tablePayments = await systemDb
+    .select({ id: payments.id, amount: payments.amountCents, tip: payments.tipCents })
+    .from(payments)
+    .where(and(eq(payments.tableSessionId, p.tableSessionId), eq(payments.status, "SUCCEEDED"), isNull(payments.orderId)))
+    .orderBy(asc(payments.createdAt), asc(payments.id));
   const sessionOrders = await systemDb
     .select({ id: orders.id, total: orders.totalGrossCents })
     .from(orders)
-    .where(and(eq(orders.tableSessionId, p.tableSessionId), inArray(orders.status, [...BILLABLE])));
-  const total = sessionOrders.reduce((n, o) => n + o.total, 0);
-  if (others > 0 || p.amountCents - p.tipCents !== total || sessionOrders.length === 0) return "split";
+    .where(and(eq(orders.tableSessionId, p.tableSessionId), inArray(orders.status, [...BILLABLE])))
+    .orderBy(asc(orders.createdAt), asc(orders.id));
+  let next = 0;
+  let mine: string[] | null = null;
+  for (const pay of tablePayments) {
+    const net = pay.amount - pay.tip;
+    const covered: string[] = [];
+    let sum = 0;
+    while (sum < net && next < sessionOrders.length) {
+      sum += sessionOrders[next].total;
+      covered.push(sessionOrders[next].id);
+      next++;
+    }
+    if (sum !== net || covered.length === 0) return "split";
+    if (pay.id === p.id) {
+      mine = covered;
+      break;
+    }
+  }
+  if (!mine) return "split";
   return toLines(
     await systemDb
       .select()
       .from(orderItems)
-      .where(inArray(orderItems.orderId, sessionOrders.map((o) => o.id)))
+      .where(inArray(orderItems.orderId, mine))
       .orderBy(asc(orderItems.orderId), asc(orderItems.lineNo)),
   );
 }

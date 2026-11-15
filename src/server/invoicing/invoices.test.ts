@@ -116,21 +116,40 @@ describe("fatura por email (InvoiceXpress)", () => {
     expect(await issuePendingInvoices(db, { fetchImpl: ix.fetchImpl })).toEqual({ checked: 0, issued: 0 });
   });
 
-  it("sem pedido de fatura não emite nada; conta paga em várias partes fica para emitir à mão", async () => {
+  it("sem pedido de fatura não emite nada; a mesa que paga outra vez fatura só a nova ronda", async () => {
     const ix = fakeInvoiceXpress();
     await connect(ix.fetchImpl);
     await order();
     await payWithInvoice(null);
     expect(await issuePendingInvoices(db, { fetchImpl: ix.fetchImpl })).toEqual({ checked: 0, issued: 0 });
 
-    // Segunda ronda na mesma conta, paga à parte e com fatura: não se adivinha que artigos levar.
+    // Segunda ronda na mesma conta, paga à parte e com fatura: leva só os artigos dessa ronda.
     await order();
-    const id = await payWithInvoice({ nif: null, email: "x@y.pt" });
-    await issuePendingInvoices(db, { fetchImpl: ix.fetchImpl });
+    const id = await payWithInvoice({ nif: null, email: "x@y.pt" }, 100);
+    expect(await issuePendingInvoices(db, { fetchImpl: ix.fetchImpl })).toEqual({ checked: 1, issued: 1 });
+    const create = ix.requests.find((r) => r.url.includes("/invoice_receipts.json"))!.body as {
+      invoice_receipt: { items: { unit_price: string; quantity: string; tax: { name: string } }[] };
+    };
+    const gross = create.invoice_receipt.items.reduce((n, i) => n + Number(i.unit_price) * Number(i.quantity) * (i.tax.name === "IVA13" ? 1.13 : 1.23), 0);
+    expect(Math.round(gross * 100)).toBe(2050);
     const [row] = await db.select().from(payments).where(eq(payments.id, id));
+    expect(row).toMatchObject({ invoiceStatus: "issued" });
+  });
+
+  it("conta repartida entre pessoas fica para emitir à mão", async () => {
+    const ix = fakeInvoiceXpress();
+    await connect(ix.fetchImpl);
+    await order();
+    const r = await startTablePayment(db, T1.publicToken, provider, new Date(), { invoice: { nif: null, email: "x@y.pt" }, share: { cents: 1000, payerKey: "pessoa-1" } });
+    if (!r.ok) throw new Error(r.message);
+    const [pay] = (await db.select().from(payments)).filter((p) => p.id === r.paymentId);
+    provider.complete(pay.providerRef, "mb_way", true);
+    await refreshTablePayment(db, T1.publicToken, r.paymentId, provider);
+    await issuePendingInvoices(db, { fetchImpl: ix.fetchImpl });
+    const [row] = await db.select().from(payments).where(eq(payments.id, r.paymentId));
     expect(row).toMatchObject({ invoiceStatus: "manual" });
     expect(row.invoiceError).toMatch(/várias partes/);
-    expect(ix.requests.some((r) => r.url.includes("/invoice_receipts.json"))).toBe(false);
+    expect(ix.requests.some((x) => x.url.includes("/invoice_receipts.json"))).toBe(false);
   });
 
   it("sem resposta do programa de faturação fica para confirmar à mão e não repete sozinho", async () => {
