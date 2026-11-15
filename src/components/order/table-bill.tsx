@@ -203,8 +203,9 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
           )}
 
           {!fullyPaid && bill.dueCents > 0 && <CallStaff tableToken={tableToken} action="bill" />}
-          {/* Quem paga no balcão também pode avaliar (a conta paga na app mostra a avaliação abaixo). */}
-          {!fullyPaid && bill.totalCents > 0 && bill.reviews.enabled && (
+          {/* Sem pagamentos na app, quem paga no balcão também pode avaliar. Com pagamentos, a avaliação
+              só aparece depois de pagar (senão aparecia duas vezes). */}
+          {!fullyPaid && !bill.paymentsEnabled && bill.totalCents > 0 && bill.reviews.enabled && (
             <div className="mt-4 text-center">
               <ReviewButton tableToken={tableToken} googleUrl={bill.reviews.googleUrl} />
             </div>
