@@ -22,6 +22,8 @@ function since(iso: string, now: number) {
 export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
   const [tables, setTables] = useState<TableOverview[] | null>(null);
   const [paymentsEnabled, setPaymentsEnabled] = useState<boolean | null>(null);
+  /** Motivo de a caixa dos pagamentos ter voltado atrás, mostrado junto à própria caixa. */
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [paymentsInPlan, setPaymentsInPlan] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -178,12 +180,15 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
 
   async function togglePayments(enabled: boolean) {
     setPaymentsEnabled(enabled);
+    setPaymentsError(null);
     const res = await fetch("/api/painel/definicoes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paymentsEnabled: enabled }),
     }).catch(() => null);
-    if (res && !res.ok) setMessage((await res.json().catch(() => ({}))).message ?? "Não foi possível mudar.", true);
+    setPaymentsError(
+      !res ? "Sem ligação. Tente de novo." : res.ok ? null : ((await res.json().catch(() => ({}))).message ?? "Não foi possível mudar."),
+    );
     await load();
   }
 
@@ -270,6 +275,11 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
           <span className="font-semibold">Clientes podem pagar a conta no telemóvel</span>
           {!canEditSettings && <span className="ml-2 text-xs text-ink-soft">(só o dono ou o gerente podem mudar)</span>}
           <span className="block text-sm text-ink-soft">Apple Pay, MB WAY e cartão. As mesas pagas aparecem a verde; depois é só fechar a mesa.</span>
+          {paymentsError && (
+            <span role="alert" className="mt-1 block text-sm font-semibold text-danger">
+              {paymentsError}
+            </span>
+          )}
         </span>
       </label>
       )}
