@@ -12,7 +12,7 @@ const POLL_MS = 10_000;
  * "Chamar empregado" (na ementa) e "Pedir a conta" (na conta da mesa). Avisa o painel do
  * restaurante, com som, e mostra ao cliente quando o empregado vem a caminho.
  */
-export function CallStaff({ tableToken, action }: { tableToken: string; action: Kind }) {
+export function CallStaff({ tableToken, action, subtle = false }: { tableToken: string; action: Kind; /** Botão discreto (a conta já se paga no telemóvel). */ subtle?: boolean }) {
   const { t } = useI18n();
   const [sheet, setSheet] = useState<Kind | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -73,7 +73,11 @@ export function CallStaff({ tableToken, action }: { tableToken: string; action: 
   return (
     <div className={action === "waiter" ? "mx-4 mt-3" : "mt-4"}>
       {action === "bill" ? (
-        <button type="button" className="min-h-12 w-full rounded-2xl bg-brand px-4 font-semibold text-white" onClick={() => setSheet("bill")}>
+        <button
+          type="button"
+          className={subtle ? `${pill} w-full` : "min-h-12 w-full rounded-2xl bg-brand px-4 font-semibold text-white"}
+          onClick={() => setSheet("bill")}
+        >
           <span aria-hidden="true">🧾</span> {t.call.askBill}
         </button>
       ) : (

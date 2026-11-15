@@ -132,7 +132,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const tipCents = Math.round((payCents * tipPct) / 100);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 pt-8 pb-16">
+    <main className={`mx-auto max-w-2xl px-4 pt-8 ${bill.paymentsEnabled && !fullyPaid && bill.dueCents > 0 ? "pb-40" : "pb-16"}`}>
       <p className="text-sm font-medium text-brand">{bill.tableLabel}</p>
       <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl">{t.bill.title}</h1>
 
@@ -145,47 +145,45 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
           <p className="mt-1 text-sm text-ink-soft">
             {t.bill.openedAt(time(bill.openedAt))}
           </p>
-          <ul className="mt-6 grid gap-3">
-            {bill.orders.map((o) => {
-              const label = orderLabel(o, t);
-              return (
-                <li key={o.id} className={`rounded-2xl border border-line bg-card p-4 ${o.void ? "opacity-60" : ""}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold">
-                      {t.order.orderNo} <span className="tabular-nums">{o.shortCode}</span>{" "}
-                      <span className="text-sm font-normal text-ink-soft">{t.bill.at(time(o.createdAt))}</span>
-                    </p>
-                    {o.awaitingPayment ? (
-                      <Link
-                        href={`/m/${tableToken}/pedido/${o.id}?pagar=1`}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold underline ${label.className}`}
-                      >
-                        {t.bill.unpaidPay}
-                      </Link>
-                    ) : (
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${label.className}`}>{label.text}</span>
-                    )}
-                  </div>
-                  <ul className={`mt-2 grid gap-1 text-sm ${o.void ? "line-through" : ""}`}>
-                    {o.lines.map((l, i) => (
-                      <li key={i} className="flex justify-between gap-3">
-                        <span className="min-w-0">
-                          <span className="font-semibold tabular-nums">{l.quantity}×</span> {l.name}
-                          {l.modifierNames.length > 0 && <span className="text-ink-soft"> · {l.modifierNames.join(", ")}</span>}
-                        </span>
-                        <span className="shrink-0 tabular-nums">{formatEur(l.lineTotalCents)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div className="mt-6 flex items-baseline justify-between rounded-2xl bg-ink px-5 py-4 text-paper">
-            <span className="font-semibold">{t.bill.tableTotal}</span>
-            <span className="text-2xl font-semibold tabular-nums">{formatEur(bill.totalCents)}</span>
-          </div>
+          <section className="mt-6 rounded-3xl border border-line bg-card">
+            <ul className="divide-y divide-line">
+              {bill.orders.map((o) => {
+                const label = orderLabel(o, t);
+                const confirmed = !o.void && !o.awaitingPayment && !o.pending;
+                return (
+                  <li key={o.id} className={`px-5 py-4 ${o.void ? "opacity-60" : ""}`}>
+                    <div className="flex items-center justify-between gap-3 text-xs text-ink-soft">
+                      <span>
+                        {t.order.orderNo} <span className="tabular-nums">{o.shortCode}</span> · {time(o.createdAt)}
+                      </span>
+                      {o.awaitingPayment ? (
+                        <Link href={`/m/${tableToken}/pedido/${o.id}?pagar=1`} className={`rounded-full px-2.5 py-0.5 font-semibold underline ${label.className}`}>
+                          {t.bill.unpaidPay}
+                        </Link>
+                      ) : (
+                        !confirmed && <span className={`rounded-full px-2.5 py-0.5 font-semibold ${label.className}`}>{label.text}</span>
+                      )}
+                    </div>
+                    <ul className={`mt-2 grid gap-1.5 ${o.void ? "line-through" : ""}`}>
+                      {o.lines.map((l, i) => (
+                        <li key={i} className="flex justify-between gap-3">
+                          <span className="min-w-0">
+                            <span className="font-semibold tabular-nums">{l.quantity}×</span> {l.name}
+                            {l.modifierNames.length > 0 && <span className="block text-sm text-ink-soft">{l.modifierNames.join(", ")}</span>}
+                          </span>
+                          <span className="shrink-0 tabular-nums">{formatEur(l.lineTotalCents)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="flex items-baseline justify-between border-t-2 border-ink px-5 py-4">
+              <span className="font-semibold">{t.bill.tableTotal}</span>
+              <span className="text-2xl font-semibold tabular-nums">{formatEur(bill.totalCents)}</span>
+            </div>
+          </section>
           {hasPending && (
             <p className="mt-2 text-sm text-ink-soft">{t.bill.includesPending}</p>
           )}
@@ -202,7 +200,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
             </p>
           )}
 
-          {!fullyPaid && bill.dueCents > 0 && <CallStaff tableToken={tableToken} action="bill" />}
+          {!fullyPaid && bill.dueCents > 0 && !bill.paymentsEnabled && <CallStaff tableToken={tableToken} action="bill" />}
           {/* Sem pagamentos na app, quem paga no balcão também pode avaliar. Com pagamentos, a avaliação
               só aparece depois de pagar (senão aparecia duas vezes). */}
           {!fullyPaid && !bill.paymentsEnabled && bill.totalCents > 0 && bill.reviews.enabled && (
@@ -313,14 +311,14 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                   )}
                   <fieldset className="mb-3">
                     <legend className="mb-2 text-sm font-semibold">{t.bill.tipTitle}</legend>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-1 rounded-2xl bg-line/50 p-1">
                       {TIP_OPTIONS.map((pct) => (
                         <button
                           key={pct}
                           type="button"
                           aria-pressed={tipPct === pct}
                           onClick={() => setTipPct(pct)}
-                          className={`min-h-12 rounded-xl border text-sm font-semibold ${tipPct === pct ? "border-brand bg-brand-soft text-brand" : "border-line bg-card"}`}
+                          className={`min-h-12 rounded-xl text-sm font-semibold ${tipPct === pct ? "bg-card text-brand shadow-sm" : "text-ink-soft"}`}
                         >
                           {pct === 0 ? t.bill.tipNone : `${pct}%`}
                           {pct > 0 && <span className="block text-xs font-normal text-ink-soft tabular-nums">{formatEur(Math.round((payCents * pct) / 100))}</span>}
@@ -330,8 +328,8 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                     <p className="mt-1 text-xs text-ink-soft">{t.bill.tipNote}</p>
                   </fieldset>
                   {bill.invoicing && (
-                    <div className="mb-3 rounded-2xl border border-line bg-card p-3">
-                      <label className="flex items-center gap-3 text-sm font-semibold">
+                    <div className={`mb-3 rounded-2xl ${wantInvoice ? "border border-line bg-card p-3" : "px-1 py-1"}`}>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold">
                         <input type="checkbox" className="size-5" checked={wantInvoice} onChange={(e) => setWantInvoice(e.target.checked)} />
                         {t.bill.wantInvoice}
                       </label>
@@ -364,21 +362,30 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                       )}
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={startPayment}
-                    disabled={starting || payCents <= 0}
-                    className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 font-semibold text-white disabled:opacity-50"
-                  >
-                    <span>
-                      {starting ? t.order.preparing : split !== "all" ? t.bill.payShare : shareCents !== null ? t.bill.payRest : t.bill.payBill}
-                    </span>
-                    <span className="tabular-nums">{formatEur(payCents + tipCents)}</span>
-                  </button>
-                  {tipCents > 0 && <p className="mt-1 text-center text-xs text-ink-soft">{t.bill.tipIncluded(formatEur(tipCents))}</p>}
+                  <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-paper/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+                    <div className="mx-auto max-w-2xl">
+                      <button
+                        type="button"
+                        onClick={startPayment}
+                        disabled={starting || payCents <= 0}
+                        className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 text-lg font-semibold text-white disabled:opacity-50"
+                      >
+                        <span>
+                          {starting ? t.order.preparing : split !== "all" ? t.bill.payShare : shareCents !== null ? t.bill.payRest : t.bill.payBill}
+                        </span>
+                        <span className="tabular-nums">{formatEur(payCents + tipCents)}</span>
+                      </button>
+                      <p className="mt-1.5 text-center text-xs text-ink-soft">
+                        {tipCents > 0 ? `${t.bill.tipIncluded(formatEur(tipCents))} · ` : ""}
+                        {t.bill.methods}
+                      </p>
+                    </div>
+                  </div>
                 </>
               )}
-              <p className="mt-2 text-center text-xs text-ink-soft">{t.bill.methods}</p>
+              <div className="mt-2">
+                <CallStaff tableToken={tableToken} action="bill" subtle />
+              </div>
             </div>
           ) : (
             <p className="mt-4 rounded-xl bg-brand-soft px-4 py-3 text-sm">
