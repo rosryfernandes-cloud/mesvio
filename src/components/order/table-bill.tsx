@@ -38,6 +38,12 @@ function orderLabel(o: BillOrder, t: Messages): { text: string; className: strin
 }
 
 /** Conta da mesa vista pelo cliente: todos os pedidos desde que a mesa abriu. */
+
+/**
+ * Dividir a conta no telemóvel (Tudo / Partes iguais / O que consumi): escondido a 2026-11-15 a
+ * pedido do Rodrigo, por confundir quem paga. Com isto desligado, cada pagamento é a conta toda.
+ */
+const SPLIT_BILL_ON_PHONE = false;
 export function TableBillView({ initial, tableToken }: { initial: TableBill; tableToken: string }) {
   const { locale, t } = useI18n();
   const [bill, setBill] = useState(initial);
@@ -223,6 +229,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                 </p>
               ) : (
                 <>
+                  {SPLIT_BILL_ON_PHONE && (
                   <fieldset className="mb-3">
                     <legend className="mb-2 text-sm font-semibold">{t.bill.splitTitle}</legend>
                     <div className="grid grid-cols-3 gap-2">
@@ -302,6 +309,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                     )}
                     {capped && <p className="mt-2 text-sm text-amber-800">{t.bill.splitCapped(formatEur(available))}</p>}
                   </fieldset>
+                  )}
                   <fieldset className="mb-3">
                     <legend className="mb-2 text-sm font-semibold">{t.bill.tipTitle}</legend>
                     <div className="grid grid-cols-4 gap-2">
