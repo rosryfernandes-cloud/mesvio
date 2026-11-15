@@ -164,11 +164,11 @@ describe("gorjeta e aviso no painel", () => {
     expect(refreshed.bill).toMatchObject({ totalCents: 2050, paidCents: 2050, dueCents: 0, overpaidCents: 0, tipCents: 205 });
   });
 
-  it("recusa gorjetas negativas ou acima de 30% da conta", async () => {
+  it("recusa gorjetas negativas ou acima de metade da conta (ou 10 €)", async () => {
     await order();
     expect(await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: -1 })).toMatchObject({ ok: false, code: "INVALID_TIP" });
-    expect(await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: 616 })).toMatchObject({ ok: false, code: "INVALID_TIP" });
-    expect(await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: 615 })).toMatchObject({ ok: true });
+    expect(await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: 1026 })).toMatchObject({ ok: false, code: "INVALID_TIP" });
+    expect(await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: 1025 })).toMatchObject({ ok: true });
   });
 
   it("mudar a gorjeta antes de pagar troca o pagamento pendente (só um ativo)", async () => {
@@ -249,7 +249,7 @@ describe("conta dividida", () => {
 
   it("a gorjeta conta sobre a parte e a comissão só sobre a parte", async () => {
     await order(); // 20,50 € → comissão de 18 cêntimos na conta toda
-    expect(await share(1025, "telemovel-ana", 400)).toMatchObject({ ok: false, code: "INVALID_TIP" });
+    expect(await share(1025, "telemovel-ana", 1001)).toMatchObject({ ok: false, code: "INVALID_TIP" });
     const r = await share(1025, "telemovel-ana", 100);
     if (!r.ok) throw new Error();
     expect(r.amountCents).toBe(1125);

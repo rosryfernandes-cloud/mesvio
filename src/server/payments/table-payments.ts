@@ -1,5 +1,6 @@
 import "server-only";
 import { planAllowsPayments } from "@/lib/plan";
+import { maxTipCents } from "@/lib/tip";
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { roundHalfUpDiv } from "@/lib/money";
 import type { Db } from "@/server/db/client";
@@ -48,7 +49,7 @@ export interface SharePayment {
 export const PAYER_KEY = /^[A-Za-z0-9_-]{8,64}$/;
 
 /** Gorjeta máxima: 30% da conta e nunca mais de 100 € (protege contra enganos ao escrever). */
-export const maxTipCents = (dueCents: number) => Math.min(Math.floor(dueCents * 0.3), 100_00);
+export { maxTipCents } from "@/lib/tip";
 
 /**
  * Inicia o pagamento do que falta na conta da mesa. Regras (auditoria P3):

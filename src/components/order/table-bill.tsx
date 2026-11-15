@@ -8,11 +8,13 @@ import { StripePaySheet, waitForPayment } from "./stripe-pay-sheet";
 import { backoffSchedule, usePolling } from "../use-polling";
 import Link from "next/link";
 import { formatEur } from "@/lib/money";
+import { maxTipCents, parseTipEuros } from "@/lib/tip";
 import type { BillOrder, TableBill } from "@/server/tables/table-sessions";
 import { useI18n } from "../i18n/i18n-provider";
 import { apiErrorText, LOCALE_TAGS, type Messages } from "@/lib/i18n/messages";
 
-const TIP_OPTIONS = [0, 5, 10, 15];
+/** Gorjetas rápidas em cêntimos; "Outro" deixa escrever o valor. */
+const TIP_PRESETS = [100, 200];
 
 /** Identifica este telemóvel nos pagamentos da conta dividida (fica no browser; sem dados pessoais). */
 function payerKey(): string {
@@ -52,8 +54,9 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const [payError, setPayError] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState(false);
   const [starting, setStarting] = useState(false);
-  // Gorjeta em percentagem do que falta pagar (0 = sem gorjeta).
-  const [tipPct, setTipPct] = useState(0);
+  // Gorjeta em euros: nenhuma, um valor rápido ou outro valor escrito pelo cliente.
+  const [tipChoice, setTipChoice] = useState<number | "other">(0);
+  const [tipText, setTipText] = useState("");
   // Fatura com NIF por email (só se o restaurante tiver o programa de faturação ligado).
   const [wantInvoice, setWantInvoice] = useState(false);
   const [nif, setNif] = useState("");
@@ -129,7 +132,10 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
   const shareCents = split === "all" && bill.pendingPaymentCents === 0 ? null : Math.min(wanted, available);
   const payCents = shareCents ?? bill.dueCents;
   const capped = split !== "all" && wanted > available;
-  const tipCents = Math.round((payCents * tipPct) / 100);
+  const tipMax = maxTipCents(payCents);
+  const typedTip = tipChoice === "other" ? parseTipEuros(tipText) : null;
+  const tipCents = tipChoice === "other" ? Math.min(typedTip ?? 0, tipMax) : tipChoice;
+  const tipInvalid = tipChoice === "other" && (typedTip === null || typedTip > tipMax);
 
   return (
     <main className={`mx-auto max-w-2xl px-4 pt-8 ${bill.paymentsEnabled && !fullyPaid && bill.dueCents > 0 ? "pb-40" : "pb-16"}`}>
@@ -309,23 +315,43 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                     {capped && <p className="mt-2 text-sm text-amber-800">{t.bill.splitCapped(formatEur(available))}</p>}
                   </fieldset>
                   )}
-                  <fieldset className="mb-3">
+                  <fieldset className="mb-4">
                     <legend className="mb-2 text-sm font-semibold">{t.bill.tipTitle}</legend>
                     <div className="grid grid-cols-4 gap-1 rounded-2xl bg-line/50 p-1">
-                      {TIP_OPTIONS.map((pct) => (
+                      {([0, ...TIP_PRESETS, "other"] as const).map((choice) => (
                         <button
-                          key={pct}
+                          key={choice}
                           type="button"
-                          aria-pressed={tipPct === pct}
-                          onClick={() => setTipPct(pct)}
-                          className={`min-h-12 rounded-xl text-sm font-semibold ${tipPct === pct ? "bg-card text-brand shadow-sm" : "text-ink-soft"}`}
+                          aria-pressed={tipChoice === choice}
+                          onClick={() => setTipChoice(choice)}
+                          className={`min-h-12 rounded-xl px-1 text-sm font-semibold leading-tight ${tipChoice === choice ? "bg-card text-brand shadow-sm" : "text-ink-soft"}`}
                         >
-                          {pct === 0 ? t.bill.tipNone : `${pct}%`}
-                          {pct > 0 && <span className="block text-xs font-normal text-ink-soft tabular-nums">{formatEur(Math.round((payCents * pct) / 100))}</span>}
+                          {choice === 0 ? t.bill.tipNone : choice === "other" ? t.bill.tipOther : formatEur(choice)}
                         </button>
                       ))}
                     </div>
-                    <p className="mt-1 text-xs text-ink-soft">{t.bill.tipNote}</p>
+                    {tipChoice === "other" && (
+                      <label className="mt-2 flex items-center gap-2 rounded-2xl border-2 border-line bg-card px-4 focus-within:border-brand">
+                        <span className="sr-only">{t.bill.tipAmount}</span>
+                        <input
+                          id="gorjeta-valor"
+                          value={tipText}
+                          onChange={(e) => setTipText(e.target.value.replace(/[^\d.,]/g, "").slice(0, 6))}
+                          inputMode="decimal"
+                          autoComplete="off"
+                          autoFocus
+                          placeholder="0,00"
+                          aria-label={t.bill.tipAmount}
+                          className="min-h-12 w-full bg-transparent text-lg font-semibold tabular-nums"
+                          // O contorno de foco fica na caixa à volta (borda verde), não no campo.
+                          style={{ outline: "none" }}
+                        />
+                        <span className="text-lg font-semibold text-ink-soft">€</span>
+                      </label>
+                    )}
+                    <p className={`mt-1.5 text-xs ${tipInvalid ? "text-danger" : "text-ink-soft"}`}>
+                      {tipInvalid ? t.bill.tipTooHigh(formatEur(tipMax)) : t.bill.tipNote}
+                    </p>
                   </fieldset>
                   {bill.invoicing && (
                     <div className={`mb-3 rounded-2xl ${wantInvoice ? "border border-line bg-card p-3" : "px-1 py-1"}`}>
@@ -367,7 +393,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                       <button
                         type="button"
                         onClick={startPayment}
-                        disabled={starting || payCents <= 0}
+                        disabled={starting || payCents <= 0 || tipInvalid}
                         className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-brand px-5 text-lg font-semibold text-white disabled:opacity-50"
                       >
                         <span>
@@ -377,15 +403,12 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                       </button>
                       <p className="mt-1.5 text-center text-xs text-ink-soft">
                         {tipCents > 0 ? `${t.bill.tipIncluded(formatEur(tipCents))} · ` : ""}
-                        {t.bill.methods}
+                        {t.bill.methodsShort}
                       </p>
                     </div>
                   </div>
                 </>
               )}
-              <div className="mt-2">
-                <CallStaff tableToken={tableToken} action="bill" subtle />
-              </div>
             </div>
           ) : (
             <p className="mt-4 rounded-xl bg-brand-soft px-4 py-3 text-sm">
@@ -402,7 +425,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
 
       <Link
         href={`/m/${tableToken}`}
-        className="mt-8 flex min-h-14 items-center justify-center rounded-2xl border border-brand font-semibold text-brand"
+        className="mt-6 flex min-h-12 items-center justify-center font-semibold text-brand underline-offset-4 hover:underline"
       >
         {t.order.backToMenu}
       </Link>

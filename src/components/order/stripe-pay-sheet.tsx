@@ -59,7 +59,11 @@ export function StripePaySheet({
           options={{
             clientSecret,
             locale,
-            appearance: { theme: "stripe", variables: { colorPrimary: brand || "#062d25", borderRadius: "12px" } },
+            appearance: {
+              theme: "stripe",
+              variables: { colorPrimary: brand || "#062d25", borderRadius: "14px", spacingUnit: "4px", fontSizeBase: "16px" },
+              rules: { ".AccordionItem": { boxShadow: "none" } },
+            },
           }}
         >
           <PayForm amountCents={amountCents} onSubmitted={onSubmitted} />
@@ -90,7 +94,15 @@ function PayForm({ amountCents, onSubmitted }: { amountCents: number; onSubmitte
 
   return (
     <form onSubmit={pay} className="mt-4 grid gap-4">
-      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto" } }} />
+      {/* Apple Pay primeiro, depois MB WAY e cartão: os métodos que aparecem são os que a conta Stripe
+          do restaurante tem ligados e que o telemóvel suporta. */}
+      <PaymentElement
+        options={{
+          layout: { type: "accordion", defaultCollapsed: false, radios: "always", spacedAccordionItems: true },
+          paymentMethodOrder: ["apple_pay", "google_pay", "mb_way", "card"],
+          wallets: { applePay: "auto", googlePay: "auto" },
+        }}
+      />
       {error && (
         <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
