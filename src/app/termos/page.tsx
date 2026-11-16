@@ -75,6 +75,10 @@ export default function TermsPage() {
           termos de um acordo de tratamento de dados (art. 28.º do RGPD) que faz parte do acordo comercial. Mais detalhes na{" "}
           <Link href="/privacidade">Política de Privacidade</Link>.
         </p>
+        <p>
+          O estabelecimento autoriza a MESVIO a aceder ao seu painel para prestar suporte (por exemplo, configurar a ementa ou
+          resolver um problema). Esses acessos ficam registados e limitam-se ao necessário.
+        </p>
 
         <h3 className="mt-6 font-bold">8. Responsabilidade</h3>
         <p>

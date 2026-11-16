@@ -133,7 +133,7 @@ export default function PrivacyPage() {
         <p>Recorremos a prestadores que tratam dados por nossa conta, com contrato e garantias adequadas:</p>
         <ul>
           <li>Alojamento da aplicação (Vercel), com execução na União Europeia.</li>
-          <li>Base de dados e autenticação (Supabase), alojadas na União Europeia.</li>
+          <li>Base de dados e autenticação (Supabase), alojadas no Reino Unido (Londres), país com decisão de adequação da Comissão Europeia.</li>
           <li>Envio de emails (por exemplo, Resend), para os códigos de entrada no painel, os avisos de pedidos de demonstração e o resumo semanal que o restaurante pode ligar.</li>
           <li>
             Inteligência artificial (Anthropic), para ler ementas a partir de fotos, PDF ou links, sugerir traduções, descrições e
@@ -166,6 +166,11 @@ export default function PrivacyPage() {
         <p>
           Os dados de cada restaurante estão isolados dos restantes na base de dados, as ligações são cifradas e o acesso ao
           painel é feito por convite, com perfis e permissões. Não vendemos dados pessoais.
+        </p>
+        <p>
+          Para dar suporte, a equipa MESVIO pode abrir o painel de um restaurante (modo suporte), apenas quando necessário e
+          com autenticação em dois passos. Cada entrada e saída fica registada, e o modo suporte não permite ligar pagamentos
+          nem mudar a equipa do restaurante.
         </p>
       </section>
 
