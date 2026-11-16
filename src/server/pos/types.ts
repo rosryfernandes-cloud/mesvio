@@ -99,6 +99,8 @@ export interface PosOrderRequest {
   tableLabel?: string;
   lines: PosOrderLine[];
   notes?: string;
+  /** Já pago pela app (lugares que pagam ao pedir, ex.: espreguiçadeiras). */
+  paid?: boolean;
 }
 
 export type PosOrderResult =

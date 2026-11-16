@@ -2,13 +2,14 @@ import "server-only";
 import { and, desc, eq, gte, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { auditLogs, categories, modifierGroups, modifiers, orderEvents, orders, posIntegrations, productModifierGroups, products } from "@/server/db/schema";
+import { auditLogs, categories, diningTables, modifierGroups, modifiers, orderEvents, orders, posIntegrations, productModifierGroups, products } from "@/server/db/schema";
 import { withTenant } from "@/server/db/tenant";
 import { guessStation } from "@/lib/station";
 import { open, seal } from "@/server/security/secret-box";
 import type { PosCatalog } from "../types";
 import { issueToken, sameSecret, signRequest, zoneSoftCredentialsSchema, type ZoneSoftCredentials, type ZsroiTokenClaims } from "./zsroi-auth";
 import { parseZsroiMenu } from "./zsroi-menu";
+import { orderIdFromZsroi, zsroiOrderId } from "./zsroi-order";
 
 /**
  * Lógica dos endpoints que a ZoneSoft (ZSROI) chama na MESVIO: login, ementa e estado dos pedidos.
@@ -219,13 +220,14 @@ export async function zsroiOrderStatus(db: Db, claims: ZsroiTokenClaims, raw: un
   const body = statusSchema.safeParse(raw);
   if (!body.success || !(body.data.status in MAP)) return { ok: false, status: 400, code: "bad_request", message: "Invalid status" };
   const next = MAP[body.data.status];
-  // O order_id que enviamos à ZoneSoft é o id do nosso pedido.
-  if (!UUID.safeParse(body.data.order_id).success) return { ok: false, status: 404, code: "resource_not_found", message: "Order not found" };
+  // O order_id que enviamos à ZoneSoft é o id do nosso pedido com o lugar no fim ("<id>_C12").
+  const orderId = orderIdFromZsroi(body.data.order_id);
+  if (!UUID.safeParse(orderId).success) return { ok: false, status: 404, code: "resource_not_found", message: "Order not found" };
   return withTenant(db, { organizationId: claims.organizationId }, async (tx) => {
     const [order] = await tx
       .select({ id: orders.id, status: orders.status })
       .from(orders)
-      .where(and(eq(orders.id, body.data.order_id), eq(orders.establishmentId, claims.establishmentId)));
+      .where(and(eq(orders.id, orderId), eq(orders.establishmentId, claims.establishmentId)));
     if (!order) return { ok: false, status: 404, code: "resource_not_found", message: "Order not found" };
     if (!next || order.status === next) return { ok: true, changed: false };
     const terminal = order.status === "REJECTED" || order.status === "CANCELLED";
@@ -377,13 +379,14 @@ export async function simulateZoneSoftAccept(
   const creds = row.provider === "zonesoft" ? readCredentials(row.ciphertext) : null;
   if (!creds) return { ok: false, code: "NO_CREDENTIALS", message: "Este restaurante não está ligado à ZoneSoft." };
   const [order] = await db
-    .select({ id: orders.id, shortCode: orders.shortCode })
+    .select({ id: orders.id, shortCode: orders.shortCode, tableLabel: diningTables.label })
     .from(orders)
+    .innerJoin(diningTables, eq(diningTables.id, orders.tableId))
     .where(and(eq(orders.establishmentId, establishmentId), eq(orders.status, "SUBMITTED")))
     .orderBy(desc(orders.createdAt))
     .limit(1);
   if (!order) return { ok: false, code: "NOT_FOUND", message: "Não há nenhum pedido à espera de confirmação do POS." };
-  const body = JSON.stringify({ serial: creds.serial, store_id: creds.clientId || creds.storeId, app_order_id: order.id, status: "accept", reason: "teste MESVIO" });
+  const body = JSON.stringify({ serial: creds.serial, store_id: creds.clientId || creds.storeId, app_order_id: zsroiOrderId(order.id, order.tableLabel), status: "accept", reason: "teste MESVIO" });
   try {
     const res = await fetchImpl(url, {
       method: "POST",

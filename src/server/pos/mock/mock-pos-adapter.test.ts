@@ -101,6 +101,6 @@ describe("ZoneSoft (ZSROI)", () => {
     const on = Object.entries(zs.capabilities).filter(([, v]) => v).map(([k]) => k);
     expect(on).toEqual(["catalogSync", "createOrder", "orderAcknowledgement", "orderStatusUpdates"]);
     expect((await zs.healthCheck()).ok).toBe(false);
-    expect(await zs.submitOrder(ribeye())).toMatchObject({ outcome: "rejected" });
+    expect(await zs.submitOrder({ ...ribeye(), paid: true })).toMatchObject({ outcome: "rejected" });
   });
 });

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { diningTables, orderEvents, orderItems, orders, outbox, posIntegrations } from "@/server/db/schema";
+import { diningTables, orderEvents, orderItems, orders, outbox, payments, posIntegrations } from "@/server/db/schema";
 import { resolvePosAdapter, type PosResolver } from "@/server/pos/registry";
 import type { PosOrderResult } from "@/server/pos/types";
 import { pruneRateLimits } from "@/server/security/rate-limit";
@@ -151,6 +151,8 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
   }
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id)).orderBy(asc(orderItems.lineNo));
+  // Pago pela app antes de ir para o POS (lugares que pagam ao pedir): alguns POS só aceitam pedidos pagos.
+  const paid = (await db.$count(payments, and(eq(payments.orderId, o.id), eq(payments.status, "SUCCEEDED")))) > 0;
   const pos = d.resolvePos(o.provider, o.establishmentId);
   let result = await submitWithTimeout(
     (signal) =>
@@ -168,6 +170,7 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
             notes: i.notes ?? undefined,
           })),
           notes: o.notes ?? undefined,
+          paid,
         },
         { signal },
       ),

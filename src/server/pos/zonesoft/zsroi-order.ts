@@ -5,10 +5,26 @@ import type { ZoneSoftCredentials } from "./zsroi-auth";
  * Pedido MESVIO → formato ZSROI (`POST /v1.0/integration/order`), conforme o manual "Generic Integration"
  * e o ficheiro example_order.txt do portal.
  *
- * A ZSROI só aceita `type_order` DELIVERY ou PICKUP e não tem campo de mesa. Até a ZoneSoft indicar o campo
- * certo, o pedido vai como PICKUP e a mesa segue no nome do cliente, na morada e nas observações, para a
- * cozinha a ver no talão. Os campos de estafeta e morada são obrigatórios na API e vão preenchidos com a mesa.
+ * A ZSROI só aceita `type_order` DELIVERY ou PICKUP e não tem campo de mesa. Como a ZoneSoft indicou
+ * (Carlos Silva, 16/11/2026), o pedido vai como PICKUP, já pago, e o lugar segue no fim do order_id
+ * (ex.: "<id>_C12" para a Cama 12): o operador vê no POS para onde levar. O lugar vai também no nome do
+ * cliente, na morada e nas observações. Pedidos por pagar (mesas que pagam no fim) não vão para a ZoneSoft.
  */
+
+/** "Cama 12" → "C12", "Mesa 20" → "M20", "Espreguiçadeira 3" → "E3"; sem número, letras e algarismos (até 6). */
+export function placeCode(label: string): string {
+  const clean = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const digits = clean.match(/\d+/)?.[0];
+  const initial = clean.match(/[A-Za-z]/)?.[0]?.toUpperCase() ?? "L";
+  if (digits) return `${initial}${digits}`;
+  return clean.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || initial;
+}
+
+/** O order_id que a ZoneSoft recebe: o id do pedido MESVIO e o lugar. */
+export const zsroiOrderId = (orderId: string, label: string) => `${orderId}_${placeCode(label)}`;
+
+/** order_id da ZoneSoft → id do pedido MESVIO (tira o lugar do fim). */
+export const orderIdFromZsroi = (zsroiId: string) => zsroiId.split("_")[0];
 
 export const ZSROI_ORDER_URL = "https://zsroi.zonesoft.org/v1.0/integration/order";
 
@@ -56,7 +72,7 @@ export function buildZsroiOrder(order: PosOrderRequest, creds: ZoneSoftCredentia
   const total = order.lines.reduce((s, l) => s + l.unitPriceCents * l.quantity, 0);
   const obs = [`${table.toUpperCase()} · MESVIO`, order.notes].filter(Boolean).join(" · ");
   return {
-    order_id: order.externalOrderId,
+    order_id: zsroiOrderId(order.externalOrderId, table),
     store_id: creds.clientId || creds.storeId,
     type_order: "PICKUP",
     order_time: lisbonTime(now),
@@ -68,7 +84,7 @@ export function buildZsroiOrder(order: PosOrderRequest, creds: ZoneSoftCredentia
     customer: { name: table, phone_number: "", nif: "", email: "" },
     products,
     obs,
-    orderIsAlreadyPaid: opts.paid ?? false,
+    orderIsAlreadyPaid: opts.paid ?? order.paid ?? false,
     delivery_address: { label: table, latitude: "0", longitude: "0" },
     is_picked_up_by_customer: true,
     discounted_products_total: 0,

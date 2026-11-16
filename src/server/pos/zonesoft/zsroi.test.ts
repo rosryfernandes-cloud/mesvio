@@ -184,8 +184,9 @@ describe("ZSROI: enviar pedidos", () => {
   const order = {
     externalOrderId: "11111111-2222-3333-4444-555555555555",
     posTableRef: "5",
-    tableLabel: "Mesa 5",
+    tableLabel: "Cama 5",
     notes: "Sem pressa",
+    paid: true,
     lines: [
       { posProductRef: "1978", name: "Menu Portuguesa", quantity: 2, unitPriceCents: 950, modifiers: [{ posModifierRef: "1978_3_390", name: "FANTA LARANJA", priceDeltaCents: 150 }], notes: "Bem passado" },
       { posProductRef: "2001", name: "Sumo de laranja", quantity: 1, unitPriceCents: 350, modifiers: [] },
@@ -193,12 +194,16 @@ describe("ZSROI: enviar pedidos", () => {
   };
   const creds = { ...CREDS, clientId: "D95C522A33D" };
 
-  it("monta o pedido como o manual: preço do artigo sem as opções, mesa no cliente e nas observações", async () => {
-    const { buildZsroiOrder, lisbonTime } = await import("./zsroi-order");
+  it("monta o pedido como o manual: pago, lugar no fim do order_id, no cliente e nas observações", async () => {
+    const { buildZsroiOrder, lisbonTime, placeCode, orderIdFromZsroi } = await import("./zsroi-order");
     const p = buildZsroiOrder(order, creds, new Date("2026-07-01T11:30:00Z"));
-    expect(p).toMatchObject({ order_id: order.externalOrderId, store_id: "D95C522A33D", type_order: "PICKUP", currency: "EUR", order_time: "2026-07-01 12:30:00" });
-    expect(p.customer.name).toBe("Mesa 5");
-    expect(p.obs).toBe("MESA 5 · MESVIO · Sem pressa");
+    expect(p).toMatchObject({ order_id: `${order.externalOrderId}_C5`, orderIsAlreadyPaid: true, store_id: "D95C522A33D", type_order: "PICKUP", currency: "EUR", order_time: "2026-07-01 12:30:00" });
+    expect(orderIdFromZsroi(p.order_id)).toBe(order.externalOrderId);
+    expect(placeCode("Mesa 20")).toBe("M20");
+    expect(placeCode("Espreguiçadeira 3")).toBe("E3");
+    expect(placeCode("Cabana VIP")).toBe("CABANA");
+    expect(p.customer.name).toBe("Cama 5");
+    expect(p.obs).toBe("CAMA 5 · MESVIO · Sem pressa");
     expect(p.products[0]).toMatchObject({ id: "1978", quantity: 2, price: 800, obs: "Bem passado" });
     expect(p.products[0].attributes[0]).toMatchObject({ id: "1978_3_390", price: 150 });
     expect(p.total_customer_to_pay).toBe(2 * 950 + 350);
@@ -229,6 +234,18 @@ describe("ZSROI: enviar pedidos", () => {
       throw new TypeError("fetch failed");
     }) as typeof fetch;
     expect(await mk(offline).submitOrder(order)).toMatchObject({ outcome: "unknown" });
+  });
+
+  it("pedido por pagar (mesa que paga no fim) não vai para a ZoneSoft: fica no painel", async () => {
+    const { ZoneSoftAdapter } = await import("./zonesoft-adapter");
+    let called = false;
+    const f = (async () => {
+      called = true;
+      return new Response("{}", { status: 201 });
+    }) as typeof fetch;
+    const a = new ZoneSoftAdapter({ establishmentId: "e1", settings: {} }, { credentials: async () => creds, fetch: f });
+    expect(await a.submitOrder({ ...order, paid: false })).toMatchObject({ outcome: "accepted" });
+    expect(called).toBe(false);
   });
 });
 
@@ -290,7 +307,8 @@ describe("ZSROI: simular aceite (conta demo)", () => {
     const orderId = (placed as { order: { id: string } }).order.id;
     await db.update(orders).set({ status: "SUBMITTED" }).where(eq(orders.id, orderId));
     expect(await simulateZoneSoftAccept(db, owner.establishmentId, { fetchImpl })).toMatchObject({ ok: true });
-    expect(JSON.parse(sent!)).toMatchObject({ serial: "D_TESTE01", app_order_id: orderId, status: "accept" });
+    expect(JSON.parse(sent!)).toMatchObject({ serial: "D_TESTE01", status: "accept" });
+    expect(JSON.parse(sent!).app_order_id).toMatch(new RegExp(`^${orderId}_[A-Z]+\\d*$`));
   });
 });
 

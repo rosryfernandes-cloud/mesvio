@@ -7,9 +7,9 @@
  *   (`/api/pos/zonesoft/menu`) quando o restaurante carrega em "Sync Menus" no ZSBMS; fica guardada
  *   na BD e é lida daqui como a ementa MESVIO (fotos, traduções e esgotados funcionam igual).
  * - Estados dos pedidos: IMPLEMENTADO no endpoint `/api/pos/zonesoft/order-status`.
- * - Enviar pedidos: IMPLEMENTADO (POST /v1.0/integration/order, assinado com HMAC-SHA256). A ZSROI só aceita
- *   DELIVERY/PICKUP e não tem campo de mesa: vai como PICKUP com a mesa no nome e nas observações, até a
- *   ZoneSoft indicar o campo certo (ver zsroi-order.ts). A aceitação chega depois por /order-status.
+ * - Enviar pedidos: IMPLEMENTADO (POST /v1.0/integration/order, assinado com HMAC-SHA256), só os já pagos
+ *   (espreguiçadeiras que pagam ao pedir): PICKUP com o lugar no fim do order_id, como a ZoneSoft indicou
+ *   (ver zsroi-order.ts). Os por pagar ficam no painel. A aceitação chega depois por /order-status.
  */
 import { eq } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
@@ -92,6 +92,9 @@ export class ZoneSoftAdapter implements PosAdapter {
   }
 
   async submitOrder(order: PosOrderRequest, opts: { signal?: AbortSignal } = {}): Promise<PosOrderResult> {
+    // A ZoneSoft só aceita pedidos já pagos. Os das mesas que pagam no fim ficam no painel e no talão,
+    // como num restaurante sem POS, e a equipa lança-os no ZS Rest.
+    if (!order.paid) return this.stored.submitOrder(order);
     const creds = await this.credentials();
     if (!creds) return { outcome: "rejected", reason: "ZoneSoft sem credenciais: ligar o restaurante na Central." };
     const body = JSON.stringify(buildZsroiOrder(order, creds, (this.deps.now ?? (() => new Date()))()));
