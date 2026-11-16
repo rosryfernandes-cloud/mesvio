@@ -151,3 +151,14 @@ describe("passagem do modo de teste para o modo real", () => {
     expect(row.billingCustomerId).toBe("cus_1");
   });
 });
+
+describe("conta ligada de teste lida com a chave real", () => {
+  it("reconhece os erros da Stripe de objeto ou conta que não existe neste modo", async () => {
+    const { isMissingStripeObject } = await import("@/server/payments/stripe-mode");
+    expect(isMissingStripeObject({ code: "resource_missing" })).toBe(true);
+    expect(isMissingStripeObject({ code: "account_invalid" })).toBe(true);
+    expect(isMissingStripeObject({ statusCode: 403, message: "The provided key 'sk_live_***' does not have access to account 'acct_1' (or that account does not exist)." })).toBe(true);
+    expect(isMissingStripeObject({ statusCode: 500, message: "boom" })).toBe(false);
+    expect(isMissingStripeObject(null)).toBe(false);
+  });
+});

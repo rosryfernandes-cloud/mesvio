@@ -32,6 +32,7 @@ export function StripeConnectCard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [returned, setReturned] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -40,10 +41,18 @@ export function StripeConnectCard() {
     void (async () => {
       const res = await fetch("/api/painel/stripe", { cache: "no-store" }).catch(() => null);
       if (res?.ok) setStatus(await res.json());
+      else setFailed(true);
     })();
   }, []);
 
   const msg = returned ? RETURN_MESSAGE[returned] : null;
+  if (failed) {
+    return (
+      <p role="alert" className="rounded-2xl border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+        Não foi possível ver o estado da conta Stripe agora. Recarregue a página; se continuar, fale com a MESVIO.
+      </p>
+    );
+  }
   if (!status) return null;
   if (!status.available) {
     return (
