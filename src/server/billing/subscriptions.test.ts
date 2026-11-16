@@ -69,7 +69,7 @@ describe("mensalidade MESVIO (Stripe Billing)", () => {
       customer: "cus_1",
       allowed_payment_method_types: ["card"],
       metadata: { establishmentId: owner.establishmentId },
-      line_items: [{ price_data: { currency: "eur", unit_amount: 5900, recurring: { interval: "month" } } }],
+      line_items: [{ price_data: { currency: "eur", unit_amount: 6900, recurring: { interval: "month" } } }],
     });
     await startSubscriptionCheckout(db, owner, "https://mesvio.example", f.stripe);
     expect(f.calls.filter((c) => c.op === "customers.create")).toHaveLength(1);
@@ -80,7 +80,7 @@ describe("mensalidade MESVIO (Stripe Billing)", () => {
     await startSubscriptionCheckout(db, owner, "https://x", f.stripe);
     expect(await finishSubscriptionCheckout(db, owner, "cs_1", f.stripe)).toBe(true);
     const status = await getBillingStatus(db, owner, f.stripe);
-    expect(status).toMatchObject({ status: "active", active: true, monthlyCents: 5900 });
+    expect(status).toMatchObject({ status: "active", active: true, monthlyCents: 6900 });
     expect(status.periodEnd).toBe(new Date(1_800_000_000 * 1000).toISOString());
     expect(await startSubscriptionCheckout(db, owner, "https://x", f.stripe)).toMatchObject({ ok: false });
 
