@@ -278,7 +278,11 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
 
       {me.canEditSettings && me.canViewTeam && (
-        <FirstSteps establishmentId={me.establishmentId} hasOrders={board.orders.length > 0} refreshKey={tab} onGo={setTab} />
+        <FirstSteps establishmentId={me.establishmentId} hasOrders={board.orders.length > 0} refreshKey={tab} onGo={(t) => {
+          setTab(t);
+          // No telemóvel, a secção aberta fica abaixo da lista: leva o dono até ela.
+          requestAnimationFrame(() => document.getElementById("seccoes-painel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+        }} />
       )}
       <InstallPrompt />
       <NotificationsCard />
@@ -287,7 +291,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         <HelpAssistant />
       </div>
 
-      <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
+      <nav id="seccoes-painel" className="mb-6 flex scroll-mt-4 gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
         {(
           [
             "pedidos",
@@ -399,7 +403,7 @@ function PrintButtons({ order }: { order: BoardOrder }) {
 }
 
 const CALL_DETAIL: Record<string, string> = {
-  card: "Cartão",
+  card: "Multibanco (levar o terminal)",
   cash: "Dinheiro",
   order: "quer pedir mais",
   napkins: "guardanapos ou talheres",

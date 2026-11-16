@@ -406,11 +406,7 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
                 </>
               )}
             </div>
-          ) : (
-            <p className="mt-4 rounded-xl bg-brand-soft px-4 py-3 text-sm">
-              <strong>{t.bill.callStaffTitle}</strong> {t.bill.callStaffBody}
-            </p>
-          )}
+          ) : null}
           {payError && (
             <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
               {payError}
