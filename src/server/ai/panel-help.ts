@@ -22,7 +22,7 @@ export const PANEL_GUIDE = `
 Painel da MESVIO (mesvio.pt/painel), para donos, gerentes e empregados de restaurantes e bares de praia. Os clientes leem um QR Code na mesa ou espreguiçadeira, veem a ementa no telemóvel e pedem; os pedidos aparecem no painel.
 
 Separadores (alguns só para dono e gerente):
-- Pedidos: pedidos a chegar, com som. Cada pedido passa por Confirmar, Em preparação e Servido, ou Recusar. Há talões automáticos por aparelho (Desligado, Tudo, Só cozinha, Só bar), escolhidos no computador ou tablet ligado a cada impressora.
+- Pedidos: pedidos a chegar, com som. Sem POS ligado, o pedido entra já confirmado (com a aprovação manual ligada, aparecem Aprovar e Recusar). Com POS ligado, o estado vem do POS; se ficar "Enviado" sem resposta, há Confirmar. Há talões automáticos por aparelho (Desligado, Tudo, Só cozinha, Só bar), escolhidos no computador ou tablet ligado a cada impressora.
 - Resumo (dono/gerente): "Hoje" mostra pedidos, vendas, ticket médio, tempo do pedido à cozinha, pedidos por hora e mais pedidos. "Últimos 7 dias" compara com a semana anterior, mostra o melhor dia, vendas por dia, horas de mais movimento, mais pedidos, o que esgotou várias vezes e os pratos que ninguém pediu.
 - Mesas: as mesas e lugares, as contas abertas, fechar a conta de uma mesa (indicando como foi paga), juntar mesas, responsável por mesa, gerar um QR novo para um lugar. O dono/gerente pode acrescentar lugares (mesas ou espreguiçadeiras) e vê aqui a subscrição, os pagamentos na app (Stripe), a faturação e as mesas por empregado.
 - Imprimir os QR: botão "Abrir QR Codes" nos Primeiros passos, ou a página /painel/qr. Um QR por mesa ou espreguiçadeira.
