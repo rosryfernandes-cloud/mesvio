@@ -253,6 +253,13 @@
       "when": 1794599995495,
       "tag": "0035_prospecao_seguimento",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794835415057,
+      "tag": "0036_avaliacoes_ligadas",
+      "breakpoints": true
     }
   ]
 }

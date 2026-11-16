@@ -115,8 +115,8 @@ export const establishments = pgTable(
      */
     invoicingAccount: text("invoicing_account"),
     invoicingApiKeyCiphertext: text("invoicing_api_key_ciphertext"),
-    /** Avaliações no fim da conta (em teste: desligado por defeito). */
-    reviewsEnabled: boolean("reviews_enabled").notNull().default(false),
+    /** Avaliações no fim da conta (ao pedir a conta ou depois de pagar). Ligadas por defeito; o dono pode desligar. */
+    reviewsEnabled: boolean("reviews_enabled").notNull().default(true),
     /** Link "escrever avaliação" do Google do restaurante (https); null = sem botão do Google. */
     googleReviewUrl: text("google_review_url"),
     /** Resumo da semana por email aos donos, às segundas-feiras de manhã (desligado por defeito). */

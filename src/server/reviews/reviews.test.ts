@@ -42,9 +42,11 @@ async function payBill() {
 const review = (body: unknown, ipHash = randomUUID()) => submitReview(db, T1.publicToken, body, { ipHash });
 
 describe("avaliações no fim da conta (em teste)", () => {
-  it("desligadas por defeito: a conta não as mostra e não se aceitam", async () => {
+  it("ligadas por defeito; desligadas pelo dono, a conta não as mostra e não se aceitam", async () => {
     await order();
     await payBill();
+    expect((await getTableBillByToken(db, T1.publicToken))!.reviews).toEqual({ enabled: true, googleUrl: null });
+    expect(await saveReviewSettings(db, owner, { enabled: false, googleReviewUrl: "" })).toEqual({ ok: true });
     expect((await getTableBillByToken(db, T1.publicToken))!.reviews).toEqual({ enabled: false, googleUrl: null });
     expect(await review({ stars: 5 })).toMatchObject({ ok: false, code: "NOT_ALLOWED" });
   });
