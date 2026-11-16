@@ -120,3 +120,34 @@ describe("mensalidade MESVIO (Stripe Billing)", () => {
     expect(e.s).toBe("past_due");
   });
 });
+
+describe("passagem do modo de teste para o modo real", () => {
+  const missing = () => Object.assign(new Error("No such object; a similar object exists in test mode"), { code: "resource_missing" });
+
+  it("subscrição de teste que não existe com a chave real: o painel fica sem subscrição, sem erro", async () => {
+    await db.update(establishments).set({ billingCustomerId: "cus_teste", billingSubscriptionId: "sub_teste", billingStatus: "active" }).where(eq(establishments.id, owner.establishmentId));
+    const f = fakeStripe();
+    f.stripe.subscriptions.retrieve = (async () => {
+      throw missing();
+    }) as never;
+    const st = await getBillingStatus(db, owner, f.stripe);
+    expect(st).toMatchObject({ status: null, active: false });
+    const [row] = await db.select().from(establishments).where(eq(establishments.id, owner.establishmentId));
+    expect(row).toMatchObject({ billingCustomerId: null, billingSubscriptionId: null, billingStatus: null });
+  });
+
+  it("cliente de teste guardado: cria um cliente novo e abre o Checkout na mesma", async () => {
+    await db.update(establishments).set({ billingCustomerId: "cus_teste" }).where(eq(establishments.id, owner.establishmentId));
+    const f = fakeStripe();
+    const create = f.stripe.checkout.sessions.create.bind(f.stripe.checkout.sessions);
+    f.stripe.checkout.sessions.create = (async (args: { customer: string }) => {
+      if (args.customer === "cus_teste") throw missing();
+      return create(args as never);
+    }) as never;
+    const r = await startSubscriptionCheckout(db, owner, "https://x", f.stripe);
+    expect(r).toMatchObject({ ok: true });
+    expect(f.calls.filter((c) => c.op === "customers.create")).toHaveLength(1);
+    const [row] = await db.select().from(establishments).where(eq(establishments.id, owner.establishmentId));
+    expect(row.billingCustomerId).toBe("cus_1");
+  });
+});

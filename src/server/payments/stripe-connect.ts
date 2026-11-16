@@ -6,6 +6,7 @@ import { withTenant } from "@/server/db/tenant";
 import { auditLogs, establishments } from "@/server/db/schema";
 import type { StaffContext } from "@/server/staff/context";
 import { stripeClient } from "./stripe-provider";
+import { isMissingStripeObject } from "./stripe-mode";
 
 /**
  * Ligar a conta Stripe de um restaurante (Stripe Connect). Conta com dashboard Stripe completo:
@@ -44,7 +45,18 @@ export async function getConnectStatus(
   const { accountId } = await storedAccount(db, s);
   if (!stripe) return { available: false, accountId, chargesEnabled: false, detailsSubmitted: false, requirementsDue: 0 };
   if (!accountId) return { available: true, accountId: null, chargesEnabled: false, detailsSubmitted: false, requirementsDue: 0 };
-  const account = await stripe.accounts.retrieve(accountId);
+  let account: Stripe.Account;
+  try {
+    account = await stripe.accounts.retrieve(accountId);
+  } catch (err) {
+    if (!isMissingStripeObject(err)) throw err;
+    // Conta de outro modo (ex.: teste) que não existe com a chave atual: o restaurante liga de novo,
+    // e os pagamentos pela app desligam-se até lá (não se pode cobrar numa conta que não existe).
+    await withTenant(db, tenantOf(s), (tx) =>
+      tx.update(establishments).set({ stripeAccountId: null, paymentsEnabled: false, updatedAt: new Date() }).where(eq(establishments.id, s.establishmentId)),
+    );
+    return { available: true, accountId: null, chargesEnabled: false, detailsSubmitted: false, requirementsDue: 0 };
+  }
   let applePay: ConnectStatus["applePay"];
   // Sempre que o painel vê a conta pronta: garantir o domínio do Apple Pay (a conta pode ter ficado
   // aprovada depois do regresso do formulário, e aí o domínio nunca chegou a ser registado).

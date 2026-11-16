@@ -1,5 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
+import { isMissingStripeObject } from "@/server/payments/stripe-mode";
 import { eq, isNotNull } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { withTenant } from "@/server/db/tenant";
@@ -81,7 +82,17 @@ export async function getBillingStatus(systemDb: Db, s: Scope, stripe: Stripe | 
       periodEnd = periodEndOf(sub);
     }
   } else if (stripe && e.subscriptionId) {
-    const sub = await stripe.subscriptions.retrieve(e.subscriptionId).catch(() => null);
+    let missing = false;
+    const sub = await stripe.subscriptions.retrieve(e.subscriptionId).catch((err) => {
+      missing = isMissingStripeObject(err);
+      return null;
+    });
+    if (missing) {
+      // Subscrição de outro modo (ex.: teste) que não existe com a chave atual: fica sem subscrição.
+      await save(systemDb, s.establishmentId, { billingCustomerId: null, billingSubscriptionId: null, billingStatus: null, billingPeriodEnd: null });
+      status = null;
+      periodEnd = null;
+    }
     if (sub) {
       await store(systemDb, s.establishmentId, sub);
       status = sub.status;
@@ -117,9 +128,10 @@ export async function startSubscriptionCheckout(
     customerId = customer.id;
     await save(systemDb, s.establishmentId, { billingCustomerId: customerId });
   }
-  const session = await stripe.checkout.sessions.create({
+  const createSession = (customer: string) =>
+    stripe.checkout.sessions.create({
     mode: "subscription",
-    customer: customerId,
+    customer,
     allowed_payment_method_types: ["card"],
     line_items: [
       {
@@ -137,6 +149,20 @@ export async function startSubscriptionCheckout(
     success_url: `${baseUrl}/painel/subscricao/retorno?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/painel?subscricao=cancelada`,
   });
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await createSession(customerId);
+  } catch (err) {
+    if (!isMissingStripeObject(err)) throw err;
+    // Cliente de outro modo (ex.: teste): cria um novo com a chave atual e tenta outra vez.
+    const customer = await stripe.customers.create({
+      name: e.name,
+      email: s.email ?? undefined,
+      metadata: { establishmentId: s.establishmentId, organizationId: s.organizationId },
+    });
+    await save(systemDb, s.establishmentId, { billingCustomerId: customer.id, billingSubscriptionId: null, billingStatus: null, billingPeriodEnd: null });
+    session = await createSession(customer.id);
+  }
   if (!session.url) return { ok: false, message: "A Stripe não devolveu o link de pagamento." };
   return { ok: true, url: session.url };
 }
