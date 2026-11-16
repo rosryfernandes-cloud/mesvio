@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/components/i18n/i18n-provider";
+import { ReviewPrompt } from "./review-prompt";
 
 type Kind = "bill" | "waiter";
 type Call = { kind: Kind; detail: string | null; acknowledged: boolean };
@@ -12,7 +13,19 @@ const POLL_MS = 10_000;
  * "Chamar empregado" (na ementa) e "Pedir a conta" (na conta da mesa). Avisa o painel do
  * restaurante, com som, e mostra ao cliente quando o empregado vem a caminho.
  */
-export function CallStaff({ tableToken, action, subtle = false }: { tableToken: string; action: Kind; /** Botão discreto (a conta já se paga no telemóvel). */ subtle?: boolean }) {
+export function CallStaff({
+  tableToken,
+  action,
+  subtle = false,
+  review = null,
+}: {
+  tableToken: string;
+  action: Kind;
+  /** Botão discreto (a conta já se paga no telemóvel). */
+  subtle?: boolean;
+  /** Avaliações ligadas: depois de pedir a conta, pede-se logo a avaliação (enquanto esperam pelo empregado). */
+  review?: { googleUrl: string | null } | null;
+}) {
   const { t } = useI18n();
   const [sheet, setSheet] = useState<Kind | null>(null);
   const [calls, setCalls] = useState<Call[]>([]);
@@ -92,6 +105,7 @@ export function CallStaff({ tableToken, action, subtle = false }: { tableToken: 
           {waiter && <p>{waiter.acknowledged ? `✓ ${t.call.onTheWay}` : t.call.waiterSent}</p>}
         </div>
       )}
+      {action === "bill" && bill && review && <ReviewPrompt tableToken={tableToken} googleUrl={review.googleUrl} />}
 
       {sheet && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40" onClick={() => setSheet(null)}>

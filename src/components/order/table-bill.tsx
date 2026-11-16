@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CallStaff } from "./call-staff";
-import { ReviewButton, ReviewPrompt } from "./review-prompt";
+import { ReviewPrompt } from "./review-prompt";
 import { MockPaySheet } from "./mock-pay-sheet";
 import { StripePaySheet, waitForPayment } from "./stripe-pay-sheet";
 import { backoffSchedule, usePolling } from "../use-polling";
@@ -206,14 +206,10 @@ export function TableBillView({ initial, tableToken }: { initial: TableBill; tab
             </p>
           )}
 
-          {!fullyPaid && bill.dueCents > 0 && !bill.paymentsEnabled && <CallStaff tableToken={tableToken} action="bill" />}
-          {/* Sem pagamentos na app, quem paga no balcão também pode avaliar. Com pagamentos, a avaliação
-              só aparece depois de pagar (senão aparecia duas vezes). */}
-          {!fullyPaid && !bill.paymentsEnabled && bill.totalCents > 0 && bill.reviews.enabled && (
-            <div className="mt-4 text-center">
-              <ReviewButton tableToken={tableToken} googleUrl={bill.reviews.googleUrl} />
-            </div>
+          {!fullyPaid && bill.dueCents > 0 && !bill.paymentsEnabled && (
+            <CallStaff tableToken={tableToken} action="bill" review={bill.reviews.enabled ? { googleUrl: bill.reviews.googleUrl } : null} />
           )}
+          {/* Sem pagamentos na app, a avaliação aparece quando o cliente pede a conta (no CallStaff). */}
 
           {fullyPaid ? (
             <>
