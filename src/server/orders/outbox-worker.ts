@@ -152,7 +152,12 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id)).orderBy(asc(orderItems.lineNo));
   // Pago pela app antes de ir para o POS (lugares que pagam ao pedir): alguns POS só aceitam pedidos pagos.
-  const paid = (await db.$count(payments, and(eq(payments.orderId, o.id), eq(payments.status, "SUCCEEDED")))) > 0;
+  const [paidRow] = await db
+    .select({ nif: payments.invoiceNif })
+    .from(payments)
+    .where(and(eq(payments.orderId, o.id), eq(payments.status, "SUCCEEDED")))
+    .limit(1);
+  const paid = Boolean(paidRow);
   const pos = d.resolvePos(o.provider, o.establishmentId);
   let result = await submitWithTimeout(
     (signal) =>
@@ -171,6 +176,7 @@ async function processJob(db: Db, job: Job, d: ReturnType<typeof defaults>): Pro
           })),
           notes: o.notes ?? undefined,
           paid,
+          customerNif: paidRow?.nif ?? undefined,
         },
         { signal },
       ),

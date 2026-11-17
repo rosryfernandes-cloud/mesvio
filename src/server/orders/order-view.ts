@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
-import { diningTables, establishments, orderItems, orders, orderStatus, payments } from "@/server/db/schema";
+import { diningTables, establishments, orderItems, orders, orderStatus, payments, posIntegrations } from "@/server/db/schema";
 import { effectiveOrderingMode } from "@/lib/plan";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
@@ -28,6 +28,8 @@ export interface OrderView {
    * a faturação ligada. `status` = estado da fatura pedida (null = ainda não pediu).
    */
   invoice?: { status: "pending" | "issued" | "failed" | "manual" | null };
+  /** A fatura sai do POS do restaurante (ZoneSoft): o NIF pede-se antes de pagar, para ir com o pedido. */
+  posInvoices?: boolean;
 }
 
 export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator = untranslated): Promise<OrderView | null> {
@@ -43,19 +45,22 @@ export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator 
       mode: diningTables.orderingMode,
       plan: establishments.plan,
       invoicing: sql<boolean>`${establishments.invoicingAccount} is not null and ${establishments.invoicingApiKeyCiphertext} is not null`,
+      provider: posIntegrations.provider,
     })
     .from(orders)
     .innerJoin(diningTables, eq(diningTables.id, orders.tableId))
     .innerJoin(establishments, eq(establishments.id, diningTables.establishmentId))
+    .leftJoin(posIntegrations, eq(posIntegrations.establishmentId, establishments.id))
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!o) return null;
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).orderBy(asc(orderItems.lineNo));
-  const { mode, plan, invoicing, ...rest } = o;
+  const { mode, plan, invoicing, provider, ...rest } = o;
   const orderingMode = effectiveOrderingMode(plan, mode);
   // Pago ao pedir: a fatura pede-se sobre o pagamento confirmado deste pedido.
   let invoice: OrderView["invoice"];
-  if (orderingMode === "pay_first" && invoicing) {
+  const posInvoices = orderingMode === "pay_first" && provider === "zonesoft";
+  if (orderingMode === "pay_first" && invoicing && !posInvoices) {
     const [p] = await db
       .select({ status: payments.invoiceStatus })
       .from(payments)
@@ -67,6 +72,7 @@ export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator 
     ...rest,
     orderingMode,
     invoice,
+    ...(posInvoices ? { posInvoices } : {}),
     notes: o.notes ?? undefined,
     createdAt: o.createdAt.toISOString(),
     lines: items.map((i) => ({

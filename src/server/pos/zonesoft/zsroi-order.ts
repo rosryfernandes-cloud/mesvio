@@ -81,7 +81,8 @@ export function buildZsroiOrder(order: PosOrderRequest, creds: ZoneSoftCredentia
     delivery_fee: 0,
     estimated_total_price: total,
     courier: { name: "MESVIO", phone_number: "", license_plate: table },
-    customer: { name: table, phone_number: "", nif: "", email: "" },
+    // O NIF que o cliente pediu: o ZS Rest emite a fatura com ele quando o pedido fica pronto.
+    customer: { name: table, phone_number: "", nif: order.customerNif ?? "", email: "" },
     products,
     obs,
     orderIsAlreadyPaid: opts.paid ?? order.paid ?? false,

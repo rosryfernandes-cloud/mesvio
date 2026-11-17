@@ -51,6 +51,8 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
   const [waiting, setWaiting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  // NIF para a fatura emitida pelo POS do restaurante (ZoneSoft): vai com o pedido, por isso pede-se antes.
+  const [nif, setNif] = useState("");
 
   const reload = async () => {
     const res = await fetch(`/api/orders/${order.id}?mesa=${encodeURIComponent(tableToken)}`, { cache: "no-store" }).catch(() => null);
@@ -60,7 +62,16 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
   async function startPayment() {
     setStarting(true);
     setPayError(null);
-    const res = await fetch(`/api/mesa/${tableToken}/pedidos/${order.id}/pagamento`, { method: "POST" }).catch(() => null);
+    const nifDigits = nif.replace(/\s/g, "");
+    if (nifDigits && !/^\d{9}$/.test(nifDigits)) {
+      setStarting(false);
+      return setPayError(t.bill.invoiceInvalid);
+    }
+    const res = await fetch(`/api/mesa/${tableToken}/pedidos/${order.id}/pagamento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nifDigits ? { nif: nifDigits } : {}),
+    }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setStarting(false);
     if (!res?.ok) {
@@ -127,6 +138,19 @@ export function OrderStatus({ initial, tableToken, autoPay = false }: { initial:
 
       {order.status === "AWAITING_PAYMENT" && (
         <div className="mt-4">
+          {order.posInvoices && (
+            <label className="mb-3 block text-sm">
+              🧾 {t.bill.invoiceNif}
+              <input
+                id="nif-fatura"
+                className="mt-1 block w-full rounded-xl border border-line bg-paper px-3 py-2.5 tabular-nums"
+                value={nif}
+                onChange={(e) => setNif(e.target.value.replace(/[^\d ]/g, "").slice(0, 11))}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </label>
+          )}
           <button
             type="button"
             onClick={startPayment}

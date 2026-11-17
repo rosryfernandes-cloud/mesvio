@@ -20,9 +20,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const provider = activePaymentProvider();
   if (!provider) return NextResponse.json({ message: "Pagamentos indisponíveis. Chame um funcionário." }, { status: 503 });
-  const r = await startOrderPayment(db, token, id, provider);
+  // NIF opcional para a fatura do POS (ZoneSoft); qualquer outra coisa é ignorada.
+  const body = (await request.json().catch(() => null)) as { nif?: unknown } | null;
+  const nif = typeof body?.nif === "string" ? body.nif.replace(/\s/g, "") : null;
+  const r = await startOrderPayment(db, token, id, provider, new Date(), { nif });
   if (r.activatedOrderId) await dispatchWithinDeadline(db, r.activatedOrderId, { label: "pagamentos" });
   if (!r.ok) return NextResponse.json({ code: r.code, message: r.message }, { status: STATUS[r.code] });
-  const { activatedOrderId: _ignored, ...body } = r;
-  return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
+  const { activatedOrderId: _ignored, ...result } = r;
+  return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
 }

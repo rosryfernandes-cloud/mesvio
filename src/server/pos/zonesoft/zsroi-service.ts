@@ -9,7 +9,8 @@ import { open, seal } from "@/server/security/secret-box";
 import type { PosCatalog } from "../types";
 import { issueToken, sameSecret, signRequest, zoneSoftCredentialsSchema, type ZoneSoftCredentials, type ZsroiTokenClaims } from "./zsroi-auth";
 import { parseZsroiMenu } from "./zsroi-menu";
-import { orderIdFromZsroi, zsroiOrderId } from "./zsroi-order";
+import { buildZsroiOrder, interpretZsroiResponse, orderIdFromZsroi, ZSROI_ORDER_URL, zsroiOrderId } from "./zsroi-order";
+import { randomUUID } from "node:crypto";
 
 /**
  * Lógica dos endpoints que a ZoneSoft (ZSROI) chama na MESVIO: login, ementa e estado dos pedidos.
@@ -358,6 +359,64 @@ export async function getZoneSoftStatus(db: Db, establishmentId: string): Promis
       return { at: r.at.toISOString(), shortCode: r.shortCode, status: r.status, reason: typeof d.reason === "string" ? d.reason : null };
     }),
   };
+}
+
+/**
+ * Central (conta de testes): envia à ZoneSoft um pedido fictício de uma espreguiçadeira, já pago, no
+ * formato real (lugar no fim do order_id, OrderAlreadyPaid). Usa o primeiro artigo da ementa
+ * sincronizada. Não grava nada na base de dados: serve para confirmar que a ZoneSoft aceita o formato.
+ */
+export async function sendZoneSoftTestOrder(
+  db: Db,
+  establishmentId: string,
+  { fetchImpl = fetch, url = ZSROI_ORDER_URL, now = new Date() }: { fetchImpl?: typeof fetch; url?: string; now?: Date } = {},
+): Promise<PingResult & { orderId?: string; outcome?: string }> {
+  const [row] = await db
+    .select({ provider: posIntegrations.provider, ciphertext: posIntegrations.credentialsCiphertext })
+    .from(posIntegrations)
+    .where(eq(posIntegrations.establishmentId, establishmentId));
+  if (!row) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const creds = row.provider === "zonesoft" ? readCredentials(row.ciphertext) : null;
+  if (!creds) return { ok: false, code: "NO_CREDENTIALS", message: "Este restaurante não está ligado à ZoneSoft." };
+  const [p] = await db
+    .select({ ref: products.posProductRef, name: products.name, price: products.priceCents })
+    .from(products)
+    .where(eq(products.establishmentId, establishmentId))
+    .limit(1);
+  if (!p) return { ok: false, code: "NOT_FOUND", message: "Ainda não há ementa da ZoneSoft: faça o Sync Menus no ZSBMS primeiro." };
+  const order = buildZsroiOrder(
+    {
+      externalOrderId: randomUUID(),
+      posTableRef: "C1",
+      tableLabel: "Cama 1",
+      lines: [{ posProductRef: p.ref, name: p.name, quantity: 1, unitPriceCents: p.price, modifiers: [] }],
+      notes: "Pedido de teste MESVIO",
+      paid: true,
+    },
+    creds,
+    now,
+  );
+  const body = JSON.stringify(order);
+  try {
+    const res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: creds.appKey, "X-Integration-Signature": signRequest(body, creds.appSecret) },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const text = await res.text().catch(() => "");
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {}
+    const result = interpretZsroiResponse(res.status, json);
+    const detail = text.slice(0, 300);
+    return result.outcome === "submitted" || result.outcome === "accepted"
+      ? { ok: true, status: res.status, detail, orderId: order.order_id, outcome: result.outcome }
+      : { ok: false, code: "NETWORK", message: "reason" in result ? result.reason : `A ZoneSoft respondeu ${res.status}.`, status: res.status, detail, orderId: order.order_id };
+  } catch (err) {
+    return { ok: false, code: "NETWORK", message: err instanceof Error ? err.message : "Sem ligação à ZoneSoft." };
+  }
 }
 
 export const ZSROI_TEST_ORDER_STATUS_URL = "https://zsroi.zonesoft.org/v1.0/testintegration/orderStatus";

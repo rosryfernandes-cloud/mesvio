@@ -101,6 +101,8 @@ export interface PosOrderRequest {
   notes?: string;
   /** Já pago pela app (lugares que pagam ao pedir, ex.: espreguiçadeiras). */
   paid?: boolean;
+  /** NIF que o cliente pediu na fatura (para o POS emitir a fatura com ele). */
+  customerNif?: string;
 }
 
 export type PosOrderResult =

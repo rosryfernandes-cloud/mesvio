@@ -43,6 +43,18 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
     router.refresh();
   }
 
+  async function sendTestOrder() {
+    setPinging(true);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/zonesoft/pedido-teste`, { method: "POST" }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setPinging(false);
+    setMessage(
+      res?.ok
+        ? { text: `A ZoneSoft aceitou o pedido de teste da Cama 1, já pago (${data.orderId}).${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: false }
+        : { text: `${data.message ?? "Não foi possível."}${data.detail ? ` Resposta: ${data.detail}` : ""}`, error: true },
+    );
+  }
+
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   async function unlink() {
     setPinging(true);
@@ -126,6 +138,11 @@ export function ZoneSoftLink({ establishmentId, provider, status }: { establishm
       {provider === "zonesoft" && !open && (
         <button type="button" onClick={ping} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-60">
           {pinging ? "A contactar a ZoneSoft…" : "Acordar POS de testes (ping)"}
+        </button>
+      )}
+      {provider === "zonesoft" && !open && (
+        <button type="button" onClick={sendTestOrder} disabled={pinging} className="mt-4 mr-2 min-h-10 rounded-xl border border-brand px-4 text-sm font-semibold text-brand disabled:opacity-60">
+          Enviar pedido de teste (cama paga)
         </button>
       )}
       {provider === "zonesoft" && !open && (

@@ -203,6 +203,8 @@ describe("ZSROI: enviar pedidos", () => {
     expect(placeCode("Espreguiçadeira 3")).toBe("E3");
     expect(placeCode("Cabana VIP")).toBe("CABANA");
     expect(p.customer.name).toBe("Cama 5");
+    expect(p.customer.nif).toBe("");
+    expect(buildZsroiOrder({ ...order, customerNif: "123456789" }, creds, new Date()).customer.nif).toBe("123456789");
     expect(p.obs).toBe("CAMA 5 · MESVIO · Sem pressa");
     expect(p.products[0]).toMatchObject({ id: "1978", quantity: 2, price: 800, obs: "Bem passado" });
     expect(p.products[0].attributes[0]).toMatchObject({ id: "1978_3_390", price: 150 });
@@ -322,5 +324,22 @@ describe("ZSROI: desligar", () => {
     expect(row).toMatchObject({ provider: "mock", credentialsCiphertext: null });
     expect(await zsroiLogin(db, { app_store_username: CREDS.appKey, app_store_secret: CREDS.appSecret })).toEqual({ ok: false, status: 401 });
     expect(await zsroiReceiveMenu(db, claims(), EXAMPLE_MENU)).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe("ZSROI: pedido de teste de cama paga (Central)", () => {
+  it("sem ligação à ZoneSoft não envia nada", async () => {
+    const { sendZoneSoftTestOrder } = await import("./zsroi-service");
+    const { createTestDb } = await import("@/server/db/client");
+    const { DEMO_ESTABLISHMENT } = await import("@/server/pos/mock/demo-data");
+    const db = await createTestDb();
+    let called = false;
+    const fetchImpl = (async () => {
+      called = true;
+      return new Response("{}", { status: 201 });
+    }) as typeof fetch;
+    const r = await sendZoneSoftTestOrder(db, DEMO_ESTABLISHMENT.id, { fetchImpl });
+    expect(r).toMatchObject({ ok: false });
+    expect(called).toBe(false);
   });
 });

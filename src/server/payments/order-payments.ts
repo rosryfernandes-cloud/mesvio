@@ -23,6 +23,7 @@ export async function startOrderPayment(
   orderId: string,
   provider: PaymentProvider,
   now = new Date(),
+  { nif = null }: { nif?: string | null } = {},
 ): Promise<StartOrderPaymentResult & { activatedOrderId?: string | null }> {
   const notFound = { ok: false as const, code: "NOT_FOUND" as const, message: "Pedido não encontrado." };
   if (!isWellFormedTableToken(token) || !z.uuid().safeParse(orderId).success) return notFound;
@@ -81,6 +82,8 @@ export async function startOrderPayment(
             providerRef: created.providerRef,
             amountCents: o.order.totalGrossCents,
             applicationFeeCents: fee,
+            // NIF para a fatura que o POS emite (ZoneSoft): segue com o pedido quando é pago.
+            invoiceNif: nif && /^\d{9}$/.test(nif) ? nif : null,
             createdAt: now,
             updatedAt: now,
           })
