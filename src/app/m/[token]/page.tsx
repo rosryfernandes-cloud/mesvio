@@ -89,7 +89,7 @@ export default async function TableMenuPage({ params }: Props) {
 
       {menu.reviews.enabled && (
         <div className="mt-10 px-4 text-center">
-          <ReviewButton tableToken={token} googleUrl={menu.reviews.googleUrl} />
+          <ReviewButton tableToken={token} googleUrl={menu.reviews.googleUrl} restaurantName={menu.establishment.name} />
         </div>
       )}
 

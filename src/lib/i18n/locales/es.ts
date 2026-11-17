@@ -174,6 +174,7 @@ export const es: Messages = {
   review: {
     title: "¿Qué tal ha ido?",
     cta: "Dejar una valoración",
+    ctaFor: (name: string) => `Valorar ${name}`,
     starLabel: (n) => `${n} ${n === 1 ? "estrella" : "estrellas"}`,
     commentGood: "¿Quiere dejar un comentario? (opcional)",
     commentBad: "¿Qué podemos mejorar? (opcional)",

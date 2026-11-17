@@ -95,7 +95,7 @@ export function ReviewPrompt({ tableToken, googleUrl }: { tableToken: string; go
 }
 
 /** Botão "Deixar uma avaliação" (ementa e conta, em todos os planos): abre a avaliação numa janela. */
-export function ReviewButton({ tableToken, googleUrl }: { tableToken: string; googleUrl: string | null }) {
+export function ReviewButton({ tableToken, googleUrl, restaurantName }: { tableToken: string; googleUrl: string | null; /** "Avaliar <restaurante>" no fim da ementa. */ restaurantName?: string }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement>(null);
@@ -112,7 +112,7 @@ export function ReviewButton({ tableToken, googleUrl }: { tableToken: string; go
         onClick={() => setOpen(true)}
         className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line bg-card px-5 font-semibold hover:border-brand hover:text-brand"
       >
-        <span aria-hidden="true" className="text-amber-500">★</span> {t.review.cta}
+        <span aria-hidden="true" className="text-amber-500">★</span> {restaurantName ? t.review.ctaFor(restaurantName) : t.review.cta}
       </button>
       <dialog
         ref={ref}

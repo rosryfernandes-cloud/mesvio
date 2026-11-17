@@ -185,6 +185,7 @@ const pt = {
   review: {
     title: "Como correu?",
     cta: "Deixar uma avaliação",
+    ctaFor: (name: string) => `Avaliar ${name}`,
     starLabel: (n: number) => `${n} ${n === 1 ? "estrela" : "estrelas"}`,
     commentGood: "Quer deixar um comentário? (opcional)",
     commentBad: "O que podemos melhorar? (opcional)",
@@ -394,6 +395,7 @@ const en: Messages = {
   review: {
     title: "How was it?",
     cta: "Leave a review",
+    ctaFor: (name: string) => `Rate ${name}`,
     starLabel: (n: number) => `${n} ${n === 1 ? "star" : "stars"}`,
     commentGood: "Would you like to leave a comment? (optional)",
     commentBad: "What could we do better? (optional)",

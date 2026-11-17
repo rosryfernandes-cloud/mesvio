@@ -174,6 +174,7 @@ export const fr: Messages = {
   review: {
     title: "Comment ça s'est passé ?",
     cta: "Laisser un avis",
+    ctaFor: (name: string) => `Évaluer ${name}`,
     starLabel: (n) => `${n} ${n === 1 ? "étoile" : "étoiles"}`,
     commentGood: "Voulez-vous laisser un commentaire ? (facultatif)",
     commentBad: "Que pouvons-nous améliorer ? (facultatif)",
