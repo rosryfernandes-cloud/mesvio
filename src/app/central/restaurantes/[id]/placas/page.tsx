@@ -39,6 +39,20 @@ type Format = keyof typeof FORMATS;
 const WHO = { todos: "Todos os lugares", mesas: "Só mesas", camas: "Só camas" } as const;
 type Who = keyof typeof WHO;
 
+/**
+ * Estilos das placas (mesmo QR e textos, aparência diferente):
+ * - marca: fundo na cor do restaurante, faixa menta e onda (o original);
+ * - claro: fundo branco, letras e detalhes na cor do restaurante (bom para logótipos escuros);
+ * - minimal: preto e branco, sem decoração (impressão mais barata, combina com tudo).
+ */
+const STYLES = {
+  marca: { label: "Cor do restaurante" },
+  claro: { label: "Fundo claro" },
+  minimal: { label: "Minimal (preto e branco)" },
+} as const;
+type Style = keyof typeof STYLES;
+type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; deco: boolean };
+
 const DEFAULT_BRAND = "#062D25";
 const MINT = "#91E9C3";
 const INK = "#10211D";
@@ -55,10 +69,10 @@ function qrSvg(url: string): Promise<string> {
 }
 
 /** "mesvio." pequeno, a branco (assinatura discreta no fundo de cada placa). */
-function Wordmark({ height }: { height: string }) {
+function Wordmark({ height, color = "#FFFFFF", dot = MINT }: { height: string; color?: string; dot?: string }) {
   return (
     <svg viewBox="0 -2 288 70" style={{ height, width: "auto" }} role="img" aria-label="mesvio">
-      <g fill="none" stroke="#FFFFFF" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4.5 60V34a12 12 0 0 1 24 0v26M28.5 34a12 12 0 0 1 24 0v26" />
         <path d="M71.5 40h31A15.5 15.5 0 1 0 98 51" />
         <path d="M145 26.5c-4-5-10.5-6-15-6-6 0-10.5 3.5-10.5 9 0 11 26 7 26 19.5 0 6-5 10.5-12 10.5-5.5 0-10.5-2.5-13.5-6.5" />
@@ -66,8 +80,8 @@ function Wordmark({ height }: { height: string }) {
         <path d="M212 22v38" />
         <path d="M261.5 40a15.5 15.5 0 1 1-31 0 15.5 15.5 0 1 1 31 0" />
       </g>
-      <circle cx="212" cy="6" r="5.5" fill="#FFFFFF" />
-      <circle cx="279" cy="58.5" r="6.5" fill={MINT} />
+      <circle cx="212" cy="6" r="5.5" fill={color} />
+      <circle cx="279" cy="58.5" r="6.5" fill={dot} />
     </svg>
   );
 }
@@ -93,19 +107,19 @@ const PALM_PATH = (() => {
   return d;
 })();
 
-function Palm({ size }: { size: string }) {
+function Palm({ size, color = MINT }: { size: string; color?: string }) {
   return (
     <svg viewBox="0 0 100 100" aria-hidden className="pointer-events-none absolute top-0 right-0" style={{ width: size, height: size, opacity: 0.5 }}>
-      <path d={PALM_PATH} fill="none" stroke={MINT} strokeWidth="2.6" strokeLinecap="round" />
+      <path d={PALM_PATH} fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );
 }
 
 /** Onda menta de ponta a ponta (separa o conteúdo da assinatura). */
-function Wave({ height }: { height: string }) {
+function Wave({ height, color = MINT }: { height: string; color?: string }) {
   return (
     <svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden style={{ width: "100%", height, display: "block" }}>
-      <path d="M0 13C40 3 80 3 112 10s62 9 88-4" fill="none" stroke={MINT} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
+      <path d="M0 13C40 3 80 3 112 10s62 9 88-4" fill="none" stroke={color} strokeWidth="2.4" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -120,10 +134,10 @@ function NfcIcon({ size }: { size: string }) {
 }
 
 /** QR em caixa branca com cantos menta à volta (como uma mira de câmara). */
-function QrBox({ svg, box, s }: { svg: string; box: number; s: number }) {
+function QrBox({ svg, box, s, accent = MINT }: { svg: string; box: number; s: number; accent?: string }) {
   const gap = 2.6 * s, arm = 7 * s, line = 0.7 * s;
   const corner = (pos: React.CSSProperties, edges: React.CSSProperties) => (
-    <span aria-hidden className="absolute" style={{ width: `${arm}mm`, height: `${arm}mm`, borderColor: MINT, borderStyle: "solid", borderWidth: 0, ...pos, ...edges }} />
+    <span aria-hidden className="absolute" style={{ width: `${arm}mm`, height: `${arm}mm`, borderColor: accent, borderStyle: "solid", borderWidth: 0, ...pos, ...edges }} />
   );
   const w = `${line}mm`, r = `${2.4 * s}mm`;
   return (
@@ -141,7 +155,7 @@ function QrBox({ svg, box, s }: { svg: string; box: number; s: number }) {
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ formato?: string; lugares?: string; demo?: string; nfc?: string }>;
+  searchParams: Promise<{ formato?: string; lugares?: string; demo?: string; nfc?: string; estilo?: string }>;
 };
 
 export default async function SignsPage({ params, searchParams }: Props) {
@@ -155,6 +169,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const demo = format === "base" && sp.demo === "1";
   // Sem etiqueta NFC colada atrás, a placa não pode prometer "Aproxima o telemóvel".
   const nfc = sp.nfc !== "0";
+  const style: Style = sp.estilo && sp.estilo in STYLES ? (sp.estilo as Style) : "marca";
 
   const db = await getDb();
   const [est] = await db
@@ -172,6 +187,12 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
   const natural = new Intl.Collator("pt", { numeric: true });
   const brand = demo ? DEFAULT_BRAND : (est.brandColor ?? DEFAULT_BRAND);
+  const theme: Theme =
+    style === "claro"
+      ? { bg: "#FFFFFF", fg: brand, accent: brand, pillBg: brand, pillFg: "#FFFFFF", mark: brand, deco: true }
+      : style === "minimal"
+        ? { bg: "#FFFFFF", fg: INK, accent: INK, pillBg: INK, pillFg: "#FFFFFF", mark: INK, deco: false }
+        : { bg: brand, fg: "#FFFFFF", accent: MINT, pillBg: MINT, pillFg: INK, mark: "#FFFFFF", deco: true };
   const active = tables.filter((t) => t.active).map((t) => ({ ...t, payFirst: effectiveOrderingMode(est.plan, t.mode) === "pay_first" }));
   // Folha de palmeira só em quem tem camas (praia); num restaurante de cidade fica só a onda.
   const beach = active.some((t) => t.payFirst);
@@ -186,8 +207,9 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const places = format === "base" ? [{ id: "base", label: "", svg: "", cta: demo ? { pt: "Pede aqui", en: "Order here" } : callToAction(est.plan, false) }] : perPlace;
   const sheets = Array.from({ length: Math.ceil(perPlace.length / 20) }, (_, i) => perPlace.slice(i * 20, i * 20 + 20));
 
-  const href = (next: Partial<{ formato: Format; lugares: Who; demo: boolean; nfc: boolean }>) => {
+  const href = (next: Partial<{ formato: Format; lugares: Who; demo: boolean; nfc: boolean; estilo: Style }>) => {
     const p = new URLSearchParams({ formato: next.formato ?? format, lugares: next.lugares ?? who });
+    if ((next.estilo ?? style) !== "marca") p.set("estilo", next.estilo ?? style);
     if (next.demo ?? (demo && !next.formato)) p.set("demo", "1");
     if (!(next.nfc ?? nfc)) p.set("nfc", "0");
     return `/central/restaurantes/${id}/placas?${p}`;
@@ -215,7 +237,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
     </div>
   );
   const Pill = ({ label, size }: { label: string; size: number }) => (
-    <span className="inline-block rounded-full font-extrabold whitespace-nowrap uppercase" style={{ background: MINT, color: INK, fontSize: u(size), padding: `${u(size * 0.32)} ${u(size * 1.1)}`, letterSpacing: "0.02em", lineHeight: 1.15 }}>
+    <span className="inline-block rounded-full font-extrabold whitespace-nowrap uppercase" style={{ background: theme.pillBg, color: theme.pillFg, fontSize: u(size), padding: `${u(size * 0.32)} ${u(size * 1.1)}`, letterSpacing: "0.02em", lineHeight: 1.15 }}>
       {label}
     </span>
   );
@@ -230,7 +252,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const Signature = ({ size }: { size: number }) => (
     <p className="m-0 flex items-baseline justify-center" style={{ gap: u(size * 0.45), fontSize: u(size) }}>
       <span style={{ opacity: 0.85 }}>com</span>
-      <Wordmark height={u(size * 1.2)} />
+      <Wordmark height={u(size * 1.2)} color={theme.mark} dot={style === "minimal" ? INK : MINT} />
     </p>
   );
   const headline = (pt: string, big: number) => (pt.length > 12 ? big * 0.82 : big);
@@ -276,6 +298,21 @@ export default async function SignsPage({ params, searchParams }: Props) {
             </Link>
           ))}
         </div>
+        {format !== "autocolantes" && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Estilo">
+            <span className="text-sm text-ink-soft">Estilo:</span>
+            {(Object.keys(STYLES) as Style[]).map((k) => (
+              <Link
+                key={k}
+                href={href({ estilo: k })}
+                aria-current={k === style ? "page" : undefined}
+                className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${k === style ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft"}`}
+              >
+                {STYLES[k].label}
+              </Link>
+            ))}
+          </div>
+        )}
         {format !== "autocolante" && format !== "autocolantes" && (
           <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="NFC">
             {[true, false].map((v) => (
@@ -357,11 +394,15 @@ export default async function SignsPage({ params, searchParams }: Props) {
             <section
               key={t.id}
               aria-label={t.label || f.label}
-              className="placa relative flex shrink-0 overflow-hidden text-white shadow-lg print:shadow-none"
+              className="placa relative flex shrink-0 overflow-hidden shadow-lg print:shadow-none"
               style={{
                 width: `${f.w}mm`,
                 height: `${f.h}mm`,
-                background: brand,
+                background: theme.bg,
+                color: theme.fg,
+                // Fundo branco: contorno fino para se ver o recorte da placa no ecrã e no PDF.
+                outline: style === "marca" ? undefined : "0.2mm solid #d4d4d4",
+                outlineOffset: "-0.1mm",
                 borderRadius: format === "autocolante" ? "50%" : "8mm",
                 flexDirection: format === "balcao" ? "row" : "column",
                 alignItems: "center",
@@ -372,21 +413,21 @@ export default async function SignsPage({ params, searchParams }: Props) {
                 WebkitPrintColorAdjust: "exact",
               }}
             >
-              {beach && format !== "autocolante" && <Palm size={format === "balcao" ? "40mm" : u(34)} />}
+              {beach && theme.deco && format !== "autocolante" && <Palm size={format === "balcao" ? "40mm" : u(34)} color={theme.accent} />}
 
               {format === "autocolante" ? (
                 <div className="flex flex-col items-center text-center" style={{ gap: "1.3mm" }}>
                   <Brand />
-                  <QrBox svg={t.svg} box={f.qr} s={s} />
+                  <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
                   <Pill label={t.label} size={5} />
                   <p className="m-0 leading-tight font-extrabold" style={{ fontSize: "2.5mm" }}>
                     {t.cta.pt} <span className="font-medium italic opacity-90">· {t.cta.en}</span>
                   </p>
-                  <Wordmark height="2.2mm" />
+                  <Wordmark height="2.2mm" color={theme.mark} dot={style === "minimal" ? INK : MINT} />
                 </div>
               ) : format === "balcao" ? (
                 <>
-                  <QrBox svg={t.svg} box={f.qr} s={s} />
+                  <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
                   <div className="relative z-10 flex min-w-0 flex-col items-start" style={{ marginLeft: "9mm", gap: "2.2mm", alignSelf: "stretch", justifyContent: "center", paddingBottom: "6mm" }}>
                     <Brand />
                     <Pill label={t.label} size={4.4} />
@@ -411,7 +452,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                     )}
                   </div>
                   <div className="absolute inset-x-0 bottom-0" style={{ paddingBottom: "4mm" }}>
-                    <Wave height="7mm" />
+                    {theme.deco && <Wave height="7mm" color={theme.accent} />}
                     <div className="flex justify-end" style={{ paddingRight: "10mm", marginTop: "0.6mm" }}>
                       <Signature size={3} />
                     </div>
@@ -422,7 +463,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                   {format === "etiqueta" && (
                     <div className="flex w-full justify-around" style={{ height: u(9), paddingInline: "18mm", boxSizing: "border-box" }} aria-hidden>
                       {[0, 1].map((i) => (
-                        <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${MINT}`, opacity: 0.7, marginTop: "-1mm" }} />
+                        <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${theme.accent}`, opacity: 0.7, marginTop: "-1mm" }} />
                       ))}
                     </div>
                   )}
@@ -442,7 +483,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                         {t.cta.en}
                       </p>
                     </div>
-                    <QrBox svg={t.svg} box={f.qr} s={s} />
+                    <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
                     <div className="flex flex-col items-center" style={{ gap: u(1.2) }}>
                       {nfc && <Nfc size={3.1} />}
                       {payments && (
@@ -453,7 +494,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                     </div>
                   </div>
                   <div className="w-full" style={{ marginInline: `-${pad}mm`, width: `${f.w}mm`, marginBottom: `-${pad - 4}mm` }}>
-                    <Wave height={u(6)} />
+                    {theme.deco ? <Wave height={u(6)} color={theme.accent} /> : <div style={{ height: u(6) }} />}
                     <div style={{ marginTop: u(1.2) }}>
                       <Signature size={3.1} />
                     </div>
