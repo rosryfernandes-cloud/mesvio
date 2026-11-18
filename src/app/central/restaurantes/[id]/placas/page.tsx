@@ -12,6 +12,7 @@ import { tableUrl } from "@/server/tables/table-token";
 import { isLocalOnlyUrl, resolvePublicBaseUrl } from "@/server/tables/table-qr";
 import { effectiveOrderingMode, planAllowsOrdering, planAllowsPayments, type Plan } from "@/lib/plan";
 import { PrintButton } from "@/app/qr/print-button";
+import { PlateBranding } from "@/components/central/plate-branding";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Placas para imprimir", robots: { index: false, follow: false } };
@@ -286,6 +287,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
             <strong>Atenção:</strong> estes códigos apontam para <code>{base}</code>, que um telemóvel não abre. Imprima a partir do site público.
           </p>
         )}
+        <PlateBranding establishmentId={id} brandColor={est.brandColor} hasLogo={Boolean(est.logo)} />
         <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Formato">
           {(Object.keys(FORMATS) as Format[]).map((k) => (
             <Link
