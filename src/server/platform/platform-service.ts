@@ -254,6 +254,49 @@ export async function inviteOwner(
   return { ok: true, invited };
 }
 
+const companySchema = z.object({
+  legalName: z.string().trim().min(2, "Indique o nome legal.").max(160),
+  nif: z.string().trim().regex(/^\d{9}$/, "O NIF tem 9 dígitos.").refine(isValidNif, "Este NIF não é válido: confirme os dígitos."),
+  billingEmail: z.union([z.literal(""), z.email("Email de faturação inválido.")]).optional(),
+  name: z.string().trim().min(2, "Indique o nome na ementa.").max(120),
+});
+
+/**
+ * Corrigir os dados da empresa e o nome na ementa (ex.: restaurante criado para uma demonstração com
+ * dados provisórios, que passa a cliente com os dados certos).
+ */
+export async function updateCompany(db: Db, admin: PlatformAdmin, establishmentId: string, raw: unknown): Promise<PlatformResult> {
+  const parsed = companySchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const { legalName, nif, billingEmail, name } = parsed.data;
+  const [taken] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.nif, nif)).limit(1);
+  if (taken && taken.id !== org) return { ok: false, code: "CONFLICT", message: "Já existe outro cliente com este NIF." };
+  await db.transaction(async (tx) => {
+    const [before] = await tx.select({ legalName: organizations.legalName, nif: organizations.nif }).from(organizations).where(eq(organizations.id, org));
+    await tx.update(organizations).set({ legalName, nif, billingEmail: billingEmail || null, updatedAt: new Date() }).where(eq(organizations.id, org));
+    await tx.update(establishments).set({ name, updatedAt: new Date() }).where(eq(establishments.id, establishmentId));
+    await audit(tx, admin, org, "platform.company_updated", establishmentId, { before, after: { legalName, nif, name } });
+  });
+  return { ok: true };
+}
+
+/** Tirar um dono (ex.: o dono de ensaio, depois de convidar o verdadeiro). Nunca deixa o restaurante sem dono. */
+export async function removeOwner(db: Db, admin: PlatformAdmin, establishmentId: string, userId: string): Promise<PlatformResult> {
+  if (!z.uuid().safeParse(userId).success) return { ok: false, code: "INVALID", message: "Dono inválido." };
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const owners = await db.select({ userId: memberships.userId }).from(memberships).where(and(eq(memberships.organizationId, org), eq(memberships.role, "owner")));
+  if (!owners.some((o) => o.userId === userId)) return { ok: false, code: "NOT_FOUND", message: "Esta pessoa não é dona deste restaurante." };
+  if (owners.length <= 1) return { ok: false, code: "CONFLICT", message: "O restaurante ficava sem dono. Convide primeiro o dono certo e tire este depois." };
+  await db.transaction(async (tx) => {
+    await tx.delete(memberships).where(and(eq(memberships.organizationId, org), eq(memberships.userId, userId), eq(memberships.role, "owner")));
+    await audit(tx, admin, org, "platform.owner_removed", establishmentId, { userId });
+  });
+  return { ok: true };
+}
+
 /**
  * Mudar o plano do restaurante. Descer para um plano sem pagamentos desliga também o interruptor
  * dos pagamentos no painel, para não voltarem a aparecer sozinhos se subir outra vez.

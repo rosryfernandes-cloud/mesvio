@@ -12,7 +12,7 @@ import { open } from "@/server/security/secret-box";
 import { confirmEnrollment, findPlatformAdmin, MFA_ATTEMPTS, startEnrollment as start, verifyMfa, type PlatformAdmin } from "./admin-auth";
 import { ACTIVATION_TTL_MS, generateActivationCode, hashActivationCode } from "./activation";
 import { totpCode, stepAt } from "./totp";
-import { addTables, createRestaurant, getPlatformOverview, inviteOwner, setupProgress, staffAddTables, STAFF_MAX_TABLES } from "./platform-service";
+import { addTables, createRestaurant, getPlatformOverview, inviteOwner, removeOwner, setupProgress, staffAddTables, STAFF_MAX_TABLES, updateCompany } from "./platform-service";
 import { DEMO_USERS } from "@/server/db/seed-demo";
 import { PLAN_MONTHLY_CENTS } from "@/lib/plan";
 
@@ -277,5 +277,32 @@ describe("progresso do arranque", () => {
     expect(setupProgress({ ...base, products: 30, tables: 8, hasLogo: true, hasOrders: true }, now)).toMatchObject({ done: 5, next: null });
     // A ementa do restaurante de demonstração não está na base de dados, mas existe.
     expect(setupProgress({ ...base, isDemo: true }, now).next?.id).toBe("tables");
+  });
+});
+
+describe("Central: corrigir dados da empresa e tirar donos", () => {
+  it("muda o nome legal, o NIF e o nome na ementa; recusa NIF inválido ou de outro cliente", async () => {
+    const r = await createRestaurant(db, admin, input, users);
+    if (!r.ok) throw new Error(r.message);
+    expect(await updateCompany(db, admin, r.establishmentId, { name: "Marradas", legalName: "Marradas, Lda.", nif: "123456789", billingEmail: "" })).toEqual({ ok: true });
+    const [e] = await db.select().from(t.establishments).where(eq(t.establishments.id, r.establishmentId));
+    const [o] = await db.select().from(t.organizations).where(eq(t.organizations.id, e.organizationId));
+    expect(e.name).toBe("Marradas");
+    expect(o).toMatchObject({ legalName: "Marradas, Lda.", nif: "123456789" });
+    expect(await updateCompany(db, admin, r.establishmentId, { name: "X", legalName: "Marradas", nif: "123456780", billingEmail: "" })).toMatchObject({ ok: false, code: "INVALID" });
+    const [demoOrg] = await db.select().from(t.organizations).where(eq(t.organizations.id, DEMO_ESTABLISHMENT.organizationId));
+    expect(await updateCompany(db, admin, r.establishmentId, { name: "Marradas", legalName: "Marradas", nif: demoOrg.nif, billingEmail: "" })).toMatchObject({ ok: false, code: "CONFLICT" });
+  });
+
+  it("tira o dono de ensaio depois de convidar o verdadeiro, mas nunca deixa sem dono", async () => {
+    const r = await createRestaurant(db, admin, input, users);
+    if (!r.ok) throw new Error(r.message);
+    const [e] = await db.select().from(t.establishments).where(eq(t.establishments.id, r.establishmentId));
+    const owners = () => db.select().from(t.memberships).where(and(eq(t.memberships.organizationId, e.organizationId), eq(t.memberships.role, "owner")));
+    const [first] = await owners();
+    expect(await removeOwner(db, admin, r.establishmentId, first.userId)).toMatchObject({ ok: false, code: "CONFLICT" });
+    await inviteOwner(db, admin, r.establishmentId, { email: "dono@marradas.pt" }, users);
+    expect(await removeOwner(db, admin, r.establishmentId, first.userId)).toEqual({ ok: true });
+    expect((await owners()).map((m) => m.userId)).not.toContain(first.userId);
   });
 });

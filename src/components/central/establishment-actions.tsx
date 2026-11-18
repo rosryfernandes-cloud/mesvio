@@ -142,3 +142,104 @@ export function OpenPanelButton({ establishmentId }: { establishmentId: string }
     </>
   );
 }
+
+/** Corrigir o nome legal, o NIF, o email de faturação e o nome na ementa (ex.: depois de uma demonstração). */
+export function CompanyForm({
+  establishmentId,
+  legalName,
+  nif,
+  billingEmail,
+  name,
+}: {
+  establishmentId: string;
+  legalName: string;
+  nif: string;
+  billingEmail: string | null;
+  name: string;
+}) {
+  const { busy, message, submit } = useSubmit(`/api/central/restaurantes/${establishmentId}/empresa`);
+  const [open, setOpen] = useState(false);
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-sm font-semibold text-brand underline">
+        Editar dados da empresa
+      </button>
+    );
+  return (
+    <form
+      className="grid gap-3 rounded-2xl border border-line bg-card p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        void submit(
+          { name: String(f.get("name")), legalName: String(f.get("legalName")), nif: String(f.get("nif")).replace(/\s/g, ""), billingEmail: String(f.get("billingEmail")) },
+          () => "Dados guardados.",
+        );
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-semibold">
+          Nome na ementa
+          <input name="name" defaultValue={name} required maxLength={120} className={field} />
+        </label>
+        <label className="text-sm font-semibold">
+          Nome legal
+          <input name="legalName" defaultValue={legalName} required maxLength={160} className={field} />
+        </label>
+        <label className="text-sm font-semibold">
+          NIF
+          <input name="nif" defaultValue={nif} required inputMode="numeric" maxLength={11} className={field} />
+        </label>
+        <label className="text-sm font-semibold">
+          Email de faturação <span className="font-normal text-ink-soft">(opcional)</span>
+          <input name="billingEmail" type="email" defaultValue={billingEmail ?? ""} maxLength={200} className={field} />
+        </label>
+      </div>
+      <Message m={message} />
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
+          {busy ? "A guardar…" : "Guardar"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-xl px-4 text-sm text-ink-soft underline">
+          Fechar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Tirar um dono (com confirmação). A Central recusa se o restaurante ficasse sem dono. */
+export function RemoveOwnerButton({ establishmentId, userId, label }: { establishmentId: string; userId: string; label: string }) {
+  const router = useRouter();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/central/restaurantes/${establishmentId}/dono?utilizador=${encodeURIComponent(userId)}`, { method: "DELETE" }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (!res?.ok) return setError(data.message ?? "Não foi possível tirar.");
+    setConfirm(false);
+    router.refresh();
+  }
+  if (!confirm)
+    return (
+      <button type="button" onClick={() => setConfirm(true)} className="ml-2 text-xs text-danger underline">
+        Tirar
+      </button>
+    );
+  return (
+    <span className="ml-2 inline-flex flex-wrap items-center gap-2 text-xs">
+      <span>Tirar {label}?</span>
+      <button type="button" onClick={remove} disabled={busy} className="rounded-lg bg-danger px-2 py-1 font-semibold text-white disabled:opacity-60">
+        Sim, tirar
+      </button>
+      <button type="button" onClick={() => setConfirm(false)} className="underline">
+        Voltar
+      </button>
+      {error && <span role="alert" className="text-danger">{error}</span>}
+    </span>
+  );
+}

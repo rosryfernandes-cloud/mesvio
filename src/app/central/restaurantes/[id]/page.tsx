@@ -7,7 +7,7 @@ import { readWithRetry } from "@/server/db/read-retry";
 import { requirePlatformAdmin } from "@/server/platform/page-guard";
 import { getEstablishmentDetail } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
-import { AddTablesForm, InviteOwnerForm, OpenPanelButton } from "@/components/central/establishment-actions";
+import { AddTablesForm, CompanyForm, InviteOwnerForm, OpenPanelButton, RemoveOwnerButton } from "@/components/central/establishment-actions";
 import { formatEur } from "@/lib/money";
 import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
 import { ZoneSoftLink } from "@/components/central/zonesoft-link";
@@ -62,6 +62,9 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
             {s.legalName} · NIF {d.nif}
             {d.address && ` · ${d.address}`}
           </p>
+          <div className="mt-2">
+            <CompanyForm establishmentId={id} legalName={s.legalName} nif={d.nif} billingEmail={d.billingEmail ?? null} name={s.name} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenPanelButton establishmentId={id} />
@@ -133,6 +136,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
                 <li key={o.userId}>
                   <span className="font-semibold">{o.displayName ?? o.email}</span>
                   {o.displayName && <span className="text-ink-soft"> · {o.email}</span>}
+                  {d.owners.length > 1 && <RemoveOwnerButton establishmentId={id} userId={o.userId} label={o.displayName ?? o.email} />}
                 </li>
               ))}
             </ul>
