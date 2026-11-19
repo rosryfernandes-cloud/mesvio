@@ -39,7 +39,8 @@ export default function TermsPage() {
         <p>
           A MESVIO cobra uma <strong>mensalidade</strong>, de acordo com o plano escolhido, sem comissões sobre os pedidos. Os
           preços em vigor estão em mesvio.pt. {VAT_EXEMPT ? VAT_NOTE : "Aos preços acresce IVA à taxa legal."} O plano com
-          pagamentos pela app, quando disponível, inclui uma comissão sobre o valor pago, indicada antes da adesão. A duração,
+          pagamentos pela app também não tem comissão da MESVIO: as taxas de processamento são cobradas pelo fornecedor de
+          pagamentos (Stripe) diretamente ao estabelecimento. A duração,
           eventuais preços de lançamento e outras condições constam do acordo comercial com cada estabelecimento, que prevalece
           sobre estes termos.
         </p>

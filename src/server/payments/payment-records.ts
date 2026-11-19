@@ -7,8 +7,11 @@ import { notifyTablePaid } from "@/server/tables/service-requests";
 import { enqueueSubmit } from "@/server/orders/outbox";
 import type { PaymentProvider, ProviderPaymentStatus } from "./provider";
 
-/** Comissão por omissão: 1% do valor sem IVA (docs/07 D6–D7), se o cliente não tiver regra própria. */
-export const PLATFORM_FEE_BPS = 100;
+/**
+ * Comissão por omissão, se o cliente não tiver regra própria: 0% desde 2026-11-19 (decisão do Rodrigo:
+ * o plano com pagamentos é 69 €/mês sem comissão). Antes era 1% do valor sem IVA (docs/07 D6–D7).
+ */
+export const PLATFORM_FEE_BPS = 0;
 /** Comissão sobre o valor sem IVA, arredondada ao cêntimo (half-up). */
 export const applicationFee = (netCents: number, bps = PLATFORM_FEE_BPS) => roundHalfUpDiv(netCents * bps, 10_000);
 

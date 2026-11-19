@@ -211,8 +211,8 @@ describe("visão geral", () => {
     const e = o.establishments.find((x) => x.id === r.establishmentId)!;
     expect(e).toMatchObject({ ordersThisMonth: 2, netCentsThisMonth: 15_000, commissionBps: 150, commissionCentsThisMonth: 225, tables: 5, owners: 1, needsAttention: 1 });
     expect(o.alerts.some((a) => a.establishmentId === r.establishmentId && a.level === "danger")).toBe(true);
-    // A demo (sem regra de comissão) usa 1%.
-    expect(o.establishments.find((x) => x.id === DEMO_ESTABLISHMENT.id)!.commissionBps).toBe(100);
+    // A demo (sem regra de comissão) usa a taxa por omissão: 0% desde 19/11.
+    expect(o.establishments.find((x) => x.id === DEMO_ESTABLISHMENT.id)!.commissionBps).toBe(0);
   });
 
   it("o MRR só conta mensalidades ativas e a central avisa de atrasos e restaurantes parados", async () => {

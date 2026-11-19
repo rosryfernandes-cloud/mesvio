@@ -19,7 +19,7 @@ function since(iso: string, now: number) {
 }
 
 /** Mesas do restaurante: livres e ocupadas, a conta de cada uma, e fechar a mesa. */
-export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
+export function TablesView({ canEditSettings, menuOnly = false }: { canEditSettings: boolean; menuOnly?: boolean }) {
   const [tables, setTables] = useState<TableOverview[] | null>(null);
   const [paymentsEnabled, setPaymentsEnabled] = useState<boolean | null>(null);
   /** Motivo de a caixa dos pagamentos ter voltado atrás, mostrado junto à própria caixa. */
@@ -192,6 +192,24 @@ export function TablesView({ canEditSettings }: { canEditSettings: boolean }) {
     await load();
   }
 
+  // Plano só ementa: sem contas nem pagamentos. Fica o plano, os QR e acrescentar lugares.
+  if (menuOnly) {
+    return (
+      <div className="grid gap-4">
+        {canEditSettings && <SubscriptionCard />}
+        {canEditSettings && (
+          <a href="/painel/qr" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 hover:border-brand">
+            <span>
+              <span className="block font-semibold">QR Codes dos lugares</span>
+              <span className="block text-sm text-ink-soft">Imprimir, ou gerar um QR novo se um for fotografado e usado de fora.</span>
+            </span>
+            <span aria-hidden="true">→</span>
+          </a>
+        )}
+        {canEditSettings && <AddPlacesCard paymentsInPlan={false} onAdded={() => void load()} />}
+      </div>
+    );
+  }
   if (!tables) return <p className="text-ink-soft">A carregar as mesas…</p>;
   const occupied = tables.filter((t) => t.bill);
   const nameOf = (userId: string | null) => (userId ? (assignments?.staff.find((m) => m.userId === userId)?.name ?? "outro empregado") : null);

@@ -33,7 +33,7 @@ import { DEMO_ESTABLISHMENT } from "@/server/pos/mock/demo-data";
 
 /** Pedidos que contam para volume e comissão: confirmados pelo restaurante/POS. */
 export const BILLABLE_STATUSES = ["ACCEPTED", "IN_PREPARATION", "SERVED"] as const;
-export const DEFAULT_COMMISSION_BPS = 100;
+export const DEFAULT_COMMISSION_BPS = 0; // 0% desde 2026-11-19: os planos não têm comissão (antes 1%).
 
 const slug = z
   .string()

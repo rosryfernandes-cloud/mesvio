@@ -65,7 +65,7 @@ describe("espreguiçadeiras: pagar ao pedir", () => {
     expect(onBoard?.awaitingApproval).toBe(false);
   });
 
-  it("depois de pago segue para o POS; o pagamento tem a comissão de 1% sem IVA", async () => {
+  it("depois de pago segue para o POS; o pagamento não tem comissão (sem regra, 0%)", async () => {
     const o = await placed();
     const { start, refreshed } = await pay(o.id);
     expect(start).toMatchObject({ ok: true, amountCents: 1200 });
@@ -73,8 +73,8 @@ describe("espreguiçadeiras: pagar ao pedir", () => {
     expect(await statusOf(o.id)).toBe("ACCEPTED");
     expect(getDemoPosAdapter().invoiceOrder(o.id).grossCents).toBe(1200);
     const [p] = await db.select().from(payments);
-    // Mojito 950 @23% → 772; Imperial 250 @23% → 203; 975 sem IVA → 1% = 9,75 → 10 cêntimos.
-    expect(p).toMatchObject({ orderId: o.id, amountCents: 1200, applicationFeeCents: 10, status: "SUCCEEDED" });
+    // Sem regra de comissão, a taxa por omissão é 0% (com 1% seriam 10 cêntimos sobre 975 sem IVA).
+    expect(p).toMatchObject({ orderId: o.id, amountCents: 1200, applicationFeeCents: 0, status: "SUCCEEDED" });
   });
 
   it("o cliente fecha o browser depois de aprovar: o worker confirma e envia", async () => {

@@ -10,7 +10,7 @@ import { resolveStaffContext } from "@/server/staff/context";
 import { setManualAcceptance } from "@/server/staff/staff-service";
 import { closeTable, getTableBillByToken, listTables } from "@/server/tables/table-sessions";
 import { MockPaymentProvider } from "./provider";
-import { ABANDONED_PAYMENT_MS, applicationFee, reconcilePendingPayments, refreshTablePayment, startTablePayment } from "./table-payments";
+import { ABANDONED_PAYMENT_MS, applicationFee, PLATFORM_FEE_BPS, reconcilePendingPayments, refreshTablePayment, startTablePayment } from "./table-payments";
 
 const T1 = DEMO_TABLES[0];
 const T2 = DEMO_TABLES[1];
@@ -49,21 +49,26 @@ async function pay(table = T1, approved = true) {
 }
 
 describe("comissão da plataforma", () => {
-  it("é 1% do valor sem IVA, arredondado ao cêntimo", () => {
-    expect(applicationFee(1796)).toBe(18);
-    expect(applicationFee(1593)).toBe(16);
-    expect(applicationFee(49)).toBe(0);
-    expect(applicationFee(50)).toBe(1);
+  it("por omissão é 0% (plano com pagamentos sem comissão, desde 19/11)", () => {
+    expect(PLATFORM_FEE_BPS).toBe(0);
+    expect(applicationFee(1796)).toBe(0);
+  });
+
+  it("com uma regra de 1%, é 1% do valor sem IVA, arredondado ao cêntimo", () => {
+    expect(applicationFee(1796, 100)).toBe(18);
+    expect(applicationFee(1593, 100)).toBe(16);
+    expect(applicationFee(49, 100)).toBe(0);
+    expect(applicationFee(50, 100)).toBe(1);
   });
 });
 
 describe("pagar a conta da mesa", () => {
-  it("paga o que falta; a conta fica paga e o fornecedor retém a comissão", async () => {
+  it("paga o que falta; a conta fica paga e, sem regra de comissão, a MESVIO não retém nada", async () => {
     await order();
     const { start, refreshed } = await pay();
     expect(start).toMatchObject({ ok: true, provider: "mock", amountCents: 2050 });
     const [row] = await db.select().from(payments);
-    expect(row).toMatchObject({ amountCents: 2050, applicationFeeCents: 18, status: "SUCCEEDED", method: "mb_way" });
+    expect(row).toMatchObject({ amountCents: 2050, applicationFeeCents: 0, status: "SUCCEEDED", method: "mb_way" });
     expect(refreshed.status).toBe("SUCCEEDED");
     expect(refreshed.bill).toMatchObject({ totalCents: 2050, paidCents: 2050, dueCents: 0 });
     expect(await startTablePayment(db, T1.publicToken, provider)).toMatchObject({ ok: false, code: "ALREADY_PAID" });
@@ -158,7 +163,7 @@ describe("gorjeta e aviso no painel", () => {
     const r = await startTablePayment(db, T1.publicToken, provider, new Date(), { tipCents: 205 });
     expect(r).toMatchObject({ ok: true, amountCents: 2255 });
     const [row] = await db.select().from(payments);
-    expect(row).toMatchObject({ amountCents: 2255, tipCents: 205, applicationFeeCents: 18 });
+    expect(row).toMatchObject({ amountCents: 2255, tipCents: 205, applicationFeeCents: 0 });
     provider.complete(row.providerRef, "apple_pay", true);
     const refreshed = (await refreshTablePayment(db, T1.publicToken, (r as { paymentId: string }).paymentId, provider))!;
     expect(refreshed.bill).toMatchObject({ totalCents: 2050, paidCents: 2050, dueCents: 0, overpaidCents: 0, tipCents: 205 });
@@ -254,6 +259,6 @@ describe("conta dividida", () => {
     if (!r.ok) throw new Error();
     expect(r.amountCents).toBe(1125);
     const [row] = await db.select().from(payments);
-    expect(row).toMatchObject({ tipCents: 100, applicationFeeCents: 9 });
+    expect(row).toMatchObject({ tipCents: 100, applicationFeeCents: 0 });
   });
 });

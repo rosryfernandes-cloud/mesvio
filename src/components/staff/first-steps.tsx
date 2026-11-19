@@ -43,11 +43,14 @@ interface Status {
 export function FirstSteps({
   establishmentId,
   hasOrders,
+  menuOnly = false,
   refreshKey,
   onGo,
 }: {
   establishmentId: string;
   hasOrders: boolean;
+  /** Plano só ementa: o teste é abrir a ementa pelo QR (não há pedidos). */
+  menuOnly?: boolean;
   refreshKey: string;
   onGo: (tab: GoTab) => void;
 }) {
@@ -101,14 +104,16 @@ export function FirstSteps({
       : [{ id: "menu", done: status.menu, title: "Crie a ementa", text: "Fotografe a ementa em papel e confirme os pratos, ou crie-os à mão.", action: "Abrir Ementa", tab: "carta" as const }]),
     { id: "logo", done: status.logo, title: "Ponha o logótipo", text: "Para a ementa ficar com a imagem do seu espaço.", action: "Abrir Aparência", tab: "ementa" as const },
     { id: "qr", done: Boolean(saved.qr), title: "Imprima os QR", text: "Um para cada mesa ou espreguiçadeira.", action: "Abrir QR Codes", href: "/painel/qr" },
-    { id: "test", done: Boolean(saved.testOrder) || hasOrders, title: "Faça um pedido de teste", text: "Leia um QR com o telemóvel, faça um pedido e confirme que ouve o som aqui." },
+    menuOnly
+      ? { id: "test", done: Boolean(saved.testOrder), title: "Experimente a ementa", text: "Leia um QR com o telemóvel e veja a ementa como os clientes a vão ver." }
+      : { id: "test", done: Boolean(saved.testOrder) || hasOrders, title: "Faça um pedido de teste", text: "Leia um QR com o telemóvel, faça um pedido e confirme que ouve o som aqui." },
     { id: "team", done: status.team, title: "Convide a equipa", text: "Cada pessoa entra com o seu email.", action: "Abrir Equipa", tab: "equipa" as const },
   ];
   const doneCount = steps.filter((s) => s.done).length;
   if (doneCount === steps.length) return null;
 
   return (
-    <details open={!hasOrders} className="mb-4 rounded-2xl border border-line bg-card p-4">
+    <details open={menuOnly || !hasOrders} className="mb-4 rounded-2xl border border-line bg-card p-4">
       <summary className="flex min-h-8 cursor-pointer items-center justify-between gap-3 font-semibold">
         <span>Primeiros passos</span>
         <span className="rounded-full bg-brand-soft px-2.5 py-0.5 text-sm text-brand tabular-nums">
@@ -134,6 +139,11 @@ export function FirstSteps({
             {!s.done && s.tab && (
               <button type="button" onClick={() => onGo(s.tab)} className="min-h-10 rounded-xl border border-brand px-3 text-sm font-semibold text-brand">
                 {s.action}
+              </button>
+            )}
+            {!s.done && menuOnly && s.id === "test" && (
+              <button type="button" onClick={() => update({ testOrder: true })} className="min-h-10 rounded-xl border border-brand px-3 text-sm font-semibold text-brand">
+                Já vi
               </button>
             )}
             {!s.done && s.href && (

@@ -1,5 +1,5 @@
 import "server-only";
-import { planAllowsPayments } from "@/lib/plan";
+import { type Plan, planAllowsPayments } from "@/lib/plan";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { auditLogs, categories, diningTables, establishments, orderEvents, orderItems, orders, outbox, posIntegrations, products, tableSessions } from "@/server/db/schema";
@@ -48,6 +48,8 @@ export const HIGH_VALUE_CENTS = 15_000;
 
 export interface Board {
   establishmentName: string;
+  /** Plano do restaurante: no "menu" (só ementa) o painel esconde pedidos, resumo e mesas. */
+  plan: Plan;
   manualAcceptance: boolean;
   /** Limite opcional acima do qual os pedidos esperam aprovação (null = desligado). */
   approvalThresholdCents: number | null;
@@ -65,6 +67,7 @@ async function loadBoard(db: Db, s: StaffScope, now: Date): Promise<Board> {
   const [est] = await db
     .select({
       name: establishments.name,
+      plan: establishments.plan,
       manualAcceptance: establishments.manualAcceptance,
       timezone: establishments.timezone,
       threshold: establishments.approvalThresholdCents,
@@ -132,6 +135,7 @@ async function loadBoard(db: Db, s: StaffScope, now: Date): Promise<Board> {
   const calls = await loadOpenCalls(db, s.establishmentId, now);
   return {
     establishmentName: est.name,
+    plan: est.plan,
     manualAcceptance: est.manualAcceptance,
     approvalThresholdCents: est.threshold,
     calls,

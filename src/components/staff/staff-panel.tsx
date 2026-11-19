@@ -43,7 +43,14 @@ export interface PanelUser {
 export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: PanelUser }) {
   const router = useRouter();
   const [board, setBoard] = useState(initialBoard);
-  const [tab, setTab] = useState<Tab>("pedidos");
+  // Plano só ementa: não há pedidos nem contas, por isso o painel abre na Ementa (ou nos Esgotados, para a equipa).
+  const menuOnly = board.plan === "menu";
+  const homeTab: Tab = menuOnly ? (me.canEditSettings ? "carta" : "esgotados") : "pedidos";
+  const [tab, setTab] = useState<Tab>(homeTab);
+  // Se o plano mudar com o painel aberto, não ficar numa secção que deixou de existir.
+  useEffect(() => {
+    if (menuOnly && (tab === "pedidos" || tab === "resumo")) setTab(homeTab);
+  }, [menuOnly, tab, homeTab]);
   // De volta da Stripe (?stripe=…): abrir as Mesas, onde está o estado da conta e a mensagem.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("stripe")) setTab("mesas");
@@ -264,7 +271,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         </button>
       )}
 
-      {sound.needsTap && (
+      {!menuOnly && sound.needsTap && (
         <button
           type="button"
           onClick={sound.test}
@@ -275,17 +282,17 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         </button>
       )}
 
-      {calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
+      {!menuOnly && calls.length > 0 && <CallsList calls={calls} now={now} onAct={actOnCall} />}
 
       {me.canEditSettings && me.canViewTeam && (
-        <FirstSteps establishmentId={me.establishmentId} hasOrders={board.orders.length > 0} refreshKey={tab} onGo={(t) => {
+        <FirstSteps establishmentId={me.establishmentId} menuOnly={menuOnly} hasOrders={board.orders.length > 0} refreshKey={tab} onGo={(t) => {
           setTab(t);
           // No telemóvel, a secção aberta fica abaixo da lista: leva o dono até ela.
           requestAnimationFrame(() => document.getElementById("seccoes-painel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
         }} />
       )}
       <InstallPrompt />
-      <NotificationsCard />
+      {!menuOnly && <NotificationsCard />}
 
       <div className="mb-2 flex justify-end">
         <HelpAssistant />
@@ -293,14 +300,21 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
 
       <nav id="seccoes-painel" className="mb-6 flex scroll-mt-4 gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
         {(
-          [
-            "pedidos",
-            ...(me.canEditSettings ? (["resumo"] as const) : []),
-            "mesas",
-            "esgotados",
-            ...(me.canViewTeam ? (["equipa"] as const) : []),
-            ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
-          ] as Tab[]
+          (menuOnly
+            ? [
+                ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                "esgotados",
+                ...(me.canEditSettings ? (["mesas"] as const) : []),
+                ...(me.canViewTeam ? (["equipa"] as const) : []),
+              ]
+            : [
+                "pedidos",
+                ...(me.canEditSettings ? (["resumo"] as const) : []),
+                "mesas",
+                "esgotados",
+                ...(me.canViewTeam ? (["equipa"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+              ]) as Tab[]
         ).map((t) => (
           <button
             key={t}
@@ -311,7 +325,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
+            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -350,7 +364,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         />
       )}
       {tab === "resumo" && <SummaryView />}
-      {tab === "mesas" && <TablesView canEditSettings={me.canEditSettings} />}
+      {tab === "mesas" && <TablesView canEditSettings={me.canEditSettings} menuOnly={menuOnly} />}
       {tab === "esgotados" && <SoldOutView />}
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
       {tab === "carta" && <MenuEditor />}

@@ -33,7 +33,7 @@ export const effectiveOrderingMode = (plan: Plan, mode: "pay_later" | "pay_first
 /**
  * Mensalidade de cada plano, em cêntimos, sem IVA (o que aparece no site e se cobra na subscrição).
  * "orders" passou de 49 € (lançamento) para 59 € a 2026-11-16, por decisão do Rodrigo; o contrato
- * garante o preço durante 12 meses. O plano com pagamentos: 69 € + 1% sobre o pago pela app (2026-11-16).
+ * garante o preço durante 12 meses. O plano com pagamentos: 69 € sem comissão (2026-11-19; antes 69 € + 1%).
  */
 export const PLAN_MONTHLY_CENTS: Record<Plan, number> = { menu: 25_00, orders: 59_00, payments: 69_00 };
 
@@ -47,5 +47,3 @@ export const PLAN_FEATURES: Record<Plan, string[]> = {
   payments: ["Pagar no telemóvel: Apple Pay, MB WAY, cartão", "Gorjetas para a equipa", "Camas e espreguiçadeiras pagam ao pedir", "Dinheiro direto na conta do restaurante"],
 };
 
-/** Comissão do plano com pagamentos: % sobre o valor sem IVA do que se paga pela app. */
-export const PAYMENTS_PLAN_COMMISSION = "1%";

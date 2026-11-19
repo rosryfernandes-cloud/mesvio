@@ -141,8 +141,8 @@ export function CreateRestaurantForm() {
         </label>
         <label className={label}>
           Comissão (%)
-          <input name="commission" required defaultValue="1" inputMode="decimal" pattern="\d{1,2}([.,]\d{1,2})?" className={field} />
-          <span className={hint}>Só se cobra no plano com pagamentos, sobre o valor sem IVA do que se paga pela app.</span>
+          <input name="commission" required defaultValue="0" inputMode="decimal" pattern="\d{1,2}([.,]\d{1,2})?" className={field} />
+          <span className={hint}>Os planos não têm comissão: deixe 0. Se um dia se combinar outra coisa, aplica-se só no plano com pagamentos, sobre o valor sem IVA do que se paga pela app.</span>
         </label>
       </fieldset>
 
