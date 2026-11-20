@@ -147,7 +147,13 @@ export function DailyMenuView() {
       }
       setMessage({ text: "Li a folha. Confirme os pratos e os preços e carregue em Guardar.", error: false });
     } catch {
-      setMessage({ text: "Não foi possível abrir esta foto. Tire-a de novo.", error: true });
+      const heic = /\.hei[cf]$/i.test(file.name) || /hei[cf]/i.test(file.type);
+      setMessage({
+        text: heic
+          ? "Fotos HEIC (do iPhone) não abrem neste computador. Use o telemóvel (câmara ou galeria) ou uma foto em JPG."
+          : "Não foi possível abrir esta foto. Tire-a de novo ou use uma foto em JPG.",
+        error: true,
+      });
     } finally {
       setBusy(null);
     }
