@@ -267,6 +267,13 @@
       "when": 1795195512105,
       "tag": "0037_menu_do_dia",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795201115497,
+      "tag": "0038_picar_ponto",
+      "breakpoints": true
     }
   ]
 }

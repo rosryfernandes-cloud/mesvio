@@ -84,6 +84,8 @@ export const establishments = pgTable(
     openingHours: jsonb("opening_hours").$type<Record<string, [string, string][]>>(),
     /** Menu do dia (src/server/menu/daily-menu.ts): o que inclui, a hora do almoço e os dias. null = desligado. */
     dailyMenuSettings: jsonb("daily_menu_settings").$type<DailyMenuSettingsRow>(),
+    /** Link secreto do tablet de picar ponto (/ponto/<token>); null até o dono o abrir pela primeira vez. */
+    clockKioskToken: text("clock_kiosk_token").unique(),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -593,6 +595,45 @@ export const menuImages = pgTable(
     check("menu_images_size", sql`${t.sizeBytes} <= 1048576`),
   ],
 );
+
+/**
+ * Picar ponto: funcionários do restaurante (não precisam de conta no painel) e os registos de
+ * entrada e saída feitos no tablet com PIN e selfie (a foto é só prova; não há reconhecimento facial).
+ */
+export const clockEmployees = pgTable(
+  "clock_employees",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    name: text("name").notNull(),
+    /** scrypt: "salt:hash" em hex. O PIN nunca é guardado. */
+    pinHash: text("pin_hash").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [index("clock_employees_est_idx").on(t.establishmentId)],
+);
+
+export const clockEntries = pgTable(
+  "clock_entries",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    employeeId: uuid("employee_id").notNull().references(() => clockEmployees.id),
+    kind: text("kind", { enum: ["in", "out"] }).notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    photo: bytea("photo"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("clock_entries_est_at_idx").on(t.establishmentId, t.at),
+    index("clock_entries_emp_at_idx").on(t.employeeId, t.at),
+    check("clock_entries_kind", sql`${t.kind} in ('in', 'out')`),
+  ],
+);
+
 
 /** Transactional outbox: gravado na mesma transação do pedido. */
 export const outbox = pgTable(

@@ -10,6 +10,7 @@ import type { StaffRole } from "@/server/staff/context";
 import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
 import { DailyMenuView } from "./daily-menu-view";
+import { ClockView } from "./clock-view";
 import { SummaryView } from "./summary-view";
 import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
@@ -28,7 +29,7 @@ const POLL_MS = 3000;
 /** Com outro separador à frente, continua a ver pedidos para tocar (o browser pode espaçar mais). */
 const POLL_HIDDEN_MS = 10_000;
 
-type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
+type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "ponto" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
 export interface PanelUser {
   displayName: string;
@@ -303,7 +304,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         {(
           (menuOnly
             ? [
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes", "ponto"] as const) : []),
                 "esgotados",
                 ...(me.canEditSettings ? (["mesas"] as const) : []),
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
@@ -314,7 +315,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
                 "mesas",
                 "esgotados",
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes", "ponto"] as const) : []),
               ]) as Tab[]
         ).map((t) => (
           <button
@@ -326,7 +327,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
+            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", ponto: "Ponto", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -370,6 +371,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
       {tab === "carta" && <MenuEditor />}
       {tab === "dia" && <DailyMenuView />}
+      {tab === "ponto" && <ClockView />}
       {tab === "ementa" && <BrandingView establishmentName={board.establishmentName} />}
       {tab === "traducoes" && <TranslationsView />}
       {tab === "fotos" && <PhotosView />}
