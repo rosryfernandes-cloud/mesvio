@@ -157,7 +157,9 @@ export async function loadDailyMenuForTable(db: Db, organizationId: string, esta
   return withTenant(db, { organizationId }, async (tx) => {
     const [e] = await tx.select({ settings: establishments.dailyMenuSettings }).from(establishments).where(eq(establishments.id, establishmentId));
     const settings = e?.settings;
+    // Só nos dias e à hora do almoço: à noite o menu do dia deixa de fazer sentido e some da ementa.
     if (!settings?.enabled || !settings.days.includes(local.weekday)) return null;
+    if (local.time < settings.from || local.time > settings.to) return null;
     const [row] = await tx
       .select({ sections: dailyMenus.sections })
       .from(dailyMenus)
@@ -171,7 +173,7 @@ export async function loadDailyMenuForTable(db: Db, organizationId: string, esta
       note: settings.note,
       from: settings.from,
       to: settings.to,
-      servingNow: local.time >= settings.from && local.time <= settings.to,
+      servingNow: true,
     };
   });
 }

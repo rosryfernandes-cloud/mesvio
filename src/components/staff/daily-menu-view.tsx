@@ -61,7 +61,10 @@ export function DailyMenuView() {
     const d = await res.json();
     setToday(d.today);
     setHasToday(Boolean(d.sections?.length));
-    setSections(d.sections?.length ? fromApi(d.sections) : EMPTY);
+    // Sem menu para hoje, começa com o anterior: quase sempre só muda um ou dois pratos.
+    setSections(d.sections?.length ? fromApi(d.sections) : d.previous ? fromApi(d.previous.sections) : EMPTY);
+    if (!d.sections?.length && d.previous)
+      setMessage({ text: `Começámos com o menu de ${dateLabel(d.previous.date).split(",")[0]}. Mude o que mudou hoje e carregue em Guardar.`, error: false });
     setPrevious(d.previous);
     setSettings(d.settings ?? DEFAULTS);
     setConfigured(Boolean(d.settings));
@@ -107,19 +110,20 @@ export function DailyMenuView() {
     setMessage({ text: api.length ? "Menu do dia guardado. Os clientes já o veem na ementa." : "Menu de hoje apagado.", error: false });
   }
 
-  async function saveSettings() {
+  async function saveSettings(next: Settings = settings, okText = "Definições guardadas.") {
     setBusy("saving");
     setMessage(null);
     const res = await fetch("/api/painel/menu-do-dia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ settings }),
+      body: JSON.stringify({ settings: next }),
     }).catch(() => null);
     setBusy(null);
     const data = res ? await res.json().catch(() => ({})) : {};
     if (!res?.ok) return setMessage({ text: data.message ?? "Não foi possível guardar.", error: true });
+    setSettings(next);
     setConfigured(true);
-    setMessage({ text: "Definições guardadas.", error: false });
+    setMessage({ text: okText, error: false });
   }
 
   async function readPhoto(file: File) {
@@ -163,14 +167,38 @@ export function DailyMenuView() {
         <div>
           <h2 className="text-xl">Menu do dia · {dateLabel(today)}</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            {hasToday ? "Os clientes veem este menu no topo da ementa, num pop-up." : "Ainda não há menu para hoje. Fotografe a folha do dia ou escreva-o."}
+            {hasToday ? "Os clientes veem este menu no topo da ementa, num pop-up." : "Ainda não há menu para hoje. Escreva os pratos de hoje e carregue em Guardar."}
             {!settings.enabled && " O menu do dia está desligado nas definições abaixo."}
           </p>
         </div>
 
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.enabled}
+          disabled={busy !== null}
+          onClick={() =>
+            void saveSettings(
+              { ...settings, enabled: !settings.enabled },
+              settings.enabled ? "Menu do dia escondido da ementa." : `Menu do dia ligado: aparece das ${settings.from} às ${settings.to}.`,
+            )
+          }
+          className={`flex items-center gap-3 rounded-2xl border-2 p-3 text-left disabled:opacity-60 ${settings.enabled ? "border-brand bg-brand-soft/50" : "border-line bg-paper"}`}
+        >
+          <span aria-hidden="true" className={`relative h-7 w-12 shrink-0 rounded-full transition ${settings.enabled ? "bg-brand" : "bg-line"}`}>
+            <span className={`absolute top-1 size-5 rounded-full bg-white transition-all ${settings.enabled ? "left-6" : "left-1"}`} />
+          </span>
+          <span>
+            <span className="block font-semibold">{settings.enabled ? "Visível na ementa" : "Escondido da ementa"}</span>
+            <span className="block text-sm text-ink-soft">
+              {settings.enabled ? `Aparece só ao almoço, das ${settings.from} às ${settings.to}. Fora dessa hora some sozinho.` : "Toque para voltar a mostrar."}
+            </span>
+          </span>
+        </button>
+
         <div className="flex flex-wrap gap-2">
-          <label className={`${primary} inline-flex cursor-pointer items-center ${busy ? "pointer-events-none opacity-60" : ""}`}>
-            {busy === "reading" ? "A ler a folha…" : "📷 Fotografar a folha de hoje"}
+          <label className={`${secondary} inline-flex cursor-pointer items-center ${busy ? "pointer-events-none opacity-60" : ""}`}>
+            {busy === "reading" ? "A ler a folha…" : "📷 Ler de uma foto"}
             <input
               type="file"
               accept="image/*"
@@ -316,7 +344,7 @@ export function DailyMenuView() {
             })}
           </div>
           <div>
-            <button type="button" disabled={busy !== null} onClick={() => void saveSettings()} className={secondary}>
+            <button type="button" disabled={busy !== null} onClick={() => void saveSettings(settings)} className={secondary}>
               Guardar definições
             </button>
           </div>
