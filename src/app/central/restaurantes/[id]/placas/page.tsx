@@ -265,7 +265,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
 
   const db = await getDb();
   const [est] = await db
-    .select({ name: establishments.name, plan: establishments.plan, brandColor: establishments.brandColor, logo: establishments.brandLogoUrl })
+    .select({ name: establishments.name, plan: establishments.plan, brandColor: establishments.brandColor, logo: establishments.brandLogoUrl, reviews: establishments.reviewsEnabled })
     .from(establishments)
     .where(eq(establishments.id, id));
   if (!est) notFound();
@@ -283,6 +283,8 @@ export default async function SignsPage({ params, searchParams }: Props) {
   // Folha de palmeira só em quem tem camas (praia); num restaurante de cidade fica só a onda.
   const beach = active.some((t) => t.payFirst);
   const payments = planAllowsPayments(est.plan);
+  // Lembrete para avaliar (o botão "Avaliar" está no fim da ementa): só se as avaliações estiverem ligadas.
+  const reviews = est.reviews && !demo;
   const perPlace = await Promise.all(
     active
       .filter((t) => who === "todos" || (who === "camas" ? t.payFirst : !t.payFirst))
@@ -335,6 +337,11 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const LineAbove = ({ theme, height }: { theme: Theme; height: string }) =>
     theme.line === "wave" ? <Wave height={height} color={theme.accent} /> : theme.line === "waves" ? <Waves height={height} color={theme.accent} /> : <div style={{ height }} />;
   const headline = (pt: string, big: number) => (pt.length > 12 ? big * 0.82 : big);
+  const RateUs = ({ size }: { size: number }) => (
+    <p className="m-0 font-semibold whitespace-nowrap" style={{ fontSize: u(size) }}>
+      <span style={{ color: "inherit" }}>★</span> Gostou? Avalie-nos <span className="font-medium italic opacity-85">· Rate us</span>
+    </p>
+  );
 
   type Place = (typeof places)[number];
   /** Uma placa, no tamanho real. `print` = vai para o PDF (as miniaturas dos desenhos não vão). */
@@ -400,6 +407,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                   Apple Pay · MB WAY · cartão
                 </p>
               )}
+              {reviews && <RateUs size={3} />}
             </div>
             <div className="absolute inset-x-0 bottom-0 z-10" style={{ paddingBottom: "4mm" }}>
               <LineAbove theme={theme} height="7mm" />
@@ -434,6 +442,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
                 </p>
               </div>
               <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
+              {reviews && <RateUs size={3.3} />}
               {payments && (
                 <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
                   Apple Pay · MB WAY · cartão
