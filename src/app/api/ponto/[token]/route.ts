@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { kioskView, MAX_CLOCK_PHOTO_BYTES, PIN_SCHEMA, punch } from "@/server/clock/clock-service";
+import { DESCRIPTOR_SCHEMA, identifyFace, kioskView, MAX_CLOCK_PHOTO_BYTES, PIN_SCHEMA, punch, punchWithTicket } from "@/server/clock/clock-service";
 import { detectPhotoType } from "@/server/menu/menu-import";
 import { hitRateLimit } from "@/server/security/rate-limit";
 
@@ -18,14 +18,36 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
 
 const fields = z.object({ employeeId: z.uuid(), pin: PIN_SCHEMA });
 
-/** Picar ponto (multipart: employeeId, pin e, se houver câmara, photo). */
+/**
+ * Picar ponto (multipart). Três formas:
+ * - `descriptor` (assinatura da cara, JSON): só identifica e devolve um bilhete para confirmar;
+ * - `ticket` (+ photo): confirma o registo de quem a cara identificou;
+ * - `employeeId` + `pin` (+ photo): com o nome e o PIN.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > MAX_CLOCK_PHOTO_BYTES + 16 * 1024) return json({ message: "A foto é demasiado grande." }, 413);
   const form = await request.formData().catch(() => null);
-  const parsed = fields.safeParse({ employeeId: form?.get("employeeId"), pin: form?.get("pin") });
-  if (!parsed.success) return json({ message: "Escolha o nome e meta o PIN de 4 algarismos." }, 400);
+
+  const descriptorField = form?.get("descriptor");
+  if (typeof descriptorField === "string") {
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(descriptorField);
+    } catch {}
+    const descriptor = DESCRIPTOR_SCHEMA.safeParse(raw);
+    if (!descriptor.success) return json({ message: "Cara inválida." }, 400);
+    const db = await getDb();
+    const limit = await hitRateLimit(db, `ponto-cara:${token.slice(0, 40)}`, { limit: 120, windowSeconds: 10 * 60 });
+    if (!limit.allowed) return json({ message: "Demasiadas tentativas. Use o nome e o PIN." }, 429);
+    const r = await identifyFace(db, token, descriptor.data);
+    return r.ok ? json(r) : json({ code: r.code, message: r.message }, r.code === "NOT_FOUND" ? 404 : 422);
+  }
+
+  const ticketField = form?.get("ticket");
+  const parsed = typeof ticketField === "string" ? null : fields.safeParse({ employeeId: form?.get("employeeId"), pin: form?.get("pin") });
+  if (parsed && !parsed.success) return json({ message: "Escolha o nome e meta o PIN de 4 algarismos." }, 400);
 
   const file = form?.get("photo");
   let photo: Buffer | null = null;
@@ -35,12 +57,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   const db = await getDb();
-  // Um PIN de 4 algarismos adivinha-se com tentativas: poucas por funcionário, e um teto por tablet.
-  const perEmployee = await hitRateLimit(db, `ponto:${parsed.data.employeeId}`, { limit: 6, windowSeconds: 15 * 60 });
   const perKiosk = await hitRateLimit(db, `ponto-tablet:${token.slice(0, 40)}`, { limit: 200, windowSeconds: 60 * 60 });
-  if (!perEmployee.allowed || !perKiosk.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
-
-  const result = await punch(db, token, parsed.data.employeeId, parsed.data.pin, photo);
+  if (!perKiosk.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
+  let result;
+  if (typeof ticketField === "string") result = await punchWithTicket(db, token, ticketField, photo);
+  else {
+    // Um PIN de 4 algarismos adivinha-se com tentativas: poucas por funcionário.
+    const perEmployee = await hitRateLimit(db, `ponto:${parsed!.data!.employeeId}`, { limit: 6, windowSeconds: 15 * 60 });
+    if (!perEmployee.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
+    result = await punch(db, token, parsed!.data!.employeeId, parsed!.data!.pin, photo);
+  }
   if (!result.ok) return json({ code: result.code, message: result.message }, result.code === "WRONG_PIN" ? 403 : 404);
   return json(result);
 }

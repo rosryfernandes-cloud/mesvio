@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { addEmployee, establishmentTimezone, kioskToken, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, updateEmployee } from "@/server/clock/clock-service";
+import { addEmployee, DESCRIPTOR_SCHEMA, establishmentTimezone, getFaceEnabled, kioskToken, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
 
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     to,
     employees: await listEmployees(db, ctx),
     kioskToken: await kioskToken(db, ctx),
+    faceEnabled: await getFaceEnabled(db, ctx),
     entries,
     shifts: pairShifts(entries),
   });
@@ -36,6 +37,9 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("add"), name: NAME_SCHEMA, pin: PIN_SCHEMA }),
   z.object({ action: z.literal("update"), id: z.uuid(), name: NAME_SCHEMA.optional(), pin: PIN_SCHEMA.optional(), active: z.boolean().optional() }),
   z.object({ action: z.literal("newLink") }),
+  z.object({ action: z.literal("faceEnabled"), enabled: z.boolean() }),
+  z.object({ action: z.literal("face"), id: z.uuid(), samples: z.array(DESCRIPTOR_SCHEMA).min(2).max(6) }),
+  z.object({ action: z.literal("faceRemove"), id: z.uuid() }),
 ]);
 
 export async function POST(request: Request) {
@@ -48,6 +52,15 @@ export async function POST(request: Request) {
   if (d.action === "add") return json(await addEmployee(db, ctx, d.name, d.pin));
   if (d.action === "update") {
     const ok = await updateEmployee(db, ctx, d.id, { name: d.name, pin: d.pin, active: d.active });
+    return ok ? json({ ok: true }) : json({ message: "Funcionário não encontrado." }, 404);
+  }
+  if (d.action === "faceEnabled") {
+    await setFaceEnabled(db, ctx, d.enabled);
+    return json({ ok: true });
+  }
+  if (d.action === "face" || d.action === "faceRemove") {
+    if (d.action === "face" && !(await getFaceEnabled(db, ctx))) return json({ message: "Ligue primeiro o reconhecimento facial." }, 409);
+    const ok = await setEmployeeFace(db, ctx, d.id, d.action === "face" ? d.samples : null);
     return ok ? json({ ok: true }) : json({ message: "Funcionário não encontrado." }, 404);
   }
   return json({ kioskToken: await kioskToken(db, ctx, true) });

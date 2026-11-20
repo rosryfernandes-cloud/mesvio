@@ -6,6 +6,8 @@ import type { Db } from "@/server/db/client";
 import { queryRows, withTenant } from "@/server/db/tenant";
 import { clockEmployees, clockEntries, establishments } from "@/server/db/schema";
 import type { StaffContext } from "@/server/staff/context";
+import { open as openSealed, seal } from "@/server/security/secret-box";
+import { decodeSigned, encodeSigned } from "@/server/staff/session";
 
 /**
  * Picar ponto: o tablet à entrada abre /ponto/<token>; o funcionário toca no nome, mete o PIN e o
@@ -22,6 +24,31 @@ export const NAME_SCHEMA = z.string().trim().min(1).max(60);
 export const MAX_CLOCK_PHOTO_BYTES = 300 * 1024;
 /** Uma entrada sem saída há mais do que isto já não conta como "a trabalhar" (esqueceu-se de picar). */
 const OPEN_SHIFT_MS = 16 * 3600_000;
+
+/** Assinatura de uma cara: 128 números (modelo de reconhecimento a correr no tablet). */
+export const DESCRIPTOR_SCHEMA = z.array(z.number().min(-2).max(2)).length(128);
+/** Distância máxima para considerar a mesma pessoa (mais baixo = mais exigente). */
+export const FACE_MATCH_MAX = 0.5;
+/** A segunda pessoa mais parecida tem de ficar claramente mais longe (evita confundir irmãos). */
+const FACE_MARGIN = 0.06;
+const TICKET_MS = 60_000;
+
+export function faceDistance(a: number[], b: number[]): number {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2;
+  return Math.sqrt(s);
+}
+
+/** Quem é esta cara: o funcionário mais parecido, se estiver perto o suficiente e sem empate. */
+export function bestFaceMatch(live: number[], people: { id: string; samples: number[][] }[]): { id: string; distance: number } | null {
+  const scored = people
+    .map((p) => ({ id: p.id, distance: Math.min(...p.samples.map((s) => faceDistance(live, s))) }))
+    .sort((a, b) => a.distance - b.distance);
+  const [best, second] = scored;
+  if (!best || best.distance > FACE_MATCH_MAX) return null;
+  if (second && second.distance - best.distance < FACE_MARGIN) return null;
+  return best;
+}
 
 export function hashPin(pin: string): string {
   const salt = randomBytes(16);
@@ -47,16 +74,48 @@ export interface ClockEmployee {
   id: string;
   name: string;
   active: boolean;
+  hasFace: boolean;
 }
 
 export async function listEmployees(db: Db, s: Scope): Promise<ClockEmployee[]> {
   return withTenant(db, tenantOf(s), (tx) =>
     tx
-      .select({ id: clockEmployees.id, name: clockEmployees.name, active: clockEmployees.active })
+      .select({ id: clockEmployees.id, name: clockEmployees.name, active: clockEmployees.active, hasFace: sql<boolean>`${clockEmployees.faceCiphertext} is not null` })
       .from(clockEmployees)
       .where(eq(clockEmployees.establishmentId, s.establishmentId))
-      .orderBy(desc(clockEmployees.active), asc(clockEmployees.name)),
+      .orderBy(desc(clockEmployees.active), asc(clockEmployees.name))
+      .then((rows) => rows.map((r) => ({ ...r, hasFace: Boolean(r.hasFace) }))),
   );
+}
+
+/** Guarda as assinaturas da cara de um funcionário (cifradas). `null` apaga-as. */
+export async function setEmployeeFace(db: Db, s: Scope, id: string, samples: number[][] | null): Promise<boolean> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const rows = await tx
+      .update(clockEmployees)
+      .set(samples ? { faceCiphertext: seal(JSON.stringify(samples)), faceEnrolledAt: new Date() } : { faceCiphertext: null, faceEnrolledAt: null })
+      .where(and(eq(clockEmployees.id, id), eq(clockEmployees.establishmentId, s.establishmentId)))
+      .returning({ id: clockEmployees.id });
+    return rows.length > 0;
+  });
+}
+
+export async function getFaceEnabled(db: Db, s: Scope): Promise<boolean> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const [e] = await tx.select({ on: establishments.clockFaceEnabled }).from(establishments).where(eq(establishments.id, s.establishmentId));
+    return e?.on ?? false;
+  });
+}
+
+/** Ligar ou desligar o reconhecimento facial. Ao desligar, apagam-se as caras de todos (dados biométricos). */
+export async function setFaceEnabled(db: Db, s: Scope, enabled: boolean): Promise<void> {
+  await withTenant(db, tenantOf(s), async (tx) => {
+    await tx
+      .update(establishments)
+      .set({ clockFaceEnabled: enabled, updatedAt: new Date() })
+      .where(and(eq(establishments.id, s.establishmentId), eq(establishments.organizationId, s.organizationId)));
+    if (!enabled) await tx.update(clockEmployees).set({ faceCiphertext: null, faceEnrolledAt: null }).where(eq(clockEmployees.establishmentId, s.establishmentId));
+  });
 }
 
 export async function addEmployee(db: Db, s: Scope, name: string, pin: string): Promise<{ id: string }> {
@@ -197,6 +256,8 @@ async function resolveKiosk(db: Db, token: string): Promise<{ organizationId: st
 
 export interface KioskView {
   establishmentName: string;
+  /** Há reconhecimento facial ligado e pelo menos uma cara registada. */
+  face: boolean;
   employees: { id: string; name: string; next: "in" | "out" }[];
 }
 
@@ -204,9 +265,9 @@ export async function kioskView(db: Db, token: string, now = new Date()): Promis
   const ids = await resolveKiosk(db, token);
   if (!ids) return null;
   return withTenant(db, { organizationId: ids.organizationId }, async (tx) => {
-    const [e] = await tx.select({ name: establishments.name }).from(establishments).where(eq(establishments.id, ids.establishmentId));
+    const [e] = await tx.select({ name: establishments.name, face: establishments.clockFaceEnabled }).from(establishments).where(eq(establishments.id, ids.establishmentId));
     const emps = await tx
-      .select({ id: clockEmployees.id, name: clockEmployees.name })
+      .select({ id: clockEmployees.id, name: clockEmployees.name, hasFace: sql<boolean>`${clockEmployees.faceCiphertext} is not null` })
       .from(clockEmployees)
       .where(and(eq(clockEmployees.establishmentId, ids.establishmentId), eq(clockEmployees.active, true)))
       .orderBy(asc(clockEmployees.name));
@@ -218,7 +279,11 @@ export async function kioskView(db: Db, token: string, now = new Date()): Promis
       .orderBy(desc(clockEntries.at));
     const last = new Map<string, { kind: "in" | "out"; at: Date }>();
     for (const r of recent) if (!last.has(r.employeeId)) last.set(r.employeeId, { kind: r.kind, at: r.at });
-    return { establishmentName: e?.name ?? "", employees: emps.map((x) => ({ ...x, next: nextKind(last.get(x.id), now) })) };
+    return {
+      establishmentName: e?.name ?? "",
+      face: Boolean(e?.face) && emps.some((x) => x.hasFace),
+      employees: emps.map((x) => ({ id: x.id, name: x.name, next: nextKind(last.get(x.id), now) })),
+    };
   });
 }
 
@@ -226,8 +291,63 @@ export type PunchResult =
   | { ok: true; kind: "in" | "out"; at: string; name: string }
   | { ok: false; code: "NOT_FOUND" | "WRONG_PIN"; message: string };
 
+export type FaceResult =
+  | { ok: true; employeeId: string; name: string; next: "in" | "out"; ticket: string }
+  | { ok: false; code: "NOT_FOUND" | "OFF" | "NO_MATCH"; message: string };
+
+/**
+ * Reconhecimento facial: o tablet calcula a assinatura da cara e o servidor compara-a com as
+ * guardadas (as caras dos colegas nunca saem do servidor). Devolve quem é e um bilhete de 1 minuto
+ * para confirmar ("É o Rodrigo?") sem PIN.
+ */
+export async function identifyFace(db: Db, token: string, live: number[], now = new Date()): Promise<FaceResult> {
+  const ids = await resolveKiosk(db, token);
+  if (!ids) return { ok: false, code: "NOT_FOUND", message: "Este link de picar ponto já não é válido." };
+  return withTenant(db, { organizationId: ids.organizationId }, async (tx) => {
+    const [e] = await tx.select({ face: establishments.clockFaceEnabled }).from(establishments).where(eq(establishments.id, ids.establishmentId));
+    if (!e?.face) return { ok: false as const, code: "OFF" as const, message: "O reconhecimento facial está desligado. Use o nome e o PIN." };
+    const rows = await tx
+      .select({ id: clockEmployees.id, name: clockEmployees.name, face: clockEmployees.faceCiphertext })
+      .from(clockEmployees)
+      .where(and(eq(clockEmployees.establishmentId, ids.establishmentId), eq(clockEmployees.active, true)));
+    const people = rows.flatMap((r) => {
+      if (!r.face) return [];
+      try {
+        return [{ id: r.id, samples: JSON.parse(openSealed(r.face)) as number[][] }];
+      } catch {
+        return [];
+      }
+    });
+    const match = bestFaceMatch(live, people);
+    if (!match) return { ok: false as const, code: "NO_MATCH" as const, message: "Não o reconheci. Tente outra vez com mais luz, ou toque no seu nome e use o PIN." };
+    const emp = rows.find((r) => r.id === match.id)!;
+    const [last] = await tx
+      .select({ kind: clockEntries.kind, at: clockEntries.at })
+      .from(clockEntries)
+      .where(eq(clockEntries.employeeId, emp.id))
+      .orderBy(desc(clockEntries.at))
+      .limit(1);
+    const ticket = encodeSigned({ k: "ponto-cara", e: emp.id, t: token.slice(0, 12) }, now.getTime() + TICKET_MS);
+    return { ok: true as const, employeeId: emp.id, name: emp.name, next: nextKind(last, now), ticket };
+  });
+}
+
+/** Confirma o registo com o bilhete do reconhecimento facial (em vez do PIN). */
+export async function punchWithTicket(db: Db, token: string, ticket: string, photo: Buffer | null, now = new Date()): Promise<PunchResult> {
+  const data = decodeSigned(ticket, now.getTime());
+  if (!data || data.k !== "ponto-cara" || data.t !== token.slice(0, 12) || typeof data.e !== "string") {
+    return { ok: false, code: "WRONG_PIN", message: "O reconhecimento expirou. Tente outra vez." };
+  }
+  return punchEmployee(db, token, data.e, null, photo, now);
+}
+
 /** Regista a entrada ou a saída (decide sozinho qual) se o PIN estiver certo. */
 export async function punch(db: Db, token: string, employeeId: string, pin: string, photo: Buffer | null, now = new Date()): Promise<PunchResult> {
+  return punchEmployee(db, token, employeeId, pin, photo, now);
+}
+
+/** `pin` null = já identificado pela cara (bilhete válido). */
+async function punchEmployee(db: Db, token: string, employeeId: string, pin: string | null, photo: Buffer | null, now: Date): Promise<PunchResult> {
   const ids = await resolveKiosk(db, token);
   if (!ids) return { ok: false, code: "NOT_FOUND", message: "Este link de picar ponto já não é válido. Peça um novo ao responsável." };
   return withTenant(db, { organizationId: ids.organizationId }, async (tx) => {
@@ -236,7 +356,7 @@ export async function punch(db: Db, token: string, employeeId: string, pin: stri
       .from(clockEmployees)
       .where(and(eq(clockEmployees.id, employeeId), eq(clockEmployees.establishmentId, ids.establishmentId), eq(clockEmployees.active, true)));
     if (!emp) return { ok: false as const, code: "NOT_FOUND" as const, message: "Funcionário não encontrado." };
-    if (!checkPin(pin, emp.pinHash)) return { ok: false as const, code: "WRONG_PIN" as const, message: "PIN errado. Tente de novo." };
+    if (pin !== null && !checkPin(pin, emp.pinHash)) return { ok: false as const, code: "WRONG_PIN" as const, message: "PIN errado. Tente de novo." };
     const [last] = await tx
       .select({ kind: clockEntries.kind, at: clockEntries.at })
       .from(clockEntries)

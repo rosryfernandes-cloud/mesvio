@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FaceEnroll } from "./face-enroll";
 
 /** Picar ponto no painel: link do tablet, funcionários (nome e PIN) e registos com as horas. */
 
-type Employee = { id: string; name: string; active: boolean };
+type Employee = { id: string; name: string; active: boolean; hasFace: boolean };
 type Shift = { employeeId: string; employeeName: string; inAt: string | null; outAt: string | null; minutes: number | null; inEntryId: string | null; outEntryId: string | null };
-type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; shifts: Shift[] };
+type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[] };
 
 const input = "min-h-11 rounded-xl border border-line bg-card px-3";
 const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-60";
@@ -26,6 +27,7 @@ export function ClockView() {
   const [newName, setNewName] = useState("");
   const [newPin, setNewPin] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState<Employee | null>(null);
 
   const load = useCallback(async (r?: { from: string; to: string }) => {
     const q = r ? `?de=${r.from}&ate=${r.to}` : "";
@@ -119,6 +121,36 @@ export function ClockView() {
       </section>
 
       <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
+        <h2 className="text-xl">Reconhecimento facial</h2>
+        <p className="text-sm text-ink-soft">
+          Com o reconhecimento ligado, o funcionário só mostra a cara ao tablet, pisca os olhos e confirma o nome. O nome e o PIN continuam a funcionar
+          para quem não quiser ou não for reconhecido.
+        </p>
+        {!data.faceEnabled && (
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-ink">
+            <strong>Antes de ligar:</strong> a cara usada para reconhecer alguém é um dado biométrico. Informe os funcionários por escrito de como funciona
+            e de que podem usar sempre o PIN. Guardamos só uma assinatura numérica da cara, cifrada, e nunca a foto.
+          </p>
+        )}
+        <div>
+          <button
+            type="button"
+            disabled={busy}
+            className={data.faceEnabled ? ghost : primary}
+            onClick={() => {
+              if (data.faceEnabled) {
+                if (window.confirm("Desligar o reconhecimento facial? As caras registadas de todos os funcionários são apagadas.")) void post({ action: "faceEnabled", enabled: false }, "Reconhecimento facial desligado e caras apagadas.");
+              } else if (window.confirm("Confirma que informou os funcionários por escrito e que eles podem usar sempre o PIN em alternativa?")) {
+                void post({ action: "faceEnabled", enabled: true }, "Reconhecimento facial ligado. Registe a cara de cada funcionário na lista abaixo.");
+              }
+            }}
+          >
+            {data.faceEnabled ? "Desligar o reconhecimento facial" : "Ligar o reconhecimento facial"}
+          </button>
+        </div>
+      </section>
+
+      <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
         <h2 className="text-xl">Funcionários</h2>
         <form
           className="flex flex-wrap items-end gap-2"
@@ -159,7 +191,18 @@ export function ClockView() {
               <span className="flex-1 font-semibold">
                 {e.name}
                 {!e.active && <span className="ml-2 text-xs font-normal text-ink-soft">(desativado)</span>}
+                {data.faceEnabled && e.hasFace && <span className="ml-2 text-xs font-normal text-ok">· cara registada</span>}
               </span>
+              {data.faceEnabled && e.active && (
+                <button type="button" className={ghost} disabled={busy} onClick={() => setEnrolling(e)}>
+                  {e.hasFace ? "Registar a cara de novo" : "Registar a cara"}
+                </button>
+              )}
+              {data.faceEnabled && e.hasFace && (
+                <button type="button" className={ghost} disabled={busy} onClick={() => void post({ action: "faceRemove", id: e.id }, `Cara de ${e.name} apagada.`)}>
+                  Apagar cara
+                </button>
+              )}
               <button
                 type="button"
                 className={ghost}
@@ -277,6 +320,14 @@ export function ClockView() {
           </div>
         )}
       </section>
+
+      {enrolling && (
+        <FaceEnroll
+          name={enrolling.name}
+          onClose={() => setEnrolling(null)}
+          onSave={(samples) => post({ action: "face", id: enrolling.id, samples }, `Cara de ${enrolling.name} registada. Já pode picar o ponto só com a cara.`)}
+        />
+      )}
 
       {photo && (
         <div role="dialog" aria-label="Foto do registo" className="fixed inset-0 z-50 grid place-items-center bg-ink/60 p-4" onClick={() => setPhoto(null)}>

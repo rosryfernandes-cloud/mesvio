@@ -274,6 +274,13 @@
       "when": 1795201115497,
       "tag": "0038_picar_ponto",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795202558388,
+      "tag": "0039_ponto_cara",
+      "breakpoints": true
     }
   ]
 }

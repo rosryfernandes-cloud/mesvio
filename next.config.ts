@@ -33,7 +33,7 @@ const csp = (frameAncestors: string) => [
 
 // Por omissão nenhuma página pode ser embebida (clickjacking). Exceção: o talão do painel, que o
 // próprio painel abre num iframe escondido para imprimir ("Talão" e impressão automática).
-// O tablet de picar ponto (/ponto/…) é a única página que pode usar a câmara (selfie de prova).
+// Só o tablet de picar ponto (/ponto/…) e o painel (registar caras) podem usar a câmara.
 const securityHeaders = (embeddableBySelf = false, camera = false) => [
   { key: "Content-Security-Policy", value: csp(embeddableBySelf ? "'self'" : "'none'") },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -51,7 +51,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite"],
   async headers() {
     return [
-      { source: "/((?!painel/talao/|ponto/).*)", headers: securityHeaders() },
+      { source: "/((?!painel(?:/|$)|ponto/).*)", headers: securityHeaders() },
+      // Painel: câmara para registar a cara dos funcionários no picar ponto (o talão a seguir sobrepõe-se).
+      { source: "/painel", headers: securityHeaders(false, true) },
+      { source: "/painel/:path*", headers: securityHeaders(false, true) },
       { source: "/painel/talao/:path*", headers: securityHeaders(true) },
       { source: "/ponto/:path*", headers: securityHeaders(false, true) },
     ];

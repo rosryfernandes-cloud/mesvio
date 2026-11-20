@@ -86,6 +86,11 @@ export const establishments = pgTable(
     dailyMenuSettings: jsonb("daily_menu_settings").$type<DailyMenuSettingsRow>(),
     /** Link secreto do tablet de picar ponto (/ponto/<token>); null até o dono o abrir pela primeira vez. */
     clockKioskToken: text("clock_kiosk_token").unique(),
+    /**
+     * Picar ponto com reconhecimento facial (dados biométricos). Desligado por omissão: o dono liga-o
+     * depois de informar os funcionários por escrito; o PIN fica sempre disponível como alternativa.
+     */
+    clockFaceEnabled: boolean("clock_face_enabled").notNull().default(false),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -609,6 +614,9 @@ export const clockEmployees = pgTable(
     name: text("name").notNull(),
     /** scrypt: "salt:hash" em hex. O PIN nunca é guardado. */
     pinHash: text("pin_hash").notNull(),
+    /** Assinaturas da cara (vetores de 128 números, nunca a foto), cifradas com AES-256-GCM (secret-box). */
+    faceCiphertext: text("face_ciphertext"),
+    faceEnrolledAt: timestamp("face_enrolled_at", { withTimezone: true }),
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
   },

@@ -38,3 +38,22 @@ describe("picar ponto", () => {
     expect(localMidnight("2026-07-15", "Europe/Lisbon").toISOString()).toBe("2026-07-14T23:00:00.000Z");
   });
 });
+
+describe("reconhecimento facial", () => {
+  const vec = (seed: number) => Array.from({ length: 128 }, (_, i) => Math.sin(seed * 31 + i) * 0.1);
+  const near = (v: number[], d: number) => v.map((x, i) => x + (i === 0 ? d : 0));
+
+  it("reconhece a pessoa certa quando a cara está perto, e ninguém quando está longe", async () => {
+    const { bestFaceMatch } = await import("./clock-service");
+    const ana = vec(1), rui = vec(2);
+    const people = [{ id: "ana", samples: [ana] }, { id: "rui", samples: [rui] }];
+    expect(bestFaceMatch(near(ana, 0.2), people)?.id).toBe("ana");
+    expect(bestFaceMatch(vec(9).map((x) => x * 8), people)).toBeNull();
+  });
+
+  it("não decide quando duas pessoas são quase iguais (gémeos)", async () => {
+    const { bestFaceMatch } = await import("./clock-service");
+    const a = vec(3);
+    expect(bestFaceMatch(a, [{ id: "a", samples: [near(a, 0.1)] }, { id: "b", samples: [near(a, 0.12)] }])).toBeNull();
+  });
+});

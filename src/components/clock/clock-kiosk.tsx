@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { EYES_CLOSED, EYES_OPEN, loadFaceEngine, readFace } from "./face-engine";
 
 type Employee = { id: string; name: string; next: "in" | "out" };
-type Step = { kind: "list" } | { kind: "pin"; emp: Employee } | { kind: "camera"; emp: Employee; pin: string } | { kind: "done"; name: string; what: "in" | "out"; at: string };
+type Match = { employeeId: string; name: string; next: "in" | "out"; ticket: string };
+type Step =
+  | { kind: "list" }
+  | { kind: "pin"; emp: Employee }
+  | { kind: "camera"; emp: Employee; pin: string }
+  | { kind: "face" }
+  | { kind: "confirm"; match: Match; photo: Blob | null }
+  | { kind: "done"; name: string; what: "in" | "out"; at: string };
 
 const IDLE_MS = 45_000;
 const label = { in: "Entrada", out: "Saída" } as const;
@@ -25,6 +33,7 @@ async function snap(video: HTMLVideoElement): Promise<Blob | null> {
 export function ClockKiosk({ token }: { token: string }) {
   const [name, setName] = useState("");
   const [employees, setEmployees] = useState<Employee[] | null>(null);
+  const [face, setFace] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [now, setNow] = useState(() => new Date());
@@ -37,6 +46,7 @@ export function ClockKiosk({ token }: { token: string }) {
     setError(null);
     setName(data.establishmentName);
     setEmployees(data.employees);
+    setFace(Boolean(data.face));
   }, [token]);
 
   useEffect(() => {
@@ -70,7 +80,20 @@ export function ClockKiosk({ token }: { token: string }) {
 
       {step.kind === "list" && (
         <>
-          <p className="mb-4 text-lg text-ink-soft">Toque no seu nome.</p>
+          {face && (
+            <button
+              type="button"
+              onClick={() => setStep({ kind: "face" })}
+              className="mb-6 flex min-h-28 w-full items-center justify-center gap-4 rounded-3xl bg-brand px-6 text-white active:opacity-90"
+            >
+              <span aria-hidden="true" className="text-5xl">🙂</span>
+              <span className="text-left">
+                <span className="block text-2xl font-extrabold">Picar com a cara</span>
+                <span className="block text-base opacity-85">Olhe para a câmara e pisque os olhos</span>
+              </span>
+            </button>
+          )}
+          <p className="mb-4 text-lg text-ink-soft">{face ? "Ou toque no seu nome e use o PIN." : "Toque no seu nome."}</p>
           {employees && employees.length === 0 && <p className="text-ink-soft">Ainda não há funcionários. O responsável acrescenta-os no painel, no separador Ponto.</p>}
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {(employees ?? []).map((e) => (
@@ -98,6 +121,20 @@ export function ClockKiosk({ token }: { token: string }) {
         />
       )}
 
+      {step.kind === "face" && (
+        <FaceScan token={token} onBack={() => setStep({ kind: "list" })} onMatch={(match, photo) => setStep({ kind: "confirm", match, photo })} />
+      )}
+
+      {step.kind === "confirm" && (
+        <Confirm
+          token={token}
+          match={step.match}
+          photo={step.photo}
+          onNo={() => setStep({ kind: "list" })}
+          onDone={(r) => setStep({ kind: "done", name: r.name, what: r.kind, at: r.at })}
+        />
+      )}
+
       {step.kind === "done" && (
         <div className="flex flex-1 flex-col items-center justify-center text-center" role="status">
           <span aria-hidden="true" className="grid size-28 place-items-center rounded-full bg-ok text-6xl text-white">✓</span>
@@ -110,8 +147,8 @@ export function ClockKiosk({ token }: { token: string }) {
       )}
 
       <p className="mt-auto pt-8 text-center text-xs text-ink-soft">
-        Registo dos tempos de trabalho (Código do Trabalho, art. 202.º). A foto serve só de prova do registo, não é analisada, e só o
-        responsável do restaurante a vê.
+        Registo dos tempos de trabalho (Código do Trabalho, art. 202.º). A foto serve só de prova do registo e só o responsável do restaurante
+        a vê.{face ? " O reconhecimento facial é opcional: pode usar sempre o nome e o PIN." : ""}
       </p>
     </main>
   );
@@ -228,6 +265,116 @@ function Camera({
         </button>
         <button type="button" onClick={() => void send()} disabled={busy || (!ready && !noCamera)} className="min-h-16 flex-[2] rounded-3xl bg-brand text-xl font-bold text-white disabled:opacity-60">
           {busy ? "A registar…" : `Registar ${label[emp.next].toLowerCase()}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Reconhecimento: espera por uma cara clara e um piscar de olhos (prova de vida), e pergunta ao servidor quem é. */
+function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => void; onMatch: (m: Match, photo: Blob | null) => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [hint, setHint] = useState("A abrir a câmara…");
+  const [error, setError] = useState<string | null>(null);
+  // O relógio do ecrã redesenha o pai: a câmara não pode reiniciar por isso.
+  const onMatchRef = useRef(onMatch);
+  useEffect(() => {
+    onMatchRef.current = onMatch;
+  });
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let stop = false;
+    const give = setTimeout(() => {
+      stop = true;
+      setError("Não consegui. Toque em Voltar e use o seu nome e PIN.");
+    }, 25_000);
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 } }, audio: false });
+        if (stop || !video.current) return;
+        video.current.srcObject = stream;
+        await video.current.play();
+        setHint("A preparar…");
+        const faceapi = await loadFaceEngine();
+        let sawOpen = false, sawClosed = false;
+        while (!stop) {
+          const r = await readFace(faceapi, video.current!);
+          if (!r) setHint("Ponha a cara dentro do oval.");
+          else if (r.size < 0.2) setHint("Chegue um pouco mais perto.");
+          else if (!sawOpen) {
+            if (r.eyes > EYES_OPEN) sawOpen = true;
+            setHint("Agora pisque os olhos.");
+          } else if (!sawClosed) {
+            if (r.eyes < EYES_CLOSED) sawClosed = true;
+            setHint("Pisque os olhos.");
+          } else if (r.eyes > EYES_OPEN) {
+            // Piscou: usa esta leitura (olhos abertos) para saber quem é.
+            setHint("A reconhecer…");
+            const photo = await snap(video.current!);
+            const form = new FormData();
+            form.append("descriptor", JSON.stringify(r.descriptor));
+            const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
+            const data = res ? await res.json().catch(() => ({})) : {};
+            if (stop) return;
+            if (res?.ok) return onMatchRef.current(data as Match, photo);
+            setError(data.message ?? "Não o reconheci.");
+            return;
+          }
+          await new Promise((res) => setTimeout(res, 120));
+        }
+      } catch {
+        if (!stop) setError("Não foi possível usar a câmara. Toque em Voltar e use o seu nome e PIN.");
+      }
+    })();
+    return () => {
+      stop = true;
+      clearTimeout(give);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [token]);
+
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center">
+      <p className="text-2xl font-bold">Picar com a cara</p>
+      <div className="relative mt-4 aspect-[3/4] w-full max-w-xs overflow-hidden rounded-3xl bg-ink">
+        <video ref={video} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
+        <span aria-hidden="true" className="pointer-events-none absolute top-[12%] left-1/2 h-[66%] w-[62%] -translate-x-1/2 rounded-[50%] border-4 border-white/90 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
+      </div>
+      <p role="status" className={`mt-4 min-h-8 text-center text-xl font-semibold ${error ? "text-red-700" : ""}`}>{error ?? hint}</p>
+      <button type="button" onClick={onBack} className="mt-4 min-h-14 w-full max-w-xs rounded-3xl border-2 border-line bg-card text-lg font-semibold">
+        Voltar
+      </button>
+    </div>
+  );
+}
+
+function Confirm({ token, match, photo, onNo, onDone }: { token: string; match: Match; photo: Blob | null; onNo: () => void; onDone: (r: { name: string; kind: "in" | "out"; at: string }) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function yes() {
+    setBusy(true);
+    const form = new FormData();
+    form.append("ticket", match.ticket);
+    if (photo) form.append("photo", photo, "ponto.jpg");
+    const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
+    setBusy(false);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return setError(data.message ?? "Não foi possível registar. Use o nome e o PIN.");
+    onDone(data);
+  }
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center text-center">
+      <p className="text-xl text-ink-soft">Olá!</p>
+      <p className="mt-1 text-5xl font-extrabold">É o {match.name}?</p>
+      <p className="mt-3 text-xl">Vai registar a {label[match.next].toLowerCase()}.</p>
+      {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+      <div className="mt-8 flex w-full max-w-md gap-3">
+        <button type="button" onClick={onNo} disabled={busy} className="min-h-16 flex-1 rounded-3xl border-2 border-line bg-card text-lg font-semibold">
+          Não sou eu
+        </button>
+        <button type="button" onClick={() => void yes()} disabled={busy} className="min-h-16 flex-[2] rounded-3xl bg-brand text-xl font-bold text-white disabled:opacity-60">
+          {busy ? "A registar…" : "Sim, sou eu"}
         </button>
       </div>
     </div>
