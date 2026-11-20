@@ -51,11 +51,14 @@ const STYLES = {
   praia: { label: "Praia", hint: "Areia, sol e ondas" },
   azulejo: { label: "Azulejo", hint: "Tasca portuguesa, azul e creme" },
   noite: { label: "Noite", hint: "Escuro com moldura dourada" },
+  marinheiro: { label: "Marinheiro", hint: "Riscas azuis e âncora, praia e peixe" },
+  tasca: { label: "Tasca", hint: "Quadrados vermelhos e brancos" },
+  madeira: { label: "Madeira", hint: "Tons quentes, tascas e churrasqueiras" },
   minimal: { label: "Minimal", hint: "Preto e branco, impressão mais barata" },
 } as const;
 type Style = keyof typeof STYLES;
 /** Decoração de fundo e linha por cima da assinatura. */
-type Deco = "palm" | "sun" | "tiles" | "frame" | "blobs" | "none";
+type Deco = "palm" | "sun" | "tiles" | "frame" | "blobs" | "stripes" | "checks" | "grain" | "none";
 type Line = "wave" | "waves" | "none";
 type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; dot: string; outline: boolean; deco: Deco; line: Line; tint?: string };
 
@@ -80,6 +83,23 @@ function themeFor(style: Style, brand: string): Theme {
       return { bg: "#FBF7EF", fg: "#1E3F8A", accent: "#1E3F8A", pillBg: "#1E3F8A", pillFg: "#FBF7EF", mark: "#1E3F8A", dot: "#1E3F8A", outline: true, deco: "tiles", line: "none" };
     case "noite":
       return { bg: "#15171A", fg: "#F3EBDD", accent: "#C9A45C", pillBg: "#C9A45C", pillFg: "#15171A", mark: "#F3EBDD", dot: "#C9A45C", outline: false, deco: "frame", line: "none" };
+    case "marinheiro":
+      return { bg: "#FFFFFF", fg: "#13315C", accent: "#13315C", pillBg: "#13315C", pillFg: "#FFFFFF", mark: "#13315C", dot: "#D7263D", outline: true, deco: "stripes", line: "none" };
+    case "tasca":
+      return { bg: "#FFFDF8", fg: "#8E1020", accent: "#C8102E", pillBg: "#C8102E", pillFg: "#FFFFFF", mark: "#8E1020", dot: "#C8102E", outline: true, deco: "checks", line: "none" };
+    case "madeira":
+      return {
+        bg: "repeating-linear-gradient(176deg, #7A4E2D 0mm, #83552F 2.2mm, #74492A 4.6mm, #7E5130 7mm)",
+        fg: "#F6E7CF",
+        accent: "#E9B872",
+        pillBg: "#E9B872",
+        pillFg: "#3B2414",
+        mark: "#F6E7CF",
+        dot: "#E9B872",
+        outline: false,
+        deco: "grain",
+        line: "none",
+      };
     case "minimal":
       return { bg: "#FFFFFF", fg: INK, accent: INK, pillBg: INK, pillFg: "#FFFFFF", mark: INK, dot: INK, outline: true, deco: "none", line: "none" };
     default:
@@ -206,6 +226,37 @@ function Decoration({ theme, beach, round, size, u }: { theme: Theme; beach: boo
         <span aria-hidden className="pointer-events-none absolute rounded-full" style={{ width: u(40), height: u(40), bottom: u(-14), right: u(-16), background: theme.tint }} />
       </>
     );
+  if (theme.deco === "stripes") {
+    // Faixa de riscas no topo (camisola de marinheiro) e uma âncora no canto de baixo.
+    return (
+      <>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0"
+          style={{ height: u(9), background: `repeating-linear-gradient(180deg, ${theme.accent} 0 ${u(1.5)}, #FFFFFF ${u(1.5)} ${u(3)})` }}
+        />
+        <svg viewBox="0 0 24 24" aria-hidden className="pointer-events-none absolute" style={{ width: u(11), height: u(11), right: u(6), bottom: u(14), opacity: 0.18 }} fill="none" stroke={theme.accent} strokeWidth="1.8" strokeLinecap="round">
+          <circle cx="12" cy="5" r="2.2" />
+          <path d="M12 7.2V21M7 11h10M4 14c0 4 3.6 7 8 7s8-3 8-7" />
+        </svg>
+      </>
+    );
+  }
+  if (theme.deco === "checks") {
+    // Toalha de tasca: faixa de quadrados vermelhos e brancos no topo.
+    const q = u(3.2);
+    return (
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{ height: u(8), background: `repeating-conic-gradient(${theme.accent} 0 25%, #FFFFFF 0 50%) 0 0 / calc(${q} * 2) calc(${q} * 2)` }}
+      />
+    );
+  }
+  if (theme.deco === "grain") {
+    // Madeira: veios claros por cima do fundo e uma moldura fina dourada.
+    return <span aria-hidden className="pointer-events-none absolute" style={{ inset: u(3.4), border: `${u(0.35)} solid ${theme.accent}`, borderRadius: u(5.6), opacity: 0.7 }} />;
+  }
   if (theme.deco === "tiles") {
     const t = u(7.5);
     const corner = (pos: React.CSSProperties) => (
@@ -474,7 +525,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
   );
   const chip = (activeNow: boolean) =>
     `min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${activeNow ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft hover:border-brand"}`;
-  const fixedPalette = style === "praia" || style === "azulejo" || style === "noite" || style === "minimal";
+  const fixedPalette = !["marca", "claro", "formas"].includes(style);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 print:m-0 print:max-w-none print:p-0">
