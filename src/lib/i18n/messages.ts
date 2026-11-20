@@ -23,6 +23,8 @@ const pt = {
   menu: {
     nav: "Ementa",
     sections: "Secções",
+    /** Separador das categorias sem secção, quando outras categorias têm secção. */
+    mainSection: "Ementa",
     categories: "Categorias",
     inOrder: (n: number) => `${n} no pedido`,
     myOrders: "Os meus pedidos",
@@ -226,6 +228,7 @@ const en: Messages = {
   menu: {
     nav: "Menu",
     sections: "Sections",
+    mainSection: "Menu",
     categories: "Categories",
     inOrder: (n) => `${n} in your order`,
     myOrders: "My orders",

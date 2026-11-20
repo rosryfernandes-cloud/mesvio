@@ -5,6 +5,7 @@ export const de: Messages = {
   menu: {
     nav: "Speisekarte",
     sections: "Bereiche",
+    mainSection: "Speisekarte",
     categories: "Kategorien",
     inOrder: (n) => `${n} in der Bestellung`,
     myOrders: "Meine Bestellungen",

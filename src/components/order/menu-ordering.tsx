@@ -12,6 +12,9 @@ import { apiErrorText, issueText } from "@/lib/i18n/messages";
 
 type Props = { menu: TableMenuView; tableToken: string };
 
+/** Chave do separador das categorias sem secção (não colide com nomes de secção reais). */
+const NO_SECTION = "\u0000sem-secao";
+
 export function MenuOrdering({ menu, tableToken }: Props) {
   const router = useRouter();
   const { locale, t } = useI18n();
@@ -45,10 +48,21 @@ export function MenuOrdering({ menu, tableToken }: Props) {
 
   // Secções da ementa (ex.: Comida / Bebidas / Bar & Cocktails) mostradas uma de cada vez, em separadores.
   // Chave estável (nome original da secção), para o separador escolhido sobreviver à mudança de língua.
-  const sections = useMemo(() => [...new Set(menu.categories.flatMap((c) => (c.sectionKey ? [c.sectionKey] : [])))], [menu]);
+  // Categorias sem secção, quando outras têm, vão para um separador próprio ("Ementa"): nunca podem
+  // ficar escondidas (bug de 20/11: o Marradas só mostrava as categorias com secção, sobremesas e vinhos).
+  const anySection = menu.categories.some((c) => c.sectionKey);
+  const keyOf = (c: (typeof menu.categories)[number]) => (anySection ? (c.sectionKey ?? NO_SECTION) : undefined);
+  const sections = useMemo(
+    () => [...new Set(menu.categories.flatMap((c) => (c.sectionKey ? [c.sectionKey] : anySection ? [NO_SECTION] : [])))],
+    [menu, anySection],
+  );
   const sectionLabel = useMemo(
-    () => new Map(menu.categories.flatMap((c) => (c.sectionKey ? [[c.sectionKey, c.section ?? c.sectionKey] as const] : []))),
-    [menu],
+    () =>
+      new Map<string, string>([
+        [NO_SECTION, t.menu.mainSection],
+        ...menu.categories.flatMap((c) => (c.sectionKey ? [[c.sectionKey, c.section ?? c.sectionKey] as [string, string]] : [])),
+      ]),
+    [menu, t.menu.mainSection],
   );
   const [activeSection, setActiveSection] = useState(sections[0]);
   const navRef = useRef<HTMLElement>(null);
@@ -72,12 +86,13 @@ export function MenuOrdering({ menu, tableToken }: Props) {
     if (nav && window.scrollY > nav.offsetTop) window.scrollTo({ top: nav.offsetTop });
   }
 
-  const visible = sections.length > 0 ? menu.categories.filter((c) => c.sectionKey === activeSection) : menu.categories;
+  const visible = sections.length > 0 ? menu.categories.filter((c) => keyOf(c) === activeSection) : menu.categories;
   const cartCountBySection = new Map<string, number>();
   for (const c of menu.categories) {
-    if (!c.sectionKey) continue;
+    const key = keyOf(c);
+    if (!key) continue;
     const n = c.products.reduce((s, p) => s + (qtyByProduct.get(p.ref) ?? 0), 0);
-    cartCountBySection.set(c.sectionKey, (cartCountBySection.get(c.sectionKey) ?? 0) + n);
+    cartCountBySection.set(key, (cartCountBySection.get(key) ?? 0) + n);
   }
 
   return (
