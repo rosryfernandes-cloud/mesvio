@@ -41,18 +41,51 @@ const WHO = { todos: "Todos os lugares", mesas: "Só mesas", camas: "Só camas" 
 type Who = keyof typeof WHO;
 
 /**
- * Estilos das placas (mesmo QR e textos, aparência diferente):
- * - marca: fundo na cor do restaurante, faixa menta e onda (o original);
- * - claro: fundo branco, letras e detalhes na cor do restaurante (bom para logótipos escuros);
- * - minimal: preto e branco, sem decoração (impressão mais barata, combina com tudo).
+ * Desenhos das placas (mesmo QR e textos, aparência diferente). Os três primeiros usam a cor do
+ * restaurante; praia, azulejo e noite têm cores próprias; formas mistura a cor do restaurante com branco.
  */
 const STYLES = {
-  marca: { label: "Cor do restaurante" },
-  claro: { label: "Fundo claro" },
-  minimal: { label: "Minimal (preto e branco)" },
+  marca: { label: "Cor do restaurante", hint: "Fundo na cor da casa, onda menta" },
+  claro: { label: "Fundo claro", hint: "Branco com detalhes na cor da casa" },
+  formas: { label: "Formas", hint: "Círculos suaves na cor da casa" },
+  praia: { label: "Praia", hint: "Areia, sol e ondas" },
+  azulejo: { label: "Azulejo", hint: "Tasca portuguesa, azul e creme" },
+  noite: { label: "Noite", hint: "Escuro com moldura dourada" },
+  minimal: { label: "Minimal", hint: "Preto e branco, impressão mais barata" },
 } as const;
 type Style = keyof typeof STYLES;
-type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; deco: boolean };
+/** Decoração de fundo e linha por cima da assinatura. */
+type Deco = "palm" | "sun" | "tiles" | "frame" | "blobs" | "none";
+type Line = "wave" | "waves" | "none";
+type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; dot: string; outline: boolean; deco: Deco; line: Line; tint?: string };
+
+/** Mistura uma cor hexadecimal com branco (t = 0 fica igual, t = 1 fica branco). */
+function tintOf(hex: string, t: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return "#EEF2EF";
+  const n = parseInt(m[1], 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(c + (255 - c) * t));
+  return `#${ch.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function themeFor(style: Style, brand: string): Theme {
+  switch (style) {
+    case "claro":
+      return { bg: "#FFFFFF", fg: brand, accent: brand, pillBg: brand, pillFg: "#FFFFFF", mark: brand, dot: MINT, outline: true, deco: "palm", line: "wave" };
+    case "formas":
+      return { bg: "#FFFFFF", fg: INK, accent: brand, pillBg: brand, pillFg: "#FFFFFF", mark: INK, dot: brand, outline: true, deco: "blobs", line: "none", tint: tintOf(brand, 0.78) };
+    case "praia":
+      return { bg: "#F6EBDD", fg: "#12485A", accent: "#2A9DB5", pillBg: "#EE7F55", pillFg: "#FFFFFF", mark: "#12485A", dot: "#EE7F55", outline: false, deco: "sun", line: "waves" };
+    case "azulejo":
+      return { bg: "#FBF7EF", fg: "#1E3F8A", accent: "#1E3F8A", pillBg: "#1E3F8A", pillFg: "#FBF7EF", mark: "#1E3F8A", dot: "#1E3F8A", outline: true, deco: "tiles", line: "none" };
+    case "noite":
+      return { bg: "#15171A", fg: "#F3EBDD", accent: "#C9A45C", pillBg: "#C9A45C", pillFg: "#15171A", mark: "#F3EBDD", dot: "#C9A45C", outline: false, deco: "frame", line: "none" };
+    case "minimal":
+      return { bg: "#FFFFFF", fg: INK, accent: INK, pillBg: INK, pillFg: "#FFFFFF", mark: INK, dot: INK, outline: true, deco: "none", line: "none" };
+    default:
+      return { bg: brand, fg: "#FFFFFF", accent: MINT, pillBg: MINT, pillFg: INK, mark: "#FFFFFF", dot: MINT, outline: false, deco: "palm", line: "wave" };
+  }
+}
 
 const DEFAULT_BRAND = "#062D25";
 const MINT = "#91E9C3";
@@ -125,6 +158,75 @@ function Wave({ height, color = MINT }: { height: string; color?: string }) {
   );
 }
 
+/** Três ondas paralelas (desenho Praia). */
+function Waves({ height, color }: { height: string; color: string }) {
+  return (
+    <svg viewBox="0 0 200 30" preserveAspectRatio="none" aria-hidden style={{ width: "100%", height, display: "block" }}>
+      {[6, 15, 24].map((y, i) => (
+        <path key={y} d={`M0 ${y}c25-7 50-7 75 0s50 7 75 0 37-6 50-2`} fill="none" stroke={color} strokeWidth={2.4 - i * 0.5} opacity={1 - i * 0.25} vectorEffect="non-scaling-stroke" />
+      ))}
+    </svg>
+  );
+}
+
+/** Um azulejo (padrão de 4 pétalas), desenhado em SVG para imprimir nítido a qualquer tamanho. */
+function Tile({ color, bg }: { color: string; bg: string }) {
+  return (
+    <svg viewBox="0 0 40 40" aria-hidden style={{ width: "100%", height: "100%", display: "block" }}>
+      <rect width="40" height="40" fill={bg} />
+      <rect x="1" y="1" width="38" height="38" fill="none" stroke={color} strokeWidth="1.4" />
+      {[[0, 0], [40, 0], [0, 40], [40, 40]].map(([cx, cy]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="9" fill="none" stroke={color} strokeWidth="2" />
+      ))}
+      <path d="M20 6C24 13 27 16 34 20 27 24 24 27 20 34 16 27 13 24 6 20 13 16 16 13 20 6Z" fill={color} />
+      <circle cx="20" cy="20" r="3.4" fill={bg} />
+    </svg>
+  );
+}
+
+/** Decoração de fundo de cada desenho (fica por trás do conteúdo). */
+function Decoration({ theme, beach, round, size, u }: { theme: Theme; beach: boolean; round: boolean; size: string; u: (v: number) => string }) {
+  if (theme.deco === "palm") return beach && !round ? <Palm size={size} color={theme.accent} /> : null;
+  if (theme.deco === "frame") {
+    const r = round ? "50%" : undefined;
+    return (
+      <>
+        <span aria-hidden className="pointer-events-none absolute" style={{ inset: u(3.4), border: `${u(0.45)} solid ${theme.accent}`, borderRadius: r ?? u(5.6) }} />
+        <span aria-hidden className="pointer-events-none absolute" style={{ inset: u(4.6), border: `${u(0.18)} solid ${theme.accent}`, borderRadius: r ?? u(4.6) }} />
+      </>
+    );
+  }
+  if (round) return null;
+  if (theme.deco === "sun")
+    return <span aria-hidden className="pointer-events-none absolute rounded-full" style={{ width: u(34), height: u(34), top: u(-12), right: u(-10), background: "#F9CDB0" }} />;
+  if (theme.deco === "blobs")
+    return (
+      <>
+        <span aria-hidden className="pointer-events-none absolute rounded-full" style={{ width: u(52), height: u(52), top: u(-22), left: u(-20), background: theme.tint }} />
+        <span aria-hidden className="pointer-events-none absolute rounded-full" style={{ width: u(40), height: u(40), bottom: u(-14), right: u(-16), background: theme.tint }} />
+      </>
+    );
+  if (theme.deco === "tiles") {
+    const t = u(7.5);
+    const corner = (pos: React.CSSProperties) => (
+      <div aria-hidden className="pointer-events-none absolute grid" style={{ gridTemplateColumns: `${t} ${t}`, ...pos }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{ width: t, height: t }}>
+            <Tile color={theme.accent} bg={theme.bg} />
+          </div>
+        ))}
+      </div>
+    );
+    return (
+      <>
+        {corner({ top: 0, left: 0 })}
+        {corner({ top: 0, right: 0 })}
+      </>
+    );
+  }
+  return null;
+}
+
 /** QR em caixa branca com cantos menta à volta (como uma mira de câmara). */
 function QrBox({ svg, box, s, accent = MINT }: { svg: string; box: number; s: number; accent?: string }) {
   const gap = 2.6 * s, arm = 7 * s, line = 0.7 * s;
@@ -177,12 +279,6 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
   const natural = new Intl.Collator("pt", { numeric: true });
   const brand = demo ? DEFAULT_BRAND : (est.brandColor ?? DEFAULT_BRAND);
-  const theme: Theme =
-    style === "claro"
-      ? { bg: "#FFFFFF", fg: brand, accent: brand, pillBg: brand, pillFg: "#FFFFFF", mark: brand, deco: true }
-      : style === "minimal"
-        ? { bg: "#FFFFFF", fg: INK, accent: INK, pillBg: INK, pillFg: "#FFFFFF", mark: INK, deco: false }
-        : { bg: brand, fg: "#FFFFFF", accent: MINT, pillBg: MINT, pillFg: INK, mark: "#FFFFFF", deco: true };
   const active = tables.filter((t) => t.active).map((t) => ({ ...t, payFirst: effectiveOrderingMode(est.plan, t.mode) === "pay_first" }));
   // Folha de palmeira só em quem tem camas (praia); num restaurante de cidade fica só a onda.
   const beach = active.some((t) => t.payFirst);
@@ -225,250 +321,305 @@ export default async function SignsPage({ params, searchParams }: Props) {
       </p>
     </div>
   );
-  const Pill = ({ label, size }: { label: string; size: number }) => (
+  const Pill = ({ label, size, theme }: { label: string; size: number; theme: Theme }) => (
     <span className="inline-block rounded-full font-extrabold whitespace-nowrap uppercase" style={{ background: theme.pillBg, color: theme.pillFg, fontSize: u(size), padding: `${u(size * 0.32)} ${u(size * 1.1)}`, letterSpacing: "0.02em", lineHeight: 1.15 }}>
       {label}
     </span>
   );
-  const Signature = ({ size }: { size: number }) => (
+  const Signature = ({ size, theme }: { size: number; theme: Theme }) => (
     <p className="m-0 flex items-baseline justify-center" style={{ gap: u(size * 0.45), fontSize: u(size) }}>
       <span style={{ opacity: 0.85 }}>com</span>
-      <Wordmark height={u(size * 1.2)} color={theme.mark} dot={style === "minimal" ? INK : MINT} />
+      <Wordmark height={u(size * 1.2)} color={theme.mark} dot={theme.dot} />
     </p>
   );
+  const LineAbove = ({ theme, height }: { theme: Theme; height: string }) =>
+    theme.line === "wave" ? <Wave height={height} color={theme.accent} /> : theme.line === "waves" ? <Waves height={height} color={theme.accent} /> : <div style={{ height }} />;
   const headline = (pt: string, big: number) => (pt.length > 12 ? big * 0.82 : big);
 
+  type Place = (typeof places)[number];
+  /** Uma placa, no tamanho real. `print` = vai para o PDF (as miniaturas dos desenhos não vão). */
+  const plate = (t: Place, st: Style, print: boolean) => {
+    const theme = themeFor(st, brand);
+    return (
+      <section
+        key={`${st}-${t.id}`}
+        aria-label={print ? t.label || f.label : undefined}
+        aria-hidden={print ? undefined : true}
+        className={`${print ? "placa shadow-lg print:shadow-none" : ""} relative flex shrink-0 overflow-hidden`}
+        style={{
+          width: `${f.w}mm`,
+          height: `${f.h}mm`,
+          background: theme.bg,
+          color: theme.fg,
+          // Fundo claro: contorno fino para se ver o recorte da placa no ecrã e no PDF.
+          outline: theme.outline ? "0.2mm solid #d4d4d4" : undefined,
+          outlineOffset: "-0.1mm",
+          borderRadius: format === "autocolante" ? "50%" : "8mm",
+          flexDirection: format === "balcao" ? "row" : "column",
+          alignItems: "center",
+          justifyContent: format === "autocolante" ? "center" : undefined,
+          padding: `${pad}mm`,
+          boxSizing: "border-box",
+          printColorAdjust: "exact",
+          WebkitPrintColorAdjust: "exact",
+        }}
+      >
+        <Decoration theme={theme} beach={beach} round={format === "autocolante"} size={format === "balcao" ? "40mm" : u(34)} u={u} />
+
+        {format === "autocolante" ? (
+          <div className="relative z-10 flex flex-col items-center text-center" style={{ gap: "1.3mm" }}>
+            <Brand />
+            <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
+            <Pill label={t.label} size={5} theme={theme} />
+            <p className="m-0 leading-tight font-extrabold" style={{ fontSize: "2.5mm" }}>
+              {t.cta.pt} <span className="font-medium italic opacity-90">· {t.cta.en}</span>
+            </p>
+            <Wordmark height="2.2mm" color={theme.mark} dot={theme.dot} />
+          </div>
+        ) : format === "balcao" ? (
+          <>
+            <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
+            <div className="relative z-10 flex min-w-0 flex-col items-start" style={{ marginLeft: "9mm", gap: "2.2mm", alignSelf: "stretch", justifyContent: "center", paddingBottom: "6mm" }}>
+              <Brand />
+              <Pill label={t.label} size={4.4} theme={theme} />
+              <div>
+                <p className="m-0 leading-none font-extrabold" style={{ fontSize: `${headline(t.cta.pt, 11)}mm` }}>
+                  {t.cta.pt}
+                </p>
+                {t.cta.sub && (
+                  <p className="m-0 font-bold" style={{ fontSize: "5mm", marginTop: "1.2mm" }}>
+                    {t.cta.sub}
+                  </p>
+                )}
+                <p className="m-0 italic opacity-90" style={{ fontSize: "4.4mm", marginTop: "1.4mm" }}>
+                  {t.cta.en}
+                </p>
+              </div>
+              {payments && (
+                <p className="m-0 font-semibold opacity-85" style={{ fontSize: "2.8mm" }}>
+                  Apple Pay · MB WAY · cartão
+                </p>
+              )}
+            </div>
+            <div className="absolute inset-x-0 bottom-0 z-10" style={{ paddingBottom: "4mm" }}>
+              <LineAbove theme={theme} height="7mm" />
+              <div className="flex justify-end" style={{ paddingRight: "10mm", marginTop: "0.6mm" }}>
+                <Signature size={3} theme={theme} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {format === "etiqueta" && (
+              <div className="relative z-10 flex w-full justify-around" style={{ height: u(9), paddingInline: "18mm", boxSizing: "border-box" }} aria-hidden>
+                {[0, 1].map((i) => (
+                  <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${theme.accent}`, opacity: 0.7, marginTop: "-1mm" }} />
+                ))}
+              </div>
+            )}
+            <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center text-center" style={{ gap: u(2.8) }}>
+              {!demo && <Brand />}
+              {t.label && <Pill label={t.label} size={4.6} theme={theme} />}
+              <div>
+                <p className="m-0 leading-none font-extrabold" style={{ fontSize: u(headline(t.cta.pt, 10)) }}>
+                  {t.cta.pt}
+                </p>
+                {t.cta.sub && (
+                  <p className="m-0 font-bold" style={{ fontSize: u(5), marginTop: u(1.2) }}>
+                    {t.cta.sub}
+                  </p>
+                )}
+                <p className="m-0 italic opacity-90" style={{ fontSize: u(4.4), marginTop: u(1.4) }}>
+                  {t.cta.en}
+                </p>
+              </div>
+              <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
+              {payments && (
+                <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
+                  Apple Pay · MB WAY · cartão
+                </p>
+              )}
+            </div>
+            <div className="relative z-10 w-full" style={{ marginInline: `-${pad}mm`, width: `${f.w}mm`, marginBottom: `-${pad - 4}mm` }}>
+              <LineAbove theme={theme} height={u(6)} />
+              <div style={{ marginTop: u(1.2) }}>
+                <Signature size={3.1} theme={theme} />
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  };
+
+  // Miniaturas dos desenhos: a primeira placa, no formato escolhido, reduzida para caber no cartão.
+  const sample = places[0];
+  const thumbW = 132;
+  const thumbScale = thumbW / (f.w * 3.7795);
+  const step = (n: number, title: string, extra?: React.ReactNode) => (
+    <h2 className="flex items-center gap-2 text-base font-bold">
+      <span className="grid size-6 place-items-center rounded-full bg-brand text-xs text-white">{n}</span>
+      {title}
+      {extra}
+    </h2>
+  );
+  const chip = (activeNow: boolean) =>
+    `min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${activeNow ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft hover:border-brand"}`;
+  const fixedPalette = style === "praia" || style === "azulejo" || style === "noite" || style === "minimal";
+
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10 print:m-0 print:max-w-none print:p-0">
+    <main className="mx-auto max-w-7xl px-4 py-10 print:m-0 print:max-w-none print:p-0">
       <style>{`@page { size: ${f.w}mm ${f.h}mm; margin: 0 } @media print { html, body { background: #fff } .placa { break-after: page; box-shadow: none !important; margin: 0 !important } }`}</style>
       <div className="print:hidden">
         <Link prefetch={false} href={`/central/restaurantes/${id}`} className="text-sm text-ink-soft underline">
           ← {est.name}
         </Link>
         <h1 className="mt-3 text-3xl tracking-tight">Placas · {est.name}</h1>
-        <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-          Uma página por lugar, no tamanho exato, com o QR de cada um, o logótipo e a cor do restaurante (separador Aparência). Carregue em
-          Imprimir, escolha <strong>Guardar como PDF</strong> e envie o PDF à gráfica.
-        </p>
-        <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-          Para a gráfica: acrílico (5 mm; a etiqueta 3 mm) com impressão UV <strong>no verso</strong>, camada de branco e acabamento mate, cantos
-          arredondados de 8 mm.
-          {format === "etiqueta" && " Os dois círculos no topo marcam os furos de 5 mm."}
-          {(format === "balcao" || format === "a4") && " Para o balcão ou a entrada, crie um lugar com esse nome (ex.: Balcão) e imprima só esse."}
-          {format === "base" &&
-            " Uma só placa para todos os lugares: o quadrado branco recebe o autocolante do QR (Folha de autocolantes QR), que se troca se alguém pedir de fora (\"Novo QR Code\" em Imprimir QR Codes)."}
-          {format === "autocolantes" &&
-            " Vinil branco com laminação mate, corte em quadrados de 48 mm (cantos de 3 mm). Peça uns 20% a mais para substituições."}
-        </p>
+        <p className="mt-2 max-w-2xl text-sm text-ink-soft">Escolha com o cliente o desenho, a cor e o formato. À direita vê as placas exatamente como vão para a gráfica.</p>
         {isLocalOnlyUrl(base) && (
           <p role="alert" className="mt-4 max-w-2xl rounded-xl border border-amber-500 bg-amber-50 px-4 py-3 text-sm">
             <strong>Atenção:</strong> estes códigos apontam para <code>{base}</code>, que um telemóvel não abre. Imprima a partir do site público.
           </p>
         )}
-        <PlateBranding establishmentId={id} brandColor={est.brandColor} hasLogo={Boolean(est.logo)} />
-        <div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="Formato">
-          {(Object.keys(FORMATS) as Format[]).map((k) => (
-            <Link
-              key={k}
-              href={href({ formato: k, lugares: FORMATS[k].who })}
-              aria-current={k === format ? "page" : undefined}
-              className={`min-h-11 rounded-xl border px-4 py-2.5 text-sm font-semibold ${k === format ? "border-brand bg-brand text-white" : "border-line bg-card"}`}
-            >
-              {FORMATS[k].label} <span className="font-normal opacity-80">· {FORMATS[k].size}</span>
-            </Link>
-          ))}
-        </div>
-        {format !== "autocolantes" && (
-          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Estilo">
-            <span className="text-sm text-ink-soft">Estilo:</span>
-            {(Object.keys(STYLES) as Style[]).map((k) => (
-              <Link
-                key={k}
-                href={href({ estilo: k })}
-                aria-current={k === style ? "page" : undefined}
-                className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${k === style ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft"}`}
-              >
-                {STYLES[k].label}
-              </Link>
-            ))}
-          </div>
-        )}
-        {format === "base" && (
-          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Marca">
-            {[false, true].map((d) => (
-              <Link
-                key={String(d)}
-                href={href({ demo: d })}
-                aria-current={d === demo ? "page" : undefined}
-                className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${d === demo ? "border-brand text-brand" : "border-line bg-card text-ink-soft"}`}
-              >
-                {d ? "Sem marca (para demonstrações)" : "Com a marca do restaurante"}
-              </Link>
-            ))}
-          </div>
-        )}
-        <div className={`mt-3 flex flex-wrap items-center gap-2 ${format === "base" ? "hidden" : ""}`} role="group" aria-label="Lugares">
-          {(Object.keys(WHO) as Who[]).map((k) => (
-            <Link
-              key={k}
-              href={href({ lugares: k })}
-              aria-current={k === who ? "page" : undefined}
-              className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold ${k === who ? "border-brand text-brand" : "border-line bg-card text-ink-soft"}`}
-            >
-              {WHO[k]}
-            </Link>
-          ))}
-          <span className="ml-2 text-sm text-ink-soft">
-            {format === "autocolantes"
-              ? `${perPlace.length} autocolantes em ${sheets.length} ${sheets.length === 1 ? "folha" : "folhas"}`
-              : `${places.length} ${places.length === 1 ? "placa" : "placas"}`}
-          </span>
-        </div>
-        <div className="mt-6">
-          <PrintButton />
-        </div>
-        {places.length === 0 && <p className="mt-6 text-ink-soft">Não há lugares deste tipo.</p>}
       </div>
 
-      {format === "autocolantes" ? (
-        <div className="mt-8 flex flex-wrap gap-6 print:mt-0 print:block">
-          {sheets.map((sheet, i) => (
-            <section
-              key={i}
-              aria-label={`Folha ${i + 1}`}
-              className="placa grid shrink-0 bg-white shadow-lg print:shadow-none"
-              style={{ width: "210mm", height: "297mm", padding: "14mm 6mm", boxSizing: "border-box", gridTemplateColumns: "repeat(4, 48mm)", gridAutoRows: "48mm", gap: "2mm", alignContent: "start" }}
-            >
-              {sheet.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex flex-col items-center justify-center"
-                  style={{ width: "48mm", height: "48mm", borderRadius: "3mm", outline: "0.1mm solid #d4d4d4", outlineOffset: "-0.05mm", color: INK, gap: "1.4mm" }}
-                >
-                  <div className="[&_svg]:h-full [&_svg]:w-full" style={{ width: "35mm", height: "35mm" }} dangerouslySetInnerHTML={{ __html: t.svg }} />
-                  <p className="m-0 leading-none font-extrabold whitespace-nowrap uppercase" style={{ fontSize: "4.2mm", letterSpacing: "0.02em" }}>
-                    {t.label}
-                  </p>
-                </div>
-              ))}
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-8 flex flex-wrap gap-6 print:mt-0 print:block">
-          {places.map((t) => (
-            <section
-              key={t.id}
-              aria-label={t.label || f.label}
-              className="placa relative flex shrink-0 overflow-hidden shadow-lg print:shadow-none"
-              style={{
-                width: `${f.w}mm`,
-                height: `${f.h}mm`,
-                background: theme.bg,
-                color: theme.fg,
-                // Fundo branco: contorno fino para se ver o recorte da placa no ecrã e no PDF.
-                outline: style === "marca" ? undefined : "0.2mm solid #d4d4d4",
-                outlineOffset: "-0.1mm",
-                borderRadius: format === "autocolante" ? "50%" : "8mm",
-                flexDirection: format === "balcao" ? "row" : "column",
-                alignItems: "center",
-                justifyContent: format === "autocolante" ? "center" : undefined,
-                padding: `${pad}mm`,
-                boxSizing: "border-box",
-                printColorAdjust: "exact",
-                WebkitPrintColorAdjust: "exact",
-              }}
-            >
-              {beach && theme.deco && format !== "autocolante" && <Palm size={format === "balcao" ? "40mm" : u(34)} color={theme.accent} />}
-
-              {format === "autocolante" ? (
-                <div className="flex flex-col items-center text-center" style={{ gap: "1.3mm" }}>
-                  <Brand />
-                  <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
-                  <Pill label={t.label} size={5} />
-                  <p className="m-0 leading-tight font-extrabold" style={{ fontSize: "2.5mm" }}>
-                    {t.cta.pt} <span className="font-medium italic opacity-90">· {t.cta.en}</span>
-                  </p>
-                  <Wordmark height="2.2mm" color={theme.mark} dot={style === "minimal" ? INK : MINT} />
-                </div>
-              ) : format === "balcao" ? (
-                <>
-                  <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
-                  <div className="relative z-10 flex min-w-0 flex-col items-start" style={{ marginLeft: "9mm", gap: "2.2mm", alignSelf: "stretch", justifyContent: "center", paddingBottom: "6mm" }}>
-                    <Brand />
-                    <Pill label={t.label} size={4.4} />
-                    <div>
-                      <p className="m-0 leading-none font-extrabold" style={{ fontSize: `${headline(t.cta.pt, 11)}mm` }}>
-                        {t.cta.pt}
-                      </p>
-                      {t.cta.sub && (
-                        <p className="m-0 font-bold" style={{ fontSize: "5mm", marginTop: "1.2mm" }}>
-                          {t.cta.sub}
-                        </p>
-                      )}
-                      <p className="m-0 italic opacity-90" style={{ fontSize: "4.4mm", marginTop: "1.4mm" }}>
-                        {t.cta.en}
-                      </p>
-                    </div>
-                    {payments && (
-                      <p className="m-0 font-semibold opacity-85" style={{ fontSize: "2.8mm" }}>
-                        Apple Pay · MB WAY · cartão
-                      </p>
+      <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,420px)_1fr] print:mt-0 print:block">
+        <aside className="grid gap-6 rounded-3xl border border-line bg-card p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto print:hidden">
+          {format !== "autocolantes" && (
+            <section className="grid gap-3" aria-label="Desenho">
+              {step(1, "Desenho")}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                {(Object.keys(STYLES) as Style[]).map((k) => (
+                  <Link
+                    key={k}
+                    href={href({ estilo: k })}
+                    aria-current={k === style ? "page" : undefined}
+                    className={`group grid gap-2 rounded-2xl border-2 p-2 text-left transition ${k === style ? "border-brand bg-brand-soft/40" : "border-transparent hover:border-line"}`}
+                  >
+                    {sample ? (
+                      <div className="mx-auto overflow-hidden rounded-lg" style={{ width: `${thumbW}px`, height: `${(thumbW * f.h) / f.w}px` }}>
+                        <div style={{ transform: `scale(${thumbScale})`, transformOrigin: "top left", width: `${f.w}mm`, height: `${f.h}mm` }}>{plate(sample, k, false)}</div>
+                      </div>
+                    ) : (
+                      <div className="mx-auto rounded-lg" style={{ width: `${thumbW}px`, height: `${(thumbW * f.h) / f.w}px`, background: themeFor(k, brand).bg, outline: "1px solid #d4d4d4" }} />
                     )}
-                  </div>
-                  <div className="absolute inset-x-0 bottom-0" style={{ paddingBottom: "4mm" }}>
-                    {theme.deco && <Wave height="7mm" color={theme.accent} />}
-                    <div className="flex justify-end" style={{ paddingRight: "10mm", marginTop: "0.6mm" }}>
-                      <Signature size={3} />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {format === "etiqueta" && (
-                    <div className="flex w-full justify-around" style={{ height: u(9), paddingInline: "18mm", boxSizing: "border-box" }} aria-hidden>
-                      {[0, 1].map((i) => (
-                        <span key={i} className="rounded-full" style={{ width: "5mm", height: "5mm", border: `0.25mm solid ${theme.accent}`, opacity: 0.7, marginTop: "-1mm" }} />
-                      ))}
-                    </div>
-                  )}
-                  <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center text-center" style={{ gap: u(2.8) }}>
-                    {!demo && <Brand />}
-                    {t.label && <Pill label={t.label} size={4.6} />}
-                    <div>
-                      <p className="m-0 leading-none font-extrabold" style={{ fontSize: u(headline(t.cta.pt, 10)) }}>
-                        {t.cta.pt}
-                      </p>
-                      {t.cta.sub && (
-                        <p className="m-0 font-bold" style={{ fontSize: u(5), marginTop: u(1.2) }}>
-                          {t.cta.sub}
-                        </p>
-                      )}
-                      <p className="m-0 italic opacity-90" style={{ fontSize: u(4.4), marginTop: u(1.4) }}>
-                        {t.cta.en}
-                      </p>
-                    </div>
-                    <QrBox svg={t.svg} box={f.qr} s={s} accent={theme.accent} />
-                    <div className="flex flex-col items-center" style={{ gap: u(1.2) }}>
-                      {payments && (
-                        <p className="m-0 font-semibold opacity-85" style={{ fontSize: u(2.7) }}>
-                          Apple Pay · MB WAY · cartão
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="w-full" style={{ marginInline: `-${pad}mm`, width: `${f.w}mm`, marginBottom: `-${pad - 4}mm` }}>
-                    {theme.deco ? <Wave height={u(6)} color={theme.accent} /> : <div style={{ height: u(6) }} />}
-                    <div style={{ marginTop: u(1.2) }}>
-                      <Signature size={3.1} />
-                    </div>
-                  </div>
-                </>
-              )}
+                    <span className="block text-sm leading-tight font-semibold">{STYLES[k].label}</span>
+                    <span className="block text-xs leading-snug text-ink-soft">{STYLES[k].hint}</span>
+                  </Link>
+                ))}
+              </div>
             </section>
-          ))}
-        </div>
-      )}
+          )}
+
+          <section className="grid gap-2" aria-label="Cor e logótipo">
+            {step(format === "autocolantes" ? 1 : 2, "Cor e logótipo")}
+            {fixedPalette && format !== "autocolantes" && (
+              <p className="text-xs text-ink-soft">O desenho &ldquo;{STYLES[style].label}&rdquo; tem cores próprias: a cor do restaurante não muda a placa, só o logótipo.</p>
+            )}
+            <PlateBranding establishmentId={id} brandColor={est.brandColor} hasLogo={Boolean(est.logo)} />
+          </section>
+
+          <section className="grid gap-2" aria-label="Formato">
+            {step(format === "autocolantes" ? 2 : 3, "Formato")}
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {(Object.keys(FORMATS) as Format[]).map((k) => (
+                <Link
+                  key={k}
+                  href={href({ formato: k, lugares: FORMATS[k].who })}
+                  aria-current={k === format ? "page" : undefined}
+                  className={`rounded-xl border px-3 py-2 text-sm ${k === format ? "border-brand bg-brand text-white" : "border-line bg-card hover:border-brand"}`}
+                >
+                  <span className="block font-semibold">{FORMATS[k].label}</span>
+                  <span className="block text-xs opacity-80">{FORMATS[k].size}</span>
+                </Link>
+              ))}
+            </div>
+            {format === "base" && (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Marca">
+                {[false, true].map((d) => (
+                  <Link key={String(d)} href={href({ demo: d })} aria-current={d === demo ? "page" : undefined} className={chip(d === demo)}>
+                    {d ? "Sem marca (demonstrações)" : "Com a marca do restaurante"}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {format !== "base" && (
+            <section className="grid gap-2" aria-label="Lugares">
+              {step(format === "autocolantes" ? 3 : 4, "Lugares")}
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(WHO) as Who[]).map((k) => (
+                  <Link key={k} href={href({ lugares: k })} aria-current={k === who ? "page" : undefined} className={chip(k === who)}>
+                    {WHO[k]}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="grid gap-3 border-t border-line pt-5" aria-label="Imprimir">
+            <p className="text-sm">
+              <strong>
+                {format === "autocolantes"
+                  ? `${perPlace.length} autocolantes em ${sheets.length} ${sheets.length === 1 ? "folha" : "folhas"}`
+                  : `${places.length} ${places.length === 1 ? "placa" : "placas"}`}
+              </strong>
+              {format !== "autocolantes" && format !== "base" && places.length > 0 && ` · ${(places.length * 4).toLocaleString("pt-PT")} € a 4 € cada`}
+            </p>
+            <div>
+              <PrintButton />
+            </div>
+            <p className="text-xs text-ink-soft">
+              Em Imprimir escolha <strong>Guardar como PDF</strong> e envie o PDF à gráfica: cada página é uma placa.
+            </p>
+            <details className="text-xs text-ink-soft">
+              <summary className="cursor-pointer font-semibold text-ink">Instruções para a gráfica</summary>
+              <p className="mt-2">
+                Acrílico (5 mm; a etiqueta 3 mm) com impressão UV <strong>no verso</strong>, camada de branco e acabamento mate, cantos arredondados de
+                8 mm.
+                {format === "etiqueta" && " Os dois círculos no topo marcam os furos de 5 mm."}
+                {(format === "balcao" || format === "a4") && " Para o balcão ou a entrada, crie um lugar com esse nome (ex.: Balcão) e imprima só esse."}
+                {format === "base" &&
+                  " Uma só placa para todos os lugares: o quadrado branco recebe o autocolante do QR (Folha de autocolantes QR), que se troca se alguém pedir de fora (\"Novo QR Code\" em Imprimir QR Codes)."}
+                {format === "autocolantes" && " Vinil branco com laminação mate, corte em quadrados de 48 mm (cantos de 3 mm). Peça uns 20% a mais para substituições."}
+              </p>
+            </details>
+          </section>
+        </aside>
+
+        <section aria-label="Pré-visualização" className="min-w-0">
+          <h2 className="mb-4 text-sm font-semibold tracking-wide text-ink-soft uppercase print:hidden">Pré-visualização, em tamanho real</h2>
+          {places.length === 0 && <p className="text-ink-soft print:hidden">Não há lugares deste tipo.</p>}
+          {format === "autocolantes" ? (
+            <div className="flex flex-wrap gap-6 print:block">
+              {sheets.map((sheet, i) => (
+                <section
+                  key={i}
+                  aria-label={`Folha ${i + 1}`}
+                  className="placa grid shrink-0 bg-white shadow-lg print:shadow-none"
+                  style={{ width: "210mm", height: "297mm", padding: "14mm 6mm", boxSizing: "border-box", gridTemplateColumns: "repeat(4, 48mm)", gridAutoRows: "48mm", gap: "2mm", alignContent: "start" }}
+                >
+                  {sheet.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex flex-col items-center justify-center"
+                      style={{ width: "48mm", height: "48mm", borderRadius: "3mm", outline: "0.1mm solid #d4d4d4", outlineOffset: "-0.05mm", color: INK, gap: "1.4mm" }}
+                    >
+                      <div className="[&_svg]:h-full [&_svg]:w-full" style={{ width: "35mm", height: "35mm" }} dangerouslySetInnerHTML={{ __html: t.svg }} />
+                      <p className="m-0 leading-none font-extrabold whitespace-nowrap uppercase" style={{ fontSize: "4.2mm", letterSpacing: "0.02em" }}>
+                        {t.label}
+                      </p>
+                    </div>
+                  ))}
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-6 print:block">{places.map((t) => plate(t, style, true))}</div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

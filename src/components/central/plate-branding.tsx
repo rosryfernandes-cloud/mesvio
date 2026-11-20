@@ -3,6 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+/** Cores rápidas para escolher com o cliente (a primeira é a cor MESVIO). */
+const PRESETS = [
+  { hex: "#062D25", name: "Verde MESVIO" },
+  { hex: "#0E4D64", name: "Azul mar" },
+  { hex: "#1E3F8A", name: "Azul azulejo" },
+  { hex: "#2F6B3B", name: "Verde oliva" },
+  { hex: "#B5532E", name: "Terracota" },
+  { hex: "#7A1F2B", name: "Bordeaux" },
+  { hex: "#C08A2E", name: "Mostarda" },
+  { hex: "#1F2937", name: "Grafite" },
+] as const;
+
 /** Placas: escolher a cor e enviar o logótipo do restaurante sem sair da página (muda também na ementa). */
 export function PlateBranding({ establishmentId, brandColor, hasLogo }: { establishmentId: string; brandColor: string | null; hasLogo: boolean }) {
   const router = useRouter();
@@ -39,9 +51,27 @@ export function PlateBranding({ establishmentId, brandColor, hasLogo }: { establ
   }
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-card p-4">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex w-full flex-wrap gap-2" role="group" aria-label="Cores rápidas">
+        {PRESETS.map((c) => (
+          <button
+            key={c.hex}
+            type="button"
+            disabled={busy}
+            title={c.name}
+            aria-label={c.name}
+            aria-pressed={color.toLowerCase() === c.hex.toLowerCase()}
+            onClick={() => {
+              setColor(c.hex);
+              void saveColor(c.hex);
+            }}
+            className={`size-9 rounded-full border-2 disabled:opacity-50 ${color.toLowerCase() === c.hex.toLowerCase() ? "border-ink ring-2 ring-brand-soft" : "border-white shadow-[0_0_0_1px_#dfe5df]"}`}
+            style={{ background: c.hex }}
+          />
+        ))}
+      </div>
       <label className="flex items-center gap-2 text-sm font-semibold">
-        Cor do restaurante
+        Outra cor
         <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 cursor-pointer rounded-lg border border-line bg-paper" aria-label="Cor do restaurante" />
       </label>
       <button type="button" disabled={busy} onClick={() => saveColor(color)} className="min-h-10 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">
