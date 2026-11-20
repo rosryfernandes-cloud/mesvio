@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { establishmentTimezone, listEntries, pairShifts } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight, localTime } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
@@ -13,6 +14,8 @@ const cell = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
 export async function GET(request: Request) {
   const ctx = await guardStaff(request, { mutating: false, permission: "settings.edit" });
   if (ctx instanceof Response) return ctx;
+  // Picar ponto em testes: só a equipa MESVIO (ver staff-panel.tsx).
+  if (!(await findPlatformAdmin(await getDb(), ctx.userId))) return new Response("Não encontrado", { status: 404 });
   const url = new URL(request.url);
   const from = day.safeParse(url.searchParams.get("de")).data;
   const to = day.safeParse(url.searchParams.get("ate")).data;

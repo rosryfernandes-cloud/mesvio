@@ -304,10 +304,12 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         {(
           (menuOnly
             ? [
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes", "ponto"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
                 "esgotados",
                 ...(me.canEditSettings ? (["mesas"] as const) : []),
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
+                // Picar ponto em testes: por agora só a equipa MESVIO o vê (os donos ainda não).
+                ...(me.isPlatformAdmin ? (["ponto"] as const) : []),
               ]
             : [
                 "pedidos",
@@ -315,7 +317,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
                 "mesas",
                 "esgotados",
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes", "ponto"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                ...(me.isPlatformAdmin ? (["ponto"] as const) : []),
               ]) as Tab[]
         ).map((t) => (
           <button

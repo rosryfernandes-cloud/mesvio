@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { addEmployee, DESCRIPTOR_SCHEMA, establishmentTimezone, getFaceEnabled, kioskToken, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
@@ -12,6 +13,8 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export async function GET(request: Request) {
   const ctx = await guardStaff(request, { mutating: false, permission: "settings.edit" });
   if (ctx instanceof Response) return ctx;
+  // Picar ponto em testes: só a equipa MESVIO (ver staff-panel.tsx).
+  if (!(await findPlatformAdmin(await getDb(), ctx.userId))) return new Response("Não encontrado", { status: 404 });
   const db = await getDb();
   const tz = await establishmentTimezone(db, ctx);
   const url = new URL(request.url);
@@ -45,6 +48,8 @@ const schema = z.discriminatedUnion("action", [
 export async function POST(request: Request) {
   const ctx = await guardStaff(request, { mutating: true, permission: "settings.edit" });
   if (ctx instanceof Response) return ctx;
+  // Picar ponto em testes: só a equipa MESVIO (ver staff-panel.tsx).
+  if (!(await findPlatformAdmin(await getDb(), ctx.userId))) return new Response("Não encontrado", { status: 404 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ message: parsed.error.issues[0]?.message?.startsWith("O PIN") ? parsed.error.issues[0].message : "Verifique o nome e o PIN (4 algarismos)." }, 400);
   const db = await getDb();
