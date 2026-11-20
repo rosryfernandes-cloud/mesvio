@@ -10,7 +10,7 @@ type Step =
   | { kind: "pin"; emp: Employee }
   | { kind: "camera"; emp: Employee; pin: string }
   | { kind: "face" }
-  | { kind: "confirm"; match: Match; photo: Blob | null }
+  | { kind: "confirm"; match: Match; photo: Blob | null; auto?: boolean }
   | { kind: "done"; name: string; what: "in" | "out"; at: string };
 
 const IDLE_MS = 45_000;
@@ -80,19 +80,7 @@ export function ClockKiosk({ token }: { token: string }) {
 
       {step.kind === "list" && (
         <>
-          {face && (
-            <button
-              type="button"
-              onClick={() => setStep({ kind: "face" })}
-              className="mb-6 flex min-h-28 w-full items-center justify-center gap-4 rounded-3xl bg-brand px-6 text-white active:opacity-90"
-            >
-              <span aria-hidden="true" className="text-5xl">🙂</span>
-              <span className="text-left">
-                <span className="block text-2xl font-extrabold">Picar com a cara</span>
-                <span className="block text-base opacity-85">Olhe para a câmara e pisque os olhos</span>
-              </span>
-            </button>
-          )}
+          {face && <FaceScan auto token={token} onMatch={(match, photo) => setStep({ kind: "confirm", match, photo, auto: true })} />}
           <p className="mb-4 text-lg text-ink-soft">{face ? "Ou toque no seu nome e use o PIN." : "Toque no seu nome."}</p>
           {employees && employees.length === 0 && <p className="text-ink-soft">Ainda não há funcionários. O responsável acrescenta-os no painel, no separador Ponto.</p>}
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -130,6 +118,7 @@ export function ClockKiosk({ token }: { token: string }) {
           token={token}
           match={step.match}
           photo={step.photo}
+          auto={step.auto}
           onNo={() => setStep({ kind: "list" })}
           onDone={(r) => setStep({ kind: "done", name: r.name, what: r.kind, at: r.at })}
         />
@@ -148,7 +137,7 @@ export function ClockKiosk({ token }: { token: string }) {
 
       <p className="mt-auto pt-8 text-center text-xs text-ink-soft">
         Registo dos tempos de trabalho (Código do Trabalho, art. 202.º). A foto serve só de prova do registo e só o responsável do restaurante
-        a vê.{face ? " O reconhecimento facial é opcional: pode usar sempre o nome e o PIN." : ""}
+        a vê.{face ? " A câmara procura caras para picar o ponto mas não grava; a foto só é guardada no momento do registo. Pode usar sempre o nome e o PIN." : ""}
       </p>
     </main>
   );
@@ -272,7 +261,8 @@ function Camera({
 }
 
 /** Reconhecimento: espera por uma cara clara e um piscar de olhos (prova de vida), e pergunta ao servidor quem é. */
-function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => void; onMatch: (m: Match, photo: Blob | null) => void }) {
+/** `auto`: fica sempre ligado no ecrã inicial (sem botões) e volta a tentar sozinho quando não reconhece. */
+function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onBack?: () => void; onMatch: (m: Match, photo: Blob | null) => void; auto?: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   const [hint, setHint] = useState("A abrir a câmara…");
   const [error, setError] = useState<string | null>(null);
@@ -285,10 +275,12 @@ function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => voi
   useEffect(() => {
     let stream: MediaStream | null = null;
     let stop = false;
-    const give = setTimeout(() => {
-      stop = true;
-      setError("Não consegui. Toque em Voltar e use o seu nome e PIN.");
-    }, 25_000);
+    const give = auto
+      ? undefined
+      : setTimeout(() => {
+          stop = true;
+          setError("Não consegui. Toque em Voltar e use o seu nome e PIN.");
+        }, 25_000);
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 } }, audio: false });
@@ -297,10 +289,13 @@ function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => voi
         await video.current.play();
         setHint("A preparar…");
         const faceapi = await loadFaceEngine();
-        let sawOpen = false, sawClosed = false;
+        let sawOpen = false, sawClosed = false, idle = 0;
         while (!stop) {
           const r = await readFace(faceapi, video.current!);
-          if (!r) setHint("Ponha a cara dentro do oval.");
+          // Sem ninguém à frente, olha menos vezes (poupa bateria) e esquece um piscar a meio.
+          idle = r && r.size >= 0.2 ? 0 : idle + 1;
+          if (idle > 8) sawOpen = sawClosed = false;
+          if (!r) setHint(auto ? "Olhe para a câmara e pisque os olhos." : "Ponha a cara dentro do oval.");
           else if (r.size < 0.2) setHint("Chegue um pouco mais perto.");
           else if (!sawOpen) {
             if (r.eyes > EYES_OPEN) sawOpen = true;
@@ -318,21 +313,42 @@ function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => voi
             const data = res ? await res.json().catch(() => ({})) : {};
             if (stop) return;
             if (res?.ok) return onMatchRef.current(data as Match, photo);
-            setError(data.message ?? "Não o reconheci.");
-            return;
+            if (!auto) {
+              setError(data.message ?? "Não o reconheci.");
+              return;
+            }
+            // Modo automático: avisa e volta a tentar daqui a pouco.
+            setHint(data.message ?? "Não o reconheci. Tente outra vez ou use o seu nome e PIN.");
+            sawOpen = sawClosed = false;
+            await new Promise((res) => setTimeout(res, 2500));
+            continue;
           }
-          await new Promise((res) => setTimeout(res, 120));
+          await new Promise((res) => setTimeout(res, idle > 8 ? 600 : 120));
         }
       } catch {
-        if (!stop) setError("Não foi possível usar a câmara. Toque em Voltar e use o seu nome e PIN.");
+        if (!stop) setError(auto ? "Sem câmara: toque no seu nome e use o PIN." : "Não foi possível usar a câmara. Toque em Voltar e use o seu nome e PIN.");
       }
     })();
     return () => {
       stop = true;
-      clearTimeout(give);
+      if (give) clearTimeout(give);
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [token]);
+  }, [token, auto]);
+
+  if (auto)
+    return (
+      <div className="mb-6 flex items-center gap-4 rounded-3xl bg-brand p-4 text-white">
+        <div className="relative aspect-[3/4] w-32 shrink-0 overflow-hidden rounded-2xl bg-ink sm:w-40">
+          <video ref={video} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
+          <span aria-hidden="true" className="pointer-events-none absolute top-[10%] left-1/2 h-[70%] w-[66%] -translate-x-1/2 rounded-[50%] border-2 border-white/90" />
+        </div>
+        <div>
+          <p className="text-2xl font-extrabold">Picar com a cara</p>
+          <p role="status" className={`mt-1 text-lg ${error ? "text-amber-200" : "opacity-90"}`}>{error ?? hint}</p>
+        </div>
+      </div>
+    );
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center">
@@ -349,9 +365,35 @@ function FaceScan({ token, onBack, onMatch }: { token: string; onBack: () => voi
   );
 }
 
-function Confirm({ token, match, photo, onNo, onDone }: { token: string; match: Match; photo: Blob | null; onNo: () => void; onDone: (r: { name: string; kind: "in" | "out"; at: string }) => void }) {
+function Confirm({
+  token,
+  match,
+  photo,
+  auto = false,
+  onNo,
+  onDone,
+}: {
+  token: string;
+  match: Match;
+  photo: Blob | null;
+  auto?: boolean;
+  onNo: () => void;
+  onDone: (r: { name: string; kind: "in" | "out"; at: string }) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Modo automático: regista sozinho ao fim de 3 segundos (Cancelar se o reconheceu mal).
+  const [count, setCount] = useState(auto ? 3 : 0);
+  const yesRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    if (!auto || error) return;
+    if (count === 0) {
+      void yesRef.current();
+      return;
+    }
+    const t = setTimeout(() => setCount((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [auto, count, error]);
   async function yes() {
     setBusy(true);
     const form = new FormData();
@@ -363,6 +405,18 @@ function Confirm({ token, match, photo, onNo, onDone }: { token: string; match: 
     if (!res?.ok) return setError(data.message ?? "Não foi possível registar. Use o nome e o PIN.");
     onDone(data);
   }
+  yesRef.current = yes;
+  if (auto)
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        <p className="text-5xl font-extrabold">Olá, {match.name}!</p>
+        <p className="mt-3 text-2xl">{busy ? "A registar…" : `A registar a ${label[match.next].toLowerCase()} em ${count}…`}</p>
+        {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+        <button type="button" onClick={onNo} disabled={busy} className="mt-8 min-h-16 w-full max-w-xs rounded-3xl border-2 border-line bg-card text-lg font-semibold">
+          Cancelar, não sou eu
+        </button>
+      </div>
+    );
   return (
     <div className="flex flex-1 flex-col items-center justify-center text-center">
       <p className="text-xl text-ink-soft">Olá!</p>

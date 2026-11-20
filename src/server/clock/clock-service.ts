@@ -363,6 +363,8 @@ async function punchEmployee(db: Db, token: string, employeeId: string, pin: str
       .where(eq(clockEntries.employeeId, emp.id))
       .orderBy(desc(clockEntries.at))
       .limit(1);
+    // Pela cara, o mesmo funcionário pode ser reconhecido duas vezes seguidas: em 2 minutos não se repete.
+    if (pin === null && last && now.getTime() - last.at.getTime() < 2 * 60_000) return { ok: true as const, kind: last.kind, at: last.at.toISOString(), name: emp.name };
     const kind = nextKind(last, now);
     await tx.insert(clockEntries).values({ organizationId: ids.organizationId, establishmentId: ids.establishmentId, employeeId: emp.id, kind, at: now, photo });
     return { ok: true as const, kind, at: now.toISOString(), name: emp.name };
