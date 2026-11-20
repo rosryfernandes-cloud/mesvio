@@ -113,7 +113,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
             <span className="min-w-0 flex-1">
               <span className="block font-extrabold">{t.menu.dailyMenu}</span>
               <span className="block text-sm text-ink-soft">
-                {daily.servingNow ? t.menu.dailyMenuServing(daily.from, daily.to) : t.menu.dailyMenuLater(daily.from, daily.to)}
+                {t.menu.dailyMenuToday}
               </span>
             </span>
             <span aria-hidden="true" className="text-xl text-brand">
@@ -273,7 +273,7 @@ function DailyMenuSheet({ daily, onClose }: { daily: NonNullable<TableMenuView["
       <div className="flex items-start justify-between gap-3 border-b border-line px-5 pt-5 pb-4">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight">{t.menu.dailyMenu}</h2>
-          <p className="text-sm text-ink-soft">{daily.servingNow ? t.menu.dailyMenuServing(daily.from, daily.to) : t.menu.dailyMenuLater(daily.from, daily.to)}</p>
+          <p className="text-sm text-ink-soft">{t.menu.dailyMenuToday}</p>
         </div>
         <button type="button" onClick={onClose} aria-label={t.menu.close} className="flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-card text-lg">
           ✕

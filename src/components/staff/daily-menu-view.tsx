@@ -26,7 +26,6 @@ const EMPTY: Section[] = [
   { title: "Sopa do dia", items: [{ name: "", half: "", full: "" }] },
   { title: "Pratos do dia", items: [{ name: "", half: "", full: "" }] },
 ];
-const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 const input = "min-h-11 rounded-xl border border-line bg-card px-3";
 const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-60";
@@ -180,7 +179,7 @@ export function DailyMenuView() {
           onClick={() =>
             void saveSettings(
               { ...settings, enabled: !settings.enabled },
-              settings.enabled ? "Menu do dia escondido da ementa." : `Menu do dia ligado: aparece das ${settings.from} às ${settings.to}.`,
+              settings.enabled ? "Menu do dia escondido da ementa." : "Menu do dia visível na ementa.",
             )
           }
           className={`flex items-center gap-3 rounded-2xl border-2 p-3 text-left disabled:opacity-60 ${settings.enabled ? "border-brand bg-brand-soft/50" : "border-line bg-paper"}`}
@@ -191,7 +190,7 @@ export function DailyMenuView() {
           <span>
             <span className="block font-semibold">{settings.enabled ? "Visível na ementa" : "Escondido da ementa"}</span>
             <span className="block text-sm text-ink-soft">
-              {settings.enabled ? `Aparece só ao almoço, das ${settings.from} às ${settings.to}. Fora dessa hora some sozinho.` : "Toque para voltar a mostrar."}
+              {settings.enabled ? "Os clientes veem-no no topo da ementa até o desligar aqui (por exemplo, ao fim do almoço)." : "Toque para voltar a mostrar."}
             </span>
           </span>
         </button>
@@ -295,15 +294,8 @@ export function DailyMenuView() {
       </section>
 
       <details className="rounded-3xl border border-line bg-card p-5" open={!configured}>
-        <summary className="cursor-pointer text-lg font-semibold">O que o menu inclui, horas e dias</summary>
+        <summary className="cursor-pointer text-lg font-semibold">O que o menu inclui</summary>
         <div className="mt-4 grid gap-4">
-          <label className="flex items-start gap-3">
-            <input type="checkbox" checked={settings.enabled} onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })} className="mt-1 size-5 accent-[var(--color-brand)]" />
-            <span>
-              <span className="font-semibold">Mostrar o menu do dia na ementa</span>
-              <span className="block text-sm text-ink-soft">Aparece no topo da ementa, nos dias escolhidos, e abre um pop-up com tudo.</span>
-            </span>
-          </label>
           <label className="grid gap-1 text-sm font-semibold">
             O menu inclui
             <input value={settings.includes} onChange={(e) => setSettings({ ...settings, includes: e.target.value })} className={`${input} font-normal`} />
@@ -316,33 +308,6 @@ export function DailyMenuView() {
             Nota (opcional)
             <input value={settings.note} onChange={(e) => setSettings({ ...settings, note: e.target.value })} placeholder="Ex.: Outras bebidas não incluídas no menu" className={`${input} font-normal`} />
           </label>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="grid gap-1 text-sm font-semibold">
-              Almoço das
-              <input type="time" value={settings.from} onChange={(e) => setSettings({ ...settings, from: e.target.value })} className={`${input} font-normal`} />
-            </label>
-            <label className="grid gap-1 text-sm font-semibold">
-              às
-              <input type="time" value={settings.to} onChange={(e) => setSettings({ ...settings, to: e.target.value })} className={`${input} font-normal`} />
-            </label>
-          </div>
-          <div role="group" aria-label="Dias com menu do dia" className="flex flex-wrap gap-2">
-            {DAYS.map((d, i) => {
-              const day = i + 1;
-              const on = settings.days.includes(day);
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setSettings({ ...settings, days: on ? settings.days.filter((x) => x !== day) : [...settings.days, day].sort() })}
-                  className={`min-h-10 min-w-12 rounded-xl border px-3 text-sm font-semibold ${on ? "border-brand bg-brand text-white" : "border-line bg-card text-ink-soft"}`}
-                >
-                  {d}
-                </button>
-              );
-            })}
-          </div>
           <div>
             <button type="button" disabled={busy !== null} onClick={() => void saveSettings(settings)} className={secondary}>
               Guardar definições
