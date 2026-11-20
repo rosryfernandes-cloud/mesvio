@@ -260,6 +260,13 @@
       "when": 1794835415057,
       "tag": "0036_avaliacoes_ligadas",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795195512105,
+      "tag": "0037_menu_do_dia",
+      "breakpoints": true
     }
   ]
 }

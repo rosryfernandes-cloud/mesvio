@@ -82,6 +82,8 @@ export const establishments = pgTable(
     timezone: text("timezone").notNull().default("Europe/Lisbon"),
     /** Horário semanal: { mon: [["12:00","15:00"],["19:00","23:00"]], ... } */
     openingHours: jsonb("opening_hours").$type<Record<string, [string, string][]>>(),
+    /** Menu do dia (src/server/menu/daily-menu.ts): o que inclui, a hora do almoço e os dias. null = desligado. */
+    dailyMenuSettings: jsonb("daily_menu_settings").$type<DailyMenuSettingsRow>(),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -278,6 +280,39 @@ export const serviceRequests = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (t) => [index("service_requests_open_idx").on(t.establishmentId, t.resolvedAt), index("service_requests_table_idx").on(t.tableId, t.createdAt)],
+);
+
+/** Formato guardado em `establishments.daily_menu_settings` (validado em daily-menu.ts). */
+export type DailyMenuSettingsRow = {
+  enabled: boolean;
+  includes: string;
+  extras: string;
+  note: string;
+  from: string;
+  to: string;
+  /** Dias da semana, 1 = segunda … 7 = domingo. */
+  days: number[];
+};
+/** Secções do menu de um dia (ex.: Sopa do dia, Pratos do dia, Sugestão do dia). Preços em cêntimos. */
+export type DailyMenuSectionRow = { title: string; items: { name: string; halfPriceCents: number | null; priceCents: number | null }[] };
+
+/**
+ * Menu do dia: o que o restaurante serve ao almoço num dia (muda todos os dias). Um por dia e por
+ * restaurante; o cliente vê-o num pop-up na ementa, com o que o menu inclui.
+ */
+export const dailyMenus = pgTable(
+  "daily_menus",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    /** Dia no fuso do restaurante (AAAA-MM-DD). */
+    menuDate: date("menu_date", { mode: "string" }).notNull(),
+    sections: jsonb("sections").$type<DailyMenuSectionRow[]>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("daily_menus_est_date_uq").on(t.establishmentId, t.menuDate)],
 );
 
 /**

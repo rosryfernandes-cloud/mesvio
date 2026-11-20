@@ -4,6 +4,7 @@ import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { getDb, type Db } from "@/server/db/client";
 import { cache } from "react";
 import { cachedPosCatalog, withLocalAvailability } from "@/server/catalog/availability";
+import { type DailyMenuView, loadDailyMenuForTable } from "@/server/menu/daily-menu";
 import { createDbTableDirectory, type TableDirectory } from "@/server/tables/table-directory";
 import type { PosModifierGroup } from "@/server/pos/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
@@ -37,6 +38,8 @@ export interface TableMenuView {
   pairings: Record<string, string[]>;
   /** Avaliações ligadas no painel: botão "Avaliar" na ementa (em todos os planos). */
   reviews: { enabled: boolean; googleUrl: string | null };
+  /** Menu do dia de hoje (pop-up no topo da ementa), se o restaurante o tiver ligado e preenchido. */
+  dailyMenu: DailyMenuView | null;
 }
 
 export async function getTableMenu(
@@ -53,12 +56,14 @@ export async function getTableMenu(
   const locale = deps.locale ?? DEFAULT_LOCALE;
   // Só fora do português há traduções a ler (uma consulta, no tenant do restaurante).
   const canOrder = planAllowsOrdering(found.plan) && found.pos.capabilities.createOrder;
-  const [tr, photos, showPhotos, pairings]: [MenuTranslator, Map<string, string>, boolean, Record<string, string[]>] = await Promise.all([
+  const [tr, photos, showPhotos, pairings, dailyMenu]: [MenuTranslator, Map<string, string>, boolean, Record<string, string[]>, DailyMenuView | null] = await Promise.all([
     loadMenuTranslations(db, found.organizationId, found.establishmentId, locale),
     productImageUrls(db, found.organizationId, found.establishmentId),
     menuPhotosEnabled(db, found.organizationId, found.establishmentId),
     // Só serve a quem pode pedir pela app; uma falha aqui nunca impede a ementa de abrir.
     canOrder ? loadPairings(db, found.organizationId, found.establishmentId).catch(() => ({})) : Promise.resolve({}),
+    // O menu do dia nunca impede a ementa de abrir.
+    loadDailyMenuForTable(db, found.organizationId, found.establishmentId, found.timezone).catch(() => null),
   ]);
   const categories = [...catalog.categories]
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -103,6 +108,7 @@ export async function getTableMenu(
     plan: found.plan,
     pairings,
     reviews: found.reviews ?? { enabled: false, googleUrl: null },
+    dailyMenu,
   };
 }
 

@@ -21,6 +21,7 @@ export function MenuOrdering({ menu, tableToken }: Props) {
   const cart = useCart(tableToken);
   const [selected, setSelected] = useState<MenuProductView | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [dailyOpen, setDailyOpen] = useState(false);
   const canOrder = menu.ordering.enabled;
 
   const products = useMemo(() => new Map(menu.categories.flatMap((c) => c.products).map((p) => [p.ref, p])), [menu]);
@@ -95,8 +96,33 @@ export function MenuOrdering({ menu, tableToken }: Props) {
     cartCountBySection.set(key, (cartCountBySection.get(key) ?? 0) + n);
   }
 
+  const daily = menu.dailyMenu;
+
   return (
     <>
+      {daily && (
+        <div className="px-4 pt-4">
+          <button
+            type="button"
+            onClick={() => setDailyOpen(true)}
+            className="flex w-full items-center gap-3 rounded-2xl border-2 border-brand bg-brand-soft/60 px-4 py-3 text-left"
+          >
+            <span aria-hidden="true" className="text-2xl">
+              🍽️
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-extrabold">{t.menu.dailyMenu}</span>
+              <span className="block text-sm text-ink-soft">
+                {daily.servingNow ? t.menu.dailyMenuServing(daily.from, daily.to) : t.menu.dailyMenuLater(daily.from, daily.to)}
+              </span>
+            </span>
+            <span aria-hidden="true" className="text-xl text-brand">
+              ›
+            </span>
+          </button>
+        </div>
+      )}
+      {daily && dailyOpen && <DailyMenuSheet daily={daily} onClose={() => setDailyOpen(false)} />}
       <nav
         ref={navRef}
         aria-label={t.menu.nav}
@@ -234,6 +260,74 @@ export function MenuOrdering({ menu, tableToken }: Props) {
         />
       )}
     </>
+  );
+}
+
+/** Pop-up do menu do dia: o que inclui, os pratos de hoje com os preços, e OK / ✕ para fechar. */
+function DailyMenuSheet({ daily, onClose }: { daily: NonNullable<TableMenuView["dailyMenu"]>; onClose: () => void }) {
+  const { t } = useI18n();
+  const hasHalf = daily.sections.some((s) => s.items.some((i) => i.halfPriceCents !== null));
+  const price = (c: number | null) => (c === null ? "" : formatEur(c));
+  return (
+    <Sheet label={t.menu.dailyMenu} onClose={onClose}>
+      <div className="flex items-start justify-between gap-3 border-b border-line px-5 pt-5 pb-4">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight">{t.menu.dailyMenu}</h2>
+          <p className="text-sm text-ink-soft">{daily.servingNow ? t.menu.dailyMenuServing(daily.from, daily.to) : t.menu.dailyMenuLater(daily.from, daily.to)}</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label={t.menu.close} className="flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-card text-lg">
+          ✕
+        </button>
+      </div>
+      <div className="grid gap-5 overflow-y-auto px-5 py-4">
+        {daily.includes && (
+          <div className="rounded-2xl bg-brand-soft/60 p-4">
+            <p className="text-sm font-bold">{t.menu.dailyMenuIncludes}</p>
+            <p className="mt-1">{daily.includes}</p>
+            {daily.extras && <p className="mt-2 text-sm font-semibold">{daily.extras}</p>}
+            {daily.note && <p className="mt-1 text-sm text-ink-soft">{daily.note}</p>}
+          </div>
+        )}
+        {daily.sections.map((s, i) => (
+          <section key={`${s.title}-${i}`} aria-label={s.title || t.menu.dailyMenu}>
+            <div className="mb-2 flex items-baseline gap-3 border-b border-line pb-1">
+              <h3 className="flex-1 text-sm font-bold tracking-wide uppercase">{s.title}</h3>
+              {hasHalf && s.items.some((it) => it.halfPriceCents !== null) && (
+                <>
+                  <span className="w-16 text-right text-xs font-semibold text-ink-soft">{t.menu.dailyMenuHalf}</span>
+                  <span className="w-16 text-right text-xs font-semibold text-ink-soft">{t.menu.dailyMenuFull}</span>
+                </>
+              )}
+            </div>
+            <ul className="grid gap-1.5">
+              {s.items.map((it, j) => (
+                <li key={`${it.name}-${j}`} className="flex items-baseline gap-3">
+                  <span className="flex-1">{it.name}</span>
+                  {s.items.some((x) => x.halfPriceCents !== null) ? (
+                    <>
+                      <span className="w-16 text-right tabular-nums">{price(it.halfPriceCents)}</span>
+                      <span className="w-16 text-right font-semibold tabular-nums">{price(it.priceCents)}</span>
+                    </>
+                  ) : (
+                    <span className="font-semibold tabular-nums">{price(it.priceCents)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        {!daily.includes && (daily.extras || daily.note) && (
+          <p className="text-sm text-ink-soft">
+            {daily.extras} {daily.note}
+          </p>
+        )}
+      </div>
+      <div className="border-t border-line p-4">
+        <button type="button" onClick={onClose} className="min-h-12 w-full rounded-2xl bg-brand font-semibold text-white">
+          {t.menu.ok}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
