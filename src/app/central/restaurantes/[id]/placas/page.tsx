@@ -54,13 +54,16 @@ const STYLES = {
   marinheiro: { label: "Marinheiro", hint: "Riscas azuis e âncora, praia e peixe" },
   tasca: { label: "Tasca", hint: "Quadrados vermelhos e brancos" },
   madeira: { label: "Madeira", hint: "Tons quentes, tascas e churrasqueiras" },
+  marmore: { label: "Mármore", hint: "Branco com veios e bronze, mais fino" },
+  vinho: { label: "Vinho", hint: "Bordeaux e uvas, garrafeiras e wine bars" },
+  neon: { label: "Néon", hint: "Fundo escuro com letras a brilhar, bares" },
   minimal: { label: "Minimal", hint: "Preto e branco, impressão mais barata" },
 } as const;
 type Style = keyof typeof STYLES;
 /** Decoração de fundo e linha por cima da assinatura. */
-type Deco = "palm" | "sun" | "tiles" | "frame" | "blobs" | "stripes" | "checks" | "grain" | "none";
+type Deco = "palm" | "sun" | "tiles" | "frame" | "blobs" | "stripes" | "checks" | "grain" | "grapes" | "glow" | "none";
 type Line = "wave" | "waves" | "none";
-type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; dot: string; outline: boolean; deco: Deco; line: Line; tint?: string };
+type Theme = { bg: string; fg: string; accent: string; pillBg: string; pillFg: string; mark: string; dot: string; outline: boolean; deco: Deco; line: Line; tint?: string; glow?: string };
 
 /** Mistura uma cor hexadecimal com branco (t = 0 fica igual, t = 1 fica branco). */
 function tintOf(hex: string, t: number): string {
@@ -100,6 +103,23 @@ function themeFor(style: Style, brand: string): Theme {
         deco: "grain",
         line: "none",
       };
+    case "marmore":
+      return {
+        bg: "linear-gradient(118deg, transparent 38%, rgba(140,140,135,0.22) 39%, transparent 41.5%), linear-gradient(64deg, transparent 60%, rgba(140,140,135,0.16) 61%, transparent 63.5%), linear-gradient(150deg, transparent 22%, rgba(140,140,135,0.12) 23%, transparent 24.5%), linear-gradient(160deg, #F8F8F6, #ECECE7)",
+        fg: "#1F2421",
+        accent: "#9C8456",
+        pillBg: "#1F2421",
+        pillFg: "#FFFFFF",
+        mark: "#1F2421",
+        dot: "#9C8456",
+        outline: true,
+        deco: "frame",
+        line: "none",
+      };
+    case "vinho":
+      return { bg: "#4A0E1E", fg: "#F5E6D3", accent: "#D9A35B", pillBg: "#D9A35B", pillFg: "#4A0E1E", mark: "#F5E6D3", dot: "#D9A35B", outline: false, deco: "grapes", line: "none" };
+    case "neon":
+      return { bg: "#0B0B12", fg: "#FFFFFF", accent: "#FF2BD6", pillBg: "#FF2BD6", pillFg: "#0B0B12", mark: "#FFFFFF", dot: "#22E1FF", outline: false, deco: "glow", line: "none", glow: "#FF2BD6" };
     case "minimal":
       return { bg: "#FFFFFF", fg: INK, accent: INK, pillBg: INK, pillFg: "#FFFFFF", mark: INK, dot: INK, outline: true, deco: "none", line: "none" };
     default:
@@ -250,6 +270,29 @@ function Decoration({ theme, beach, round, size, u }: { theme: Theme; beach: boo
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0"
         style={{ height: u(8), background: `repeating-conic-gradient(${theme.accent} 0 25%, #FFFFFF 0 50%) 0 0 / calc(${q} * 2) calc(${q} * 2)` }}
+      />
+    );
+  }
+  if (theme.deco === "grapes") {
+    // Cacho de uvas com folha no canto de cima (desenho Vinho).
+    const g = [[12, 9], [17, 9], [22, 9], [14.5, 13.5], [19.5, 13.5], [17, 18]];
+    return (
+      <svg viewBox="0 0 34 30" aria-hidden className="pointer-events-none absolute" style={{ width: u(26), height: u(23), top: u(4), right: u(4), opacity: 0.5 }}>
+        <path d="M17 6c0-3 2-5 5-5M17 6c-3-4-9-4-11 0 4 0 7 1 11 0Z" fill="none" stroke={theme.accent} strokeWidth="1.2" strokeLinecap="round" />
+        {g.map(([cx, cy]) => (
+          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.6" fill="none" stroke={theme.accent} strokeWidth="1.1" />
+        ))}
+      </svg>
+    );
+  }
+  if (theme.deco === "glow") {
+    // Néon: moldura a brilhar (sombra da mesma cor por dentro e por fora).
+    const r = round ? "50%" : u(5.6);
+    return (
+      <span
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{ inset: u(3.6), border: `${u(0.6)} solid ${theme.accent}`, borderRadius: r, boxShadow: `0 0 ${u(2.2)} ${theme.accent}, inset 0 0 ${u(2.2)} ${theme.accent}` }}
       />
     );
   }
@@ -420,6 +463,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
           boxSizing: "border-box",
           printColorAdjust: "exact",
           WebkitPrintColorAdjust: "exact",
+          textShadow: theme.glow ? `0 0 1.2mm ${theme.glow}` : undefined,
         }}
       >
         <Decoration theme={theme} beach={beach} round={format === "autocolante"} size={format === "balcao" ? "40mm" : u(34)} u={u} />
