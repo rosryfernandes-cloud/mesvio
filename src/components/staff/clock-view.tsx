@@ -6,8 +6,38 @@ import { FaceEnroll } from "./face-enroll";
 /** Picar ponto no painel: link do tablet, funcionários (nome e PIN) e registos com as horas. */
 
 type Employee = { id: string; name: string; active: boolean; hasFace: boolean };
-type Shift = { employeeId: string; employeeName: string; inAt: string | null; outAt: string | null; minutes: number | null; inEntryId: string | null; outEntryId: string | null };
-type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[] };
+type Kind = "in" | "out" | "pause" | "resume";
+type Entry = { id: string; employeeId: string; employeeName: string; kind: Kind; at: string; hasPhoto: boolean; source: "tablet" | "manual"; originalAt: string | null };
+type Shift = {
+  employeeId: string;
+  employeeName: string;
+  inAt: string | null;
+  outAt: string | null;
+  minutes: number | null;
+  pauseMinutes: number;
+  status: "closed" | "open" | "forgot" | "noIn";
+  corrected: boolean;
+  entries: Entry[];
+  inEntryId: string | null;
+  outEntryId: string | null;
+};
+type Correction = { at: string; action: "add" | "edit" | "delete"; text: string };
+type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[] };
+
+const KIND_LABEL: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
+
+/** Diferença (ms) entre a hora local no fuso e UTC, num dado instante. */
+function offsetMs(instant: number, tz: string): number {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(instant));
+  const g = (t: string) => Number(p.find((x) => x.type === t)?.value);
+  return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")) - instant;
+}
+/** ISO → valor de <input type="datetime-local"> na hora do restaurante, e o contrário. */
+const toLocalInput = (iso: string, tz: string) => new Date(new Date(iso).getTime() + offsetMs(new Date(iso).getTime(), tz)).toISOString().slice(0, 16);
+function fromLocalInput(value: string, tz: string): string {
+  const guess = new Date(`${value}:00Z`).getTime();
+  return new Date(guess - offsetMs(guess - offsetMs(guess, tz), tz)).toISOString();
+}
 
 const input = "min-h-11 rounded-xl border border-line bg-card px-3";
 const primary = "min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-60";
@@ -28,6 +58,8 @@ export function ClockView() {
   const [newPin, setNewPin] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState<Employee | null>(null);
+  const [editing, setEditing] = useState<Shift | null>(null);
+  const [adding, setAdding] = useState<{ employeeId: string; kind: Kind; at: string } | null>(null);
 
   const load = useCallback(async (r?: { from: string; to: string }) => {
     const q = r ? `?de=${r.from}&ate=${r.to}` : "";
@@ -59,7 +91,8 @@ export function ClockView() {
   if (!data) return <p className="text-ink-soft">{message?.text ?? "A carregar o picar ponto…"}</p>;
 
   const link = `${window.location.origin}/ponto/${data.kioskToken}`;
-  const working = data.shifts.filter((s) => s.inAt && !s.outAt && Date.now() - new Date(s.inAt).getTime() < 16 * 3600_000);
+  const working = data.shifts.filter((s) => s.status === "open");
+  const forgotten = data.shifts.filter((s) => s.status === "forgot" || s.status === "noIn");
   const totals = new Map<string, { name: string; minutes: number; shifts: number }>();
   for (const s of data.shifts) {
     if (s.minutes === null) continue;
@@ -242,9 +275,26 @@ export function ClockView() {
 
         {working.length > 0 && (
           <p className="rounded-2xl bg-brand-soft/60 px-4 py-3 text-sm">
-            <strong>A trabalhar agora:</strong> {working.map((s) => `${s.employeeName} (desde as ${time(s.inAt!)})`).join(", ")}
+            <strong>A trabalhar agora:</strong>{" "}
+            {working.map((s) => `${s.employeeName} (desde as ${time(s.inAt!)}${s.entries[s.entries.length - 1].kind === "pause" ? ", em pausa" : ""})`).join(", ")}
           </p>
         )}
+        {forgotten.length > 0 && (
+          <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800">
+            <strong>{forgotten.length === 1 ? "1 turno incompleto" : `${forgotten.length} turnos incompletos`}</strong> (saída esquecida ou entrada em falta). Toque em
+            &ldquo;Corrigir&rdquo; na linha para acrescentar a hora que falta.
+          </p>
+        )}
+        <div>
+          <button
+            type="button"
+            className={ghost}
+            onClick={() => setAdding({ employeeId: data.employees.find((e) => e.active)?.id ?? "", kind: "in", at: toLocalInput(new Date().toISOString(), data.timezone) })}
+            disabled={data.employees.length === 0}
+          >
+            + Acrescentar registo esquecido
+          </button>
+        </div>
 
         <div className="flex flex-wrap items-end gap-2">
           <button type="button" className={ghost} onClick={() => preset(data.today, data.today)}>
@@ -293,14 +343,16 @@ export function ClockView() {
                   <th className="py-2 pr-3 font-semibold">Dia</th>
                   <th className="py-2 pr-3 font-semibold">Entrada</th>
                   <th className="py-2 pr-3 font-semibold">Saída</th>
-                  <th className="py-2 font-semibold">Horas</th>
+                  <th className="py-2 pr-3 font-semibold">Pausas</th>
+                  <th className="py-2 pr-3 font-semibold">Horas</th>
+                  <th className="py-2 font-semibold" />
                 </tr>
               </thead>
               <tbody>
                 {data.shifts.map((s, i) => (
                   <tr key={`${s.inEntryId ?? s.outEntryId}-${i}`} className="border-b border-line/60">
                     <td className="py-2 pr-3 font-semibold">{s.employeeName}</td>
-                    <td className="py-2 pr-3">{dayOf((s.inAt ?? s.outAt)!)}</td>
+                    <td className="py-2 pr-3">{dayOf(s.inAt ?? s.outAt ?? s.entries[0].at)}</td>
                     <td className="py-2 pr-3 tabular-nums">
                       {s.inAt ? (
                         <button type="button" className="underline decoration-dotted" onClick={() => s.inEntryId && setPhoto(s.inEntryId)} title="Ver a foto">
@@ -315,19 +367,136 @@ export function ClockView() {
                         <button type="button" className="underline decoration-dotted" onClick={() => s.outEntryId && setPhoto(s.outEntryId)} title="Ver a foto">
                           {time(s.outAt)}
                         </button>
+                      ) : s.status === "open" ? (
+                        <span className="text-ok">a trabalhar</span>
                       ) : (
-                        <span className="text-ink-soft">—</span>
+                        <span className="font-semibold text-danger">esquecida</span>
                       )}
                     </td>
-                    <td className="py-2 font-semibold tabular-nums">{s.minutes !== null ? hm(s.minutes) : ""}</td>
+                    <td className="py-2 pr-3 tabular-nums">{s.pauseMinutes ? hm(s.pauseMinutes) : ""}</td>
+                    <td className="py-2 pr-3 font-semibold tabular-nums">
+                      {s.minutes !== null ? hm(s.minutes) : ""}
+                      {s.corrected && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" title="Hora acrescentada ou corrigida pelo responsável">corrigido</span>}
+                    </td>
+                    <td className="py-2 text-right">
+                      <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setEditing(s)}>
+                        Corrigir
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-ink-soft">Toque na hora para ver a foto do registo.</p>
+            <p className="mt-2 text-xs text-ink-soft">Toque na hora para ver a foto do registo. As correções ficam guardadas no histórico.</p>
           </div>
         )}
       </section>
+
+      <details className="rounded-3xl border border-line bg-card p-5">
+        <summary className="cursor-pointer text-lg font-semibold">Histórico de correções</summary>
+        <p className="mt-2 text-sm text-ink-soft">Cada hora acrescentada, mudada ou apagada fica aqui, com a data. A lei pede que o registo de tempos não seja alterado sem deixar rasto.</p>
+        {data.corrections.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-soft">Ainda não houve correções.</p>
+        ) : (
+          <ul className="mt-3 grid gap-1 text-sm">
+            {data.corrections.map((c, i) => (
+              <li key={i} className="flex gap-3 border-b border-line/60 py-1.5">
+                <span className="w-32 shrink-0 text-ink-soft tabular-nums">{new Date(c.at).toLocaleString("pt-PT", { timeZone: data.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                <span>{c.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+
+      {editing && (
+        <div role="dialog" aria-label="Corrigir turno" className="fixed inset-0 z-50 grid place-items-center bg-ink/60 p-4" onClick={() => setEditing(null)}>
+          <div className="grid max-h-[90dvh] w-full max-w-md gap-3 overflow-y-auto rounded-3xl bg-card p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">Corrigir · {editing.employeeName}</h3>
+            <p className="text-sm text-ink-soft">Mude a hora e carregue em Guardar, ou apague um registo feito por engano. Fica tudo no histórico.</p>
+            {editing.entries.map((en) => (
+              <EntryRow
+                key={en.id}
+                entry={en}
+                tz={data.timezone}
+                busy={busy}
+                onSave={async (at) => {
+                  if (await post({ action: "editEntry", id: en.id, at }, `${KIND_LABEL[en.kind]} de ${editing.employeeName} corrigida.`)) setEditing(null);
+                }}
+                onDelete={async () => {
+                  if (!window.confirm(`Apagar a ${KIND_LABEL[en.kind].toLowerCase()} das ${time(en.at)}? Deixa de contar nas horas (fica no histórico).`)) return;
+                  if (await post({ action: "deleteEntry", id: en.id }, `${KIND_LABEL[en.kind]} apagada.`)) setEditing(null);
+                }}
+              />
+            ))}
+            {(editing.status === "forgot" || editing.status === "open" || editing.status === "noIn") && (
+              <button
+                type="button"
+                className={primary}
+                onClick={() => {
+                  const ref = editing.entries[editing.entries.length - 1].at;
+                  setAdding({ employeeId: editing.employeeId, kind: editing.status === "noIn" ? "in" : "out", at: toLocalInput(ref, data.timezone) });
+                  setEditing(null);
+                }}
+              >
+                {editing.status === "noIn" ? "Acrescentar a entrada que falta" : "Acrescentar a saída"}
+              </button>
+            )}
+            <button type="button" className={ghost} onClick={() => setEditing(null)}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {adding && (
+        <div role="dialog" aria-label="Acrescentar registo" className="fixed inset-0 z-50 grid place-items-center bg-ink/60 p-4" onClick={() => setAdding(null)}>
+          <form
+            className="grid w-full max-w-md gap-3 rounded-3xl bg-card p-5"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = data.employees.find((x) => x.id === adding.employeeId)?.name ?? "";
+              void post({ action: "addEntry", employeeId: adding.employeeId, kind: adding.kind, at: fromLocalInput(adding.at, data.timezone) }, `${KIND_LABEL[adding.kind]} de ${name} acrescentada.`).then((ok) => ok && setAdding(null));
+            }}
+          >
+            <h3 className="text-lg font-bold">Acrescentar registo esquecido</h3>
+            <label className="grid gap-1 text-sm font-semibold">
+              Funcionário
+              <select value={adding.employeeId} onChange={(e) => setAdding({ ...adding, employeeId: e.target.value })} className={`${input} font-normal`} required>
+                {data.employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-semibold">
+              Registo
+              <select value={adding.kind} onChange={(e) => setAdding({ ...adding, kind: e.target.value as Kind })} className={`${input} font-normal`}>
+                {(Object.keys(KIND_LABEL) as Kind[]).map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-semibold">
+              Dia e hora
+              <input type="datetime-local" value={adding.at} onChange={(e) => setAdding({ ...adding, at: e.target.value })} className={`${input} font-normal`} required />
+            </label>
+            <p className="text-xs text-ink-soft">Fica marcado como acrescentado pelo responsável e entra no histórico.</p>
+            <div className="flex gap-2">
+              <button type="button" className={`${ghost} flex-1`} onClick={() => setAdding(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className={`${primary} flex-[2]`} disabled={busy || !adding.employeeId}>
+                Acrescentar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {enrolling && (
         <FaceEnroll
@@ -348,6 +517,32 @@ export function ClockView() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Uma linha do turno a corrigir: tipo, hora (editável), guardar e apagar. */
+function EntryRow({ entry, tz, busy, onSave, onDelete }: { entry: Entry; tz: string; busy: boolean; onSave: (at: string) => void; onDelete: () => void }) {
+  const [value, setValue] = useState(() => toLocalInput(entry.at, tz));
+  const changed = value !== toLocalInput(entry.at, tz);
+  return (
+    <div className="grid gap-1 rounded-2xl border border-line p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">
+          {KIND_LABEL[entry.kind]}
+          {entry.source === "manual" && <span className="ml-2 text-xs font-normal text-ink-soft">(acrescentado)</span>}
+        </span>
+        {entry.originalAt && <span className="text-xs text-ink-soft">original: {new Date(entry.originalAt).toLocaleTimeString("pt-PT", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} className="min-h-11 flex-1 rounded-xl border border-line bg-card px-3" aria-label={`Hora da ${KIND_LABEL[entry.kind].toLowerCase()}`} />
+        <button type="button" disabled={busy || !changed} onClick={() => onSave(fromLocalInput(value, tz))} className="min-h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">
+          Guardar
+        </button>
+        <button type="button" disabled={busy} onClick={onDelete} className="min-h-11 rounded-xl border border-red-300 px-3 text-sm font-semibold text-red-700">
+          Apagar
+        </button>
+      </div>
     </div>
   );
 }

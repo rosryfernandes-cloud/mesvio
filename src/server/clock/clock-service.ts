@@ -1,10 +1,10 @@
 import "server-only";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/server/db/client";
 import { queryRows, withTenant } from "@/server/db/tenant";
-import { clockEmployees, clockEntries, establishments } from "@/server/db/schema";
+import { auditLogs, clockEmployees, clockEntries, establishments } from "@/server/db/schema";
 import type { StaffContext } from "@/server/staff/context";
 import { open as openSealed, seal } from "@/server/security/secret-box";
 import { decodeSigned, encodeSigned } from "@/server/staff/session";
@@ -63,9 +63,23 @@ export function checkPin(pin: string, stored: string): boolean {
   return got.length === expected.length && timingSafeEqual(got, expected);
 }
 
-/** Entrada ou saída: a seguir a uma entrada recente vem uma saída; senão é entrada. */
-export function nextKind(last: { kind: "in" | "out"; at: Date } | undefined, now = new Date()): "in" | "out" {
-  return last?.kind === "in" && now.getTime() - last.at.getTime() < OPEN_SHIFT_MS ? "out" : "in";
+export type ClockKind = "in" | "out" | "pause" | "resume";
+export type ClockState = "off" | "working" | "paused";
+export const KIND_SCHEMA = z.enum(["in", "out", "pause", "resume"]);
+
+/** Estado do funcionário pelo último registo: fora, a trabalhar ou em pausa (um turno esquecido há muito conta como fora). */
+export function stateFrom(last: { kind: ClockKind; at: Date } | undefined, now = new Date()): ClockState {
+  if (!last || now.getTime() - last.at.getTime() >= OPEN_SHIFT_MS || last.kind === "out") return "off";
+  return last.kind === "pause" ? "paused" : "working";
+}
+
+/** O que se pode fazer em cada estado, e o que o tablet propõe primeiro. */
+export const ALLOWED: Record<ClockState, ClockKind[]> = { off: ["in"], working: ["pause", "out"], paused: ["resume", "out"] };
+export const DEFAULT_KIND: Record<ClockState, ClockKind> = { off: "in", working: "out", paused: "resume" };
+
+/** O registo mais provável a seguir (entrada, saída ou regresso da pausa). */
+export function nextKind(last: { kind: ClockKind; at: Date } | undefined, now = new Date()): ClockKind {
+  return DEFAULT_KIND[stateFrom(last, now)];
 }
 
 // ───────────────────────── Painel (dono / gerente) ─────────────────────────
@@ -162,23 +176,63 @@ export interface ClockEntryRow {
   id: string;
   employeeId: string;
   employeeName: string;
-  kind: "in" | "out";
+  kind: ClockKind;
   at: string;
   hasPhoto: boolean;
+  source: "tablet" | "manual";
+  /** Hora original antes de o dono a corrigir (null = nunca corrigida). */
+  originalAt: string | null;
 }
 
-/** Turnos: cada entrada com a saída seguinte do mesmo funcionário. */
+/** Turno: entrada, pausas e saída. `minutes` são as horas trabalhadas (sem as pausas). */
 export interface ClockShift {
   employeeId: string;
   employeeName: string;
   inAt: string | null;
   outAt: string | null;
   minutes: number | null;
+  pauseMinutes: number;
+  /** closed = completo; open = a trabalhar agora; forgot = esqueceu-se de picar a saída; noIn = saída sem entrada. */
+  status: "closed" | "open" | "forgot" | "noIn";
+  /** Alguma hora acrescentada ou corrigida pelo dono. */
+  corrected: boolean;
+  entries: ClockEntryRow[];
   inEntryId: string | null;
   outEntryId: string | null;
 }
 
-export function pairShifts(entries: ClockEntryRow[]): ClockShift[] {
+const ms = (iso: string) => new Date(iso).getTime();
+
+function closeShift(entries: ClockEntryRow[], status: ClockShift["status"]): ClockShift {
+  const first = entries[0];
+  const inE = entries.find((e) => e.kind === "in") ?? null;
+  const outE = [...entries].reverse().find((e) => e.kind === "out") ?? null;
+  let pause = 0;
+  let pauseStart: number | null = null;
+  for (const e of entries) {
+    if (e.kind === "pause") pauseStart = ms(e.at);
+    else if ((e.kind === "resume" || e.kind === "out") && pauseStart !== null) {
+      pause += ms(e.at) - pauseStart;
+      pauseStart = null;
+    }
+  }
+  const minutes = status === "closed" && inE && outE ? Math.max(0, Math.round((ms(outE.at) - ms(inE.at) - pause) / 60_000)) : null;
+  return {
+    employeeId: first.employeeId,
+    employeeName: first.employeeName,
+    inAt: inE?.at ?? null,
+    outAt: outE?.at ?? null,
+    minutes,
+    pauseMinutes: Math.round(pause / 60_000),
+    status,
+    corrected: entries.some((e) => e.source === "manual" || e.originalAt !== null),
+    entries,
+    inEntryId: inE?.id ?? null,
+    outEntryId: outE?.id ?? null,
+  };
+}
+
+export function pairShifts(entries: ClockEntryRow[], now = new Date()): ClockShift[] {
   const byEmp = new Map<string, ClockEntryRow[]>();
   for (const e of [...entries].sort((a, b) => a.at.localeCompare(b.at))) {
     const list = byEmp.get(e.employeeId) ?? [];
@@ -187,24 +241,25 @@ export function pairShifts(entries: ClockEntryRow[]): ClockShift[] {
   }
   const shifts: ClockShift[] = [];
   for (const list of byEmp.values()) {
-    let open: ClockEntryRow | null = null;
+    let cur: ClockEntryRow[] | null = null;
     for (const e of list) {
       if (e.kind === "in") {
-        if (open) shifts.push({ employeeId: open.employeeId, employeeName: open.employeeName, inAt: open.at, outAt: null, minutes: null, inEntryId: open.id, outEntryId: null });
-        open = e;
-      } else if (open) {
-        const minutes = Math.round((new Date(e.at).getTime() - new Date(open.at).getTime()) / 60_000);
-        shifts.push({ employeeId: e.employeeId, employeeName: e.employeeName, inAt: open.at, outAt: e.at, minutes, inEntryId: open.id, outEntryId: e.id });
-        open = null;
-      } else {
-        // Saída sem entrada (esqueceu-se de picar à chegada).
-        shifts.push({ employeeId: e.employeeId, employeeName: e.employeeName, inAt: null, outAt: e.at, minutes: null, inEntryId: null, outEntryId: e.id });
-      }
+        if (cur) shifts.push(closeShift(cur, "forgot"));
+        cur = [e];
+      } else if (e.kind === "out") {
+        if (cur) {
+          cur.push(e);
+          shifts.push(closeShift(cur, cur[0].kind === "in" ? "closed" : "noIn"));
+          cur = null;
+        } else shifts.push(closeShift([e], "noIn"));
+      } else (cur ??= []).push(e);
     }
-    // Entrada sem saída: a trabalhar agora (ou esqueceu-se de picar à saída).
-    if (open) shifts.push({ employeeId: open.employeeId, employeeName: open.employeeName, inAt: open.at, outAt: null, minutes: null, inEntryId: open.id, outEntryId: null });
+    if (cur) {
+      const last = cur[cur.length - 1];
+      shifts.push(closeShift(cur, cur[0].kind !== "in" ? "noIn" : now.getTime() - ms(last.at) < OPEN_SHIFT_MS ? "open" : "forgot"));
+    }
   }
-  return shifts.sort((a, b) => (b.inAt ?? b.outAt ?? "").localeCompare(a.inAt ?? a.outAt ?? ""));
+  return shifts.sort((a, b) => (b.inAt ?? b.outAt ?? b.entries[0].at).localeCompare(a.inAt ?? a.outAt ?? a.entries[0].at));
 }
 
 export async function listEntries(db: Db, s: Scope, from: Date, to: Date): Promise<ClockEntryRow[]> {
@@ -217,12 +272,106 @@ export async function listEntries(db: Db, s: Scope, from: Date, to: Date): Promi
         kind: clockEntries.kind,
         at: clockEntries.at,
         hasPhoto: sql<boolean>`${clockEntries.photo} is not null`,
+        source: clockEntries.source,
+        originalAt: clockEntries.originalAt,
       })
       .from(clockEntries)
       .innerJoin(clockEmployees, eq(clockEmployees.id, clockEntries.employeeId))
-      .where(and(eq(clockEntries.establishmentId, s.establishmentId), gte(clockEntries.at, from), lt(clockEntries.at, to)))
+      .where(and(eq(clockEntries.establishmentId, s.establishmentId), isNull(clockEntries.deletedAt), gte(clockEntries.at, from), lt(clockEntries.at, to)))
       .orderBy(asc(clockEntries.at));
-    return rows.map((r) => ({ ...r, at: r.at.toISOString(), hasPhoto: Boolean(r.hasPhoto) }));
+    return rows.map((r) => ({ ...r, at: r.at.toISOString(), hasPhoto: Boolean(r.hasPhoto), originalAt: r.originalAt?.toISOString() ?? null }));
+  });
+}
+
+// ───────────────────────── Correções do dono (com histórico) ─────────────────────────
+
+const KIND_LABEL: Record<ClockKind, string> = { in: "entrada", out: "saída", pause: "pausa", resume: "regresso da pausa" };
+
+async function audit(tx: Db, s: Scope, action: string, entityId: string, before: unknown, after: unknown) {
+  await tx.insert(auditLogs).values({ organizationId: s.organizationId, actorType: "user", actorId: s.userId, action, entityType: "clock_entry", entityId, before, after });
+}
+
+/** Acrescentar um registo esquecido (ex.: a saída que ficou por picar). */
+export async function addManualEntry(db: Db, s: Scope, employeeId: string, kind: ClockKind, at: Date): Promise<{ id: string } | null> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const [emp] = await tx
+      .select({ id: clockEmployees.id, name: clockEmployees.name })
+      .from(clockEmployees)
+      .where(and(eq(clockEmployees.id, employeeId), eq(clockEmployees.establishmentId, s.establishmentId)));
+    if (!emp) return null;
+    const [row] = await tx
+      .insert(clockEntries)
+      .values({ organizationId: s.organizationId, establishmentId: s.establishmentId, employeeId, kind, at, source: "manual", editedAt: new Date(), editedBy: s.userId })
+      .returning({ id: clockEntries.id });
+    await audit(tx, s, "clock.entry.add", row.id, null, { employee: emp.name, kind, at: at.toISOString() });
+    return row;
+  });
+}
+
+/** Corrigir a hora de um registo. A hora original fica guardada no próprio registo e no histórico. */
+export async function editEntryTime(db: Db, s: Scope, id: string, at: Date): Promise<boolean> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const [cur] = await tx
+      .select({ at: clockEntries.at, originalAt: clockEntries.originalAt, kind: clockEntries.kind, name: clockEmployees.name })
+      .from(clockEntries)
+      .innerJoin(clockEmployees, eq(clockEmployees.id, clockEntries.employeeId))
+      .where(and(eq(clockEntries.id, id), eq(clockEntries.establishmentId, s.establishmentId), isNull(clockEntries.deletedAt)));
+    if (!cur) return false;
+    await tx
+      .update(clockEntries)
+      .set({ at, originalAt: cur.originalAt ?? cur.at, editedAt: new Date(), editedBy: s.userId })
+      .where(eq(clockEntries.id, id));
+    await audit(tx, s, "clock.entry.edit", id, { employee: cur.name, kind: cur.kind, at: cur.at.toISOString() }, { employee: cur.name, kind: cur.kind, at: at.toISOString() });
+    return true;
+  });
+}
+
+/** Apagar um registo (ex.: picado por engano). Fica guardado como apagado e no histórico; deixa de contar nas horas. */
+export async function deleteEntry(db: Db, s: Scope, id: string): Promise<boolean> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const [cur] = await tx
+      .select({ at: clockEntries.at, kind: clockEntries.kind, name: clockEmployees.name })
+      .from(clockEntries)
+      .innerJoin(clockEmployees, eq(clockEmployees.id, clockEntries.employeeId))
+      .where(and(eq(clockEntries.id, id), eq(clockEntries.establishmentId, s.establishmentId), isNull(clockEntries.deletedAt)));
+    if (!cur) return false;
+    await tx.update(clockEntries).set({ deletedAt: new Date(), editedAt: new Date(), editedBy: s.userId }).where(eq(clockEntries.id, id));
+    await audit(tx, s, "clock.entry.delete", id, { employee: cur.name, kind: cur.kind, at: cur.at.toISOString() }, null);
+    return true;
+  });
+}
+
+export interface ClockCorrection {
+  at: string;
+  action: "add" | "edit" | "delete";
+  text: string;
+}
+
+/** Histórico das correções (as mais recentes primeiro), em frases para o dono e para uma inspeção. */
+export async function listCorrections(db: Db, s: Scope, timezone: string, limit = 50): Promise<ClockCorrection[]> {
+  return withTenant(db, tenantOf(s), async (tx) => {
+    const ids = tx.select({ id: sql<string>`${clockEntries.id}::text` }).from(clockEntries).where(eq(clockEntries.establishmentId, s.establishmentId));
+    const rows = await tx
+      .select({ action: auditLogs.action, before: auditLogs.before, after: auditLogs.after, createdAt: auditLogs.createdAt })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.entityType, "clock_entry"), inArray(auditLogs.entityId, ids)))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+    const when = (iso: string) => new Date(iso).toLocaleString("pt-PT", { timeZone: timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return rows.map((r) => {
+      const b = r.before as { employee: string; kind: ClockKind; at: string } | null;
+      const a = r.after as { employee: string; kind: ClockKind; at: string } | null;
+      const action = r.action.endsWith("add") ? "add" : r.action.endsWith("edit") ? "edit" : "delete";
+      const text =
+        action === "add" && a
+          ? `Acrescentada a ${KIND_LABEL[a.kind]} de ${a.employee} (${when(a.at)})`
+          : action === "edit" && a && b
+            ? `${KIND_LABEL[a.kind][0].toUpperCase()}${KIND_LABEL[a.kind].slice(1)} de ${a.employee} mudada de ${when(b.at)} para ${when(a.at)}`
+            : b
+              ? `Apagada a ${KIND_LABEL[b.kind]} de ${b.employee} (${when(b.at)})`
+              : "Correção";
+      return { at: r.createdAt.toISOString(), action, text };
+    });
   });
 }
 
@@ -258,7 +407,7 @@ export interface KioskView {
   establishmentName: string;
   /** Há reconhecimento facial ligado e pelo menos uma cara registada. */
   face: boolean;
-  employees: { id: string; name: string; next: "in" | "out" }[];
+  employees: { id: string; name: string; state: ClockState; next: ClockKind }[];
 }
 
 export async function kioskView(db: Db, token: string, now = new Date()): Promise<KioskView | null> {
@@ -275,24 +424,27 @@ export async function kioskView(db: Db, token: string, now = new Date()): Promis
     const recent = await tx
       .select({ employeeId: clockEntries.employeeId, kind: clockEntries.kind, at: clockEntries.at })
       .from(clockEntries)
-      .where(and(eq(clockEntries.establishmentId, ids.establishmentId), gte(clockEntries.at, since)))
+      .where(and(eq(clockEntries.establishmentId, ids.establishmentId), isNull(clockEntries.deletedAt), gte(clockEntries.at, since)))
       .orderBy(desc(clockEntries.at));
-    const last = new Map<string, { kind: "in" | "out"; at: Date }>();
+    const last = new Map<string, { kind: ClockKind; at: Date }>();
     for (const r of recent) if (!last.has(r.employeeId)) last.set(r.employeeId, { kind: r.kind, at: r.at });
     return {
       establishmentName: e?.name ?? "",
       face: Boolean(e?.face) && emps.some((x) => x.hasFace),
-      employees: emps.map((x) => ({ id: x.id, name: x.name, next: nextKind(last.get(x.id), now) })),
+      employees: emps.map((x) => {
+        const state = stateFrom(last.get(x.id), now);
+        return { id: x.id, name: x.name, state, next: DEFAULT_KIND[state] };
+      }),
     };
   });
 }
 
 export type PunchResult =
-  | { ok: true; kind: "in" | "out"; at: string; name: string }
-  | { ok: false; code: "NOT_FOUND" | "WRONG_PIN"; message: string };
+  | { ok: true; kind: ClockKind; at: string; name: string }
+  | { ok: false; code: "NOT_FOUND" | "WRONG_PIN" | "NOT_ALLOWED"; message: string };
 
 export type FaceResult =
-  | { ok: true; employeeId: string; name: string; next: "in" | "out"; ticket: string }
+  | { ok: true; employeeId: string; name: string; state: ClockState; next: ClockKind; ticket: string }
   | { ok: false; code: "NOT_FOUND" | "OFF" | "NO_MATCH"; message: string };
 
 /**
@@ -324,30 +476,31 @@ export async function identifyFace(db: Db, token: string, live: number[], now = 
     const [last] = await tx
       .select({ kind: clockEntries.kind, at: clockEntries.at })
       .from(clockEntries)
-      .where(eq(clockEntries.employeeId, emp.id))
+      .where(and(eq(clockEntries.employeeId, emp.id), isNull(clockEntries.deletedAt)))
       .orderBy(desc(clockEntries.at))
       .limit(1);
+    const state = stateFrom(last, now);
     const ticket = encodeSigned({ k: "ponto-cara", e: emp.id, t: token.slice(0, 12) }, now.getTime() + TICKET_MS);
-    return { ok: true as const, employeeId: emp.id, name: emp.name, next: nextKind(last, now), ticket };
+    return { ok: true as const, employeeId: emp.id, name: emp.name, state, next: DEFAULT_KIND[state], ticket };
   });
 }
 
 /** Confirma o registo com o bilhete do reconhecimento facial (em vez do PIN). */
-export async function punchWithTicket(db: Db, token: string, ticket: string, photo: Buffer | null, now = new Date()): Promise<PunchResult> {
+export async function punchWithTicket(db: Db, token: string, ticket: string, photo: Buffer | null, action?: ClockKind, now = new Date()): Promise<PunchResult> {
   const data = decodeSigned(ticket, now.getTime());
   if (!data || data.k !== "ponto-cara" || data.t !== token.slice(0, 12) || typeof data.e !== "string") {
     return { ok: false, code: "WRONG_PIN", message: "O reconhecimento expirou. Tente outra vez." };
   }
-  return punchEmployee(db, token, data.e, null, photo, now);
+  return punchEmployee(db, token, data.e, null, photo, action, now);
 }
 
-/** Regista a entrada ou a saída (decide sozinho qual) se o PIN estiver certo. */
-export async function punch(db: Db, token: string, employeeId: string, pin: string, photo: Buffer | null, now = new Date()): Promise<PunchResult> {
-  return punchEmployee(db, token, employeeId, pin, photo, now);
+/** Regista entrada, pausa, regresso ou saída (sem `action`, o mais provável) se o PIN estiver certo. */
+export async function punch(db: Db, token: string, employeeId: string, pin: string, photo: Buffer | null, action?: ClockKind, now = new Date()): Promise<PunchResult> {
+  return punchEmployee(db, token, employeeId, pin, photo, action, now);
 }
 
 /** `pin` null = já identificado pela cara (bilhete válido). */
-async function punchEmployee(db: Db, token: string, employeeId: string, pin: string | null, photo: Buffer | null, now: Date): Promise<PunchResult> {
+async function punchEmployee(db: Db, token: string, employeeId: string, pin: string | null, photo: Buffer | null, action: ClockKind | undefined, now: Date): Promise<PunchResult> {
   const ids = await resolveKiosk(db, token);
   if (!ids) return { ok: false, code: "NOT_FOUND", message: "Este link de picar ponto já não é válido. Peça um novo ao responsável." };
   return withTenant(db, { organizationId: ids.organizationId }, async (tx) => {
@@ -360,12 +513,17 @@ async function punchEmployee(db: Db, token: string, employeeId: string, pin: str
     const [last] = await tx
       .select({ kind: clockEntries.kind, at: clockEntries.at })
       .from(clockEntries)
-      .where(eq(clockEntries.employeeId, emp.id))
+      .where(and(eq(clockEntries.employeeId, emp.id), isNull(clockEntries.deletedAt)))
       .orderBy(desc(clockEntries.at))
       .limit(1);
-    // Pela cara, o mesmo funcionário pode ser reconhecido duas vezes seguidas: em 2 minutos não se repete.
-    if (pin === null && last && now.getTime() - last.at.getTime() < 2 * 60_000) return { ok: true as const, kind: last.kind, at: last.at.toISOString(), name: emp.name };
-    const kind = nextKind(last, now);
+    const state = stateFrom(last, now);
+    // O mesmo registo duas vezes seguidas em menos de 1 minuto (cara reconhecida outra vez): não se repete.
+    if (last && last.kind === (action ?? DEFAULT_KIND[state]) && now.getTime() - last.at.getTime() < 60_000) return { ok: true as const, kind: last.kind, at: last.at.toISOString(), name: emp.name };
+    const kind = action ?? DEFAULT_KIND[state];
+    if (!ALLOWED[state].includes(kind)) {
+      const msg = state === "off" ? "Ainda não registou a entrada hoje." : state === "paused" ? "Está em pausa: registe o regresso ou a saída." : "Já registou a entrada.";
+      return { ok: false as const, code: "NOT_ALLOWED" as const, message: msg };
+    }
     await tx.insert(clockEntries).values({ organizationId: ids.organizationId, establishmentId: ids.establishmentId, employeeId: emp.id, kind, at: now, photo });
     return { ok: true as const, kind, at: now.toISOString(), name: emp.name };
   });

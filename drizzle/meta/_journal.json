@@ -281,6 +281,13 @@
       "when": 1795202558388,
       "tag": "0039_ponto_cara",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795286976255,
+      "tag": "0040_ponto_pausas_correcoes",
+      "breakpoints": true
     }
   ]
 }

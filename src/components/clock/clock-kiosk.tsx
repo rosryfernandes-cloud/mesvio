@@ -3,18 +3,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EYES_CLOSED, EYES_OPEN, FRONTAL, loadFaceEngine, readEyes, readFace, TURNED } from "./face-engine";
 
-type Employee = { id: string; name: string; next: "in" | "out" };
-type Match = { employeeId: string; name: string; next: "in" | "out"; ticket: string };
+type Kind = "in" | "out" | "pause" | "resume";
+type State = "off" | "working" | "paused";
+type Employee = { id: string; name: string; state: State; next: Kind };
+type Match = { employeeId: string; name: string; state: State; next: Kind; ticket: string };
+/** O que se pode escolher em cada estado (igual ao servidor). */
+const CHOICES: Record<State, Kind[]> = { off: ["in"], working: ["pause", "out"], paused: ["resume", "out"] };
 type Step =
   | { kind: "list" }
   | { kind: "pin"; emp: Employee }
-  | { kind: "camera"; emp: Employee; pin: string }
+  | { kind: "choose"; emp: Employee; pin: string }
+  | { kind: "camera"; emp: Employee; pin: string; action: Kind }
   | { kind: "face" }
   | { kind: "confirm"; match: Match; photo: Blob | null; auto?: boolean }
-  | { kind: "done"; name: string; what: "in" | "out"; at: string };
+  | { kind: "done"; name: string; what: Kind; at: string };
 
 const IDLE_MS = 45_000;
-const label = { in: "Entrada", out: "Saída" } as const;
+const label: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
+const button: Record<Kind, string> = { in: "Registar entrada", out: "Saída", pause: "Pausa", resume: "Voltar da pausa" };
+const doneText: Record<Kind, { title: string; sub: string }> = {
+  in: { title: "Entrada registada", sub: "Bom trabalho!" },
+  out: { title: "Saída registada", sub: "Até amanhã!" },
+  pause: { title: "Pausa registada", sub: "Bom descanso!" },
+  resume: { title: "Regresso registado", sub: "Bom trabalho!" },
+};
 
 /** Selfie reduzida (só prova do registo; não é analisada). */
 async function snap(video: HTMLVideoElement): Promise<Blob | null> {
@@ -88,7 +100,9 @@ export function ClockKiosk({ token }: { token: string }) {
               <li key={e.id}>
                 <button type="button" onClick={() => setStep({ kind: "pin", emp: e })} className="flex min-h-24 w-full flex-col items-start justify-center rounded-3xl border-2 border-line bg-card px-4 py-3 text-left active:border-brand">
                   <span className="text-xl font-bold">{e.name}</span>
-                  <span className={`mt-1 text-sm font-semibold ${e.next === "in" ? "text-ok" : "text-brand"}`}>{e.next === "in" ? "→ Entrada" : "← Saída"}</span>
+                  <span className={`mt-1 text-sm font-semibold ${e.state === "off" ? "text-ok" : e.state === "paused" ? "text-amber-700" : "text-brand"}`}>
+                    {e.state === "off" ? "→ Entrada" : e.state === "paused" ? "Em pausa" : "A trabalhar"}
+                  </span>
                 </button>
               </li>
             ))}
@@ -96,13 +110,42 @@ export function ClockKiosk({ token }: { token: string }) {
         </>
       )}
 
-      {step.kind === "pin" && <PinPad emp={step.emp} onBack={() => setStep({ kind: "list" })} onDone={(pin) => setStep({ kind: "camera", emp: step.emp, pin })} />}
+      {step.kind === "pin" && (
+        <PinPad
+          emp={step.emp}
+          onBack={() => setStep({ kind: "list" })}
+          onDone={(pin) => setStep(step.emp.state === "off" ? { kind: "camera", emp: step.emp, pin, action: "in" } : { kind: "choose", emp: step.emp, pin })}
+        />
+      )}
+
+      {step.kind === "choose" && (
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <p className="text-4xl font-extrabold">{step.emp.name}</p>
+          <p className="mt-2 text-xl text-ink-soft">{step.emp.state === "paused" ? "Está em pausa. O que vai registar?" : "Está a trabalhar. O que vai registar?"}</p>
+          <div className="mt-8 grid w-full max-w-md gap-3">
+            {CHOICES[step.emp.state].map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setStep({ kind: "camera", emp: step.emp, pin: step.pin, action: k })}
+                className={`min-h-20 rounded-3xl text-2xl font-bold ${k === "out" ? "border-2 border-line bg-card" : "bg-brand text-white"}`}
+              >
+                {button[k]}
+              </button>
+            ))}
+            <button type="button" onClick={() => setStep({ kind: "list" })} className="min-h-14 text-lg text-ink-soft underline">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {step.kind === "camera" && (
         <Camera
           token={token}
           emp={step.emp}
           pin={step.pin}
+          action={step.action}
           onBack={() => setStep({ kind: "list" })}
           onWrongPin={() => setStep({ kind: "pin", emp: step.emp })}
           onDone={(r) => setStep({ kind: "done", name: r.name, what: r.kind, at: r.at })}
@@ -127,11 +170,11 @@ export function ClockKiosk({ token }: { token: string }) {
       {step.kind === "done" && (
         <div className="flex flex-1 flex-col items-center justify-center text-center" role="status">
           <span aria-hidden="true" className="grid size-28 place-items-center rounded-full bg-ok text-6xl text-white">✓</span>
-          <p className="mt-6 text-4xl font-extrabold">{label[step.what]} registada</p>
+          <p className="mt-6 text-4xl font-extrabold">{doneText[step.what].title}</p>
           <p className="mt-2 text-2xl">
             {step.name} · {new Date(step.at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}
           </p>
-          <p className="mt-2 text-xl text-ink-soft">{step.what === "in" ? "Bom trabalho!" : "Até amanhã!"}</p>
+          <p className="mt-2 text-xl text-ink-soft">{doneText[step.what].sub}</p>
         </div>
       )}
 
@@ -154,7 +197,7 @@ function PinPad({ emp, onBack, onDone }: { emp: Employee; onBack: () => void; on
   return (
     <div className="mx-auto w-full max-w-sm">
       <p className="text-center text-2xl font-bold">{emp.name}</p>
-      <p className="mt-1 text-center text-lg text-ink-soft">Vai registar a {label[emp.next].toLowerCase()}. Meta o seu PIN.</p>
+      <p className="mt-1 text-center text-lg text-ink-soft">Meta o seu PIN.</p>
       <div className="my-6 flex justify-center gap-4" aria-label={`${pin.length} de 4 algarismos`}>
         {[0, 1, 2, 3].map((i) => (
           <span key={i} className={`size-5 rounded-full border-2 border-brand ${i < pin.length ? "bg-brand" : ""}`} />
@@ -184,6 +227,7 @@ function Camera({
   token,
   emp,
   pin,
+  action,
   onBack,
   onWrongPin,
   onDone,
@@ -191,9 +235,10 @@ function Camera({
   token: string;
   emp: Employee;
   pin: string;
+  action: Kind;
   onBack: () => void;
   onWrongPin: () => void;
-  onDone: (r: { name: string; kind: "in" | "out"; at: string }) => void;
+  onDone: (r: { name: string; kind: Kind; at: string }) => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
@@ -223,6 +268,7 @@ function Camera({
     const form = new FormData();
     form.append("employeeId", emp.id);
     form.append("pin", pin);
+    form.append("action", action);
     const photo = video.current && ready ? await snap(video.current) : null;
     if (photo) form.append("photo", photo, "ponto.jpg");
     const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
@@ -253,7 +299,7 @@ function Camera({
           Cancelar
         </button>
         <button type="button" onClick={() => void send()} disabled={busy || (!ready && !noCamera)} className="min-h-16 flex-[2] rounded-3xl bg-brand text-xl font-bold text-white disabled:opacity-60">
-          {busy ? "A registar…" : `Registar ${label[emp.next].toLowerCase()}`}
+          {busy ? "A registar…" : action === "in" ? "Registar entrada" : `Registar ${label[action].toLowerCase()}`}
         </button>
       </div>
     </div>
@@ -391,26 +437,31 @@ function Confirm({
   photo: Blob | null;
   auto?: boolean;
   onNo: () => void;
-  onDone: (r: { name: string; kind: "in" | "out"; at: string }) => void;
+  onDone: (r: { name: string; kind: Kind; at: string }) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Modo automático: regista sozinho ao fim de 3 segundos (Cancelar se o reconheceu mal).
-  const [count, setCount] = useState(auto ? 3 : 0);
-  const yesRef = useRef<() => Promise<void>>(async () => {});
+  const choices = CHOICES[match.state];
+  // Sozinho só o que é óbvio: a entrada, ou o regresso da pausa. A trabalhar, tem de escolher Pausa ou Saída.
+  const autoKind: Kind | null = !auto ? null : match.state === "off" ? "in" : match.state === "paused" ? "resume" : null;
+  const [count, setCount] = useState(autoKind ? 3 : 0);
+  const sendRef = useRef<(k: Kind) => Promise<void>>(async () => {});
+
   useEffect(() => {
-    if (!auto || error) return;
+    if (!autoKind || error || busy) return;
     if (count === 0) {
-      void yesRef.current();
+      void sendRef.current(autoKind);
       return;
     }
     const t = setTimeout(() => setCount((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [auto, count, error]);
-  async function yes() {
+  }, [autoKind, count, error, busy]);
+
+  async function send(kind: Kind) {
     setBusy(true);
     const form = new FormData();
     form.append("ticket", match.ticket);
+    form.append("action", kind);
     if (photo) form.append("photo", photo, "ponto.jpg");
     const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
     setBusy(false);
@@ -418,30 +469,39 @@ function Confirm({
     if (!res?.ok) return setError(data.message ?? "Não foi possível registar. Use o nome e o PIN.");
     onDone(data);
   }
-  yesRef.current = yes;
-  if (auto)
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <p className="text-5xl font-extrabold">Olá, {match.name}!</p>
-        <p className="mt-3 text-2xl">{busy ? "A registar…" : `A registar a ${label[match.next].toLowerCase()} em ${count}…`}</p>
-        {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
-        <button type="button" onClick={onNo} disabled={busy} className="mt-8 min-h-16 w-full max-w-xs rounded-3xl border-2 border-line bg-card text-lg font-semibold">
-          Cancelar, não sou eu
-        </button>
-      </div>
-    );
+  sendRef.current = send;
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center text-center">
-      <p className="text-xl text-ink-soft">Olá!</p>
-      <p className="mt-1 text-5xl font-extrabold">É o {match.name}?</p>
-      <p className="mt-3 text-xl">Vai registar a {label[match.next].toLowerCase()}.</p>
+      <p className="text-5xl font-extrabold">Olá, {match.name}!</p>
+      <p className="mt-3 text-2xl">
+        {busy
+          ? "A registar…"
+          : autoKind
+            ? `A registar ${autoKind === "in" ? "a entrada" : "o regresso da pausa"} em ${count}…`
+            : match.state === "working"
+              ? "Está a trabalhar. O que vai registar?"
+              : match.state === "paused"
+                ? "Está em pausa. O que vai registar?"
+                : "Vai registar a entrada."}
+      </p>
       {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
-      <div className="mt-8 flex w-full max-w-md gap-3">
-        <button type="button" onClick={onNo} disabled={busy} className="min-h-16 flex-1 rounded-3xl border-2 border-line bg-card text-lg font-semibold">
-          Não sou eu
-        </button>
-        <button type="button" onClick={() => void yes()} disabled={busy} className="min-h-16 flex-[2] rounded-3xl bg-brand text-xl font-bold text-white disabled:opacity-60">
-          {busy ? "A registar…" : "Sim, sou eu"}
+      <div className="mt-8 grid w-full max-w-md gap-3">
+        {choices
+          .filter((k) => k !== autoKind)
+          .map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => void send(k)}
+              disabled={busy}
+              className={`min-h-20 rounded-3xl text-2xl font-bold disabled:opacity-60 ${k === "out" ? "border-2 border-line bg-card" : "bg-brand text-white"}`}
+            >
+              {button[k]}
+            </button>
+          ))}
+        <button type="button" onClick={onNo} disabled={busy} className="min-h-14 rounded-3xl border-2 border-line bg-card text-lg font-semibold">
+          {autoKind ? "Cancelar, não sou eu" : "Não sou eu"}
         </button>
       </div>
     </div>

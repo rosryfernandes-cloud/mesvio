@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
-import { addEmployee, DESCRIPTOR_SCHEMA, establishmentTimezone, getFaceEnabled, kioskToken, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
+import { addEmployee, addManualEntry, deleteEntry, DESCRIPTOR_SCHEMA, editEntryTime, establishmentTimezone, getFaceEnabled, KIND_SCHEMA, kioskToken, listCorrections, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
 
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     employees: await listEmployees(db, ctx),
     kioskToken: await kioskToken(db, ctx),
     faceEnabled: await getFaceEnabled(db, ctx),
+    corrections: await listCorrections(db, ctx, tz),
     entries,
     shifts: pairShifts(entries),
   });
@@ -43,6 +44,9 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("faceEnabled"), enabled: z.boolean() }),
   z.object({ action: z.literal("face"), id: z.uuid(), samples: z.array(DESCRIPTOR_SCHEMA).min(2).max(6) }),
   z.object({ action: z.literal("faceRemove"), id: z.uuid() }),
+  z.object({ action: z.literal("addEntry"), employeeId: z.uuid(), kind: KIND_SCHEMA, at: z.iso.datetime({ offset: true }) }),
+  z.object({ action: z.literal("editEntry"), id: z.uuid(), at: z.iso.datetime({ offset: true }) }),
+  z.object({ action: z.literal("deleteEntry"), id: z.uuid() }),
 ]);
 
 export async function POST(request: Request) {
@@ -68,5 +72,12 @@ export async function POST(request: Request) {
     const ok = await setEmployeeFace(db, ctx, d.id, d.action === "face" ? d.samples : null);
     return ok ? json({ ok: true }) : json({ message: "Funcionário não encontrado." }, 404);
   }
+  if (d.action === "addEntry" || d.action === "editEntry") {
+    const at = new Date(d.at);
+    if (at.getTime() > Date.now() + 5 * 60_000) return json({ message: "Não pode registar horas no futuro." }, 400);
+    const ok = d.action === "addEntry" ? await addManualEntry(db, ctx, d.employeeId, d.kind, at) : await editEntryTime(db, ctx, d.id, at);
+    return ok ? json({ ok: true }) : json({ message: "Registo não encontrado." }, 404);
+  }
+  if (d.action === "deleteEntry") return (await deleteEntry(db, ctx, d.id)) ? json({ ok: true }) : json({ message: "Registo não encontrado." }, 404);
   return json({ kioskToken: await kioskToken(db, ctx, true) });
 }

@@ -23,13 +23,18 @@ export async function GET(request: Request) {
   const db = await getDb();
   const tz = await establishmentTimezone(db, ctx);
   const shifts = pairShifts(await listEntries(db, ctx, localMidnight(from, tz), localMidnight(addDays(to, 1), tz))).reverse();
-  const lines = ["Funcionário;Data;Entrada;Saída;Horas;Nota"];
+  const lines = ["Funcionário;Data;Entrada;Saída;Pausas;Horas trabalhadas;Nota"];
+  const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
   for (const s of shifts) {
-    const ref = new Date((s.inAt ?? s.outAt)!);
-    const hours = s.minutes === null ? "" : `${Math.floor(s.minutes / 60)}:${String(s.minutes % 60).padStart(2, "0")}`;
-    const note = !s.inAt ? "Saída sem entrada" : !s.outAt ? "Entrada sem saída" : "";
+    const ref = new Date(s.inAt ?? s.outAt ?? s.entries[0].at);
+    const hours = s.minutes === null ? "" : hm(s.minutes);
+    const notes = [
+      s.status === "noIn" ? "Saída sem entrada" : s.status === "forgot" ? "Saída esquecida" : s.status === "open" ? "Ainda a trabalhar" : "",
+      s.corrected ? "Corrigido pelo responsável" : "",
+    ].filter(Boolean);
+    const note = notes.join(" · ");
     const [y, m, d] = localDate(ref, tz).split("-");
-    lines.push([s.employeeName, `${d}/${m}/${y}`, s.inAt ? localTime(new Date(s.inAt), tz) : "", s.outAt ? localTime(new Date(s.outAt), tz) : "", hours, note].map(cell).join(";"));
+    lines.push([s.employeeName, `${d}/${m}/${y}`, s.inAt ? localTime(new Date(s.inAt), tz) : "", s.outAt ? localTime(new Date(s.outAt), tz) : "", s.pauseMinutes ? hm(s.pauseMinutes) : "", hours, note].map(cell).join(";"));
   }
   // BOM para o Excel abrir os acentos certos.
   return new Response(`﻿${lines.join("\r\n")}\r\n`, {

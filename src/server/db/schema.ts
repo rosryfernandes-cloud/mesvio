@@ -630,15 +630,24 @@ export const clockEntries = pgTable(
     organizationId: orgId(),
     establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
     employeeId: uuid("employee_id").notNull().references(() => clockEmployees.id),
-    kind: text("kind", { enum: ["in", "out"] }).notNull(),
+    /** Entrada, saída, início de pausa e regresso da pausa. */
+    kind: text("kind", { enum: ["in", "out", "pause", "resume"] }).notNull(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     photo: bytea("photo"),
+    /** "tablet" (picado pelo funcionário) ou "manual" (acrescentado pelo dono no painel). */
+    source: text("source", { enum: ["tablet", "manual"] }).notNull().default("tablet"),
+    /** Correções do dono: a hora original fica guardada e cada mudança vai para audit_logs. */
+    originalAt: timestamp("original_at", { withTimezone: true }),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    editedBy: text("edited_by"),
+    /** Apagado pelo dono (fica guardado, com o motivo no histórico; não conta nas horas). */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
     index("clock_entries_est_at_idx").on(t.establishmentId, t.at),
     index("clock_entries_emp_at_idx").on(t.employeeId, t.at),
-    check("clock_entries_kind", sql`${t.kind} in ('in', 'out')`),
+    check("clock_entries_kind", sql`${t.kind} in ('in', 'out', 'pause', 'resume')`),
   ],
 );
 

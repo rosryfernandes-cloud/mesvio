@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { DESCRIPTOR_SCHEMA, identifyFace, kioskView, MAX_CLOCK_PHOTO_BYTES, PIN_SCHEMA, punch, punchWithTicket } from "@/server/clock/clock-service";
+import { DESCRIPTOR_SCHEMA, identifyFace, KIND_SCHEMA, kioskView, MAX_CLOCK_PHOTO_BYTES, PIN_SCHEMA, punch, punchWithTicket } from "@/server/clock/clock-service";
 import { detectPhotoType } from "@/server/menu/menu-import";
 import { hitRateLimit } from "@/server/security/rate-limit";
 
@@ -59,14 +59,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const db = await getDb();
   const perKiosk = await hitRateLimit(db, `ponto-tablet:${token.slice(0, 40)}`, { limit: 200, windowSeconds: 60 * 60 });
   if (!perKiosk.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
+  // Entrada, pausa, regresso ou saída escolhida no tablet (sem ela, o mais provável).
+  const action = KIND_SCHEMA.safeParse(form?.get("action")).data;
   let result;
-  if (typeof ticketField === "string") result = await punchWithTicket(db, token, ticketField, photo);
+  if (typeof ticketField === "string") result = await punchWithTicket(db, token, ticketField, photo, action);
   else {
     // Um PIN de 4 algarismos adivinha-se com tentativas: poucas por funcionário.
     const perEmployee = await hitRateLimit(db, `ponto:${parsed!.data!.employeeId}`, { limit: 6, windowSeconds: 15 * 60 });
     if (!perEmployee.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
-    result = await punch(db, token, parsed!.data!.employeeId, parsed!.data!.pin, photo);
+    result = await punch(db, token, parsed!.data!.employeeId, parsed!.data!.pin, photo, action);
   }
-  if (!result.ok) return json({ code: result.code, message: result.message }, result.code === "WRONG_PIN" ? 403 : 404);
+  if (!result.ok) return json({ code: result.code, message: result.message }, result.code === "WRONG_PIN" ? 403 : result.code === "NOT_ALLOWED" ? 409 : 404);
   return json(result);
 }
