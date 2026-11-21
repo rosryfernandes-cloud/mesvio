@@ -67,7 +67,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     // Um PIN de 4 algarismos adivinha-se com tentativas: poucas por funcionário.
     const perEmployee = await hitRateLimit(db, `ponto:${parsed!.data!.employeeId}`, { limit: 6, windowSeconds: 15 * 60 });
     if (!perEmployee.allowed) return json({ message: "Demasiadas tentativas. Espere uns minutos ou fale com o responsável." }, 429);
-    result = await punch(db, token, parsed!.data!.employeeId, parsed!.data!.pin, photo, action);
+    // Registo guardado no tablet sem internet: vem com a hora real em que foi picado (até 3 dias, nunca no futuro).
+    const atField = form?.get("at");
+    let when = new Date();
+    if (typeof atField === "string" && atField) {
+      const t = new Date(atField);
+      if (Number.isNaN(t.getTime()) || t.getTime() > Date.now() + 2 * 60_000 || t.getTime() < Date.now() - 72 * 3600_000) {
+        return json({ code: "TOO_OLD", message: "Registo guardado há demasiado tempo. Peça ao responsável para o acrescentar." }, 422);
+      }
+      when = t;
+    }
+    result = await punch(db, token, parsed!.data!.employeeId, parsed!.data!.pin, photo, action, when);
   }
   if (!result.ok) return json({ code: result.code, message: result.message }, result.code === "WRONG_PIN" ? 403 : result.code === "NOT_ALLOWED" ? 409 : 404);
   return json(result);

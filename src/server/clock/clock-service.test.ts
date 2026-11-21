@@ -86,3 +86,22 @@ describe("reconhecimento facial", () => {
     expect(bestFaceMatch(a, [{ id: "a", samples: [near(a, 0.1)] }, { id: "b", samples: [near(a, 0.12)] }])).toBeNull();
   });
 });
+
+describe("alertas da lei", () => {
+  it("avisa de mais de 10 horas, descanso curto e semana acima das 40/48 horas", async () => {
+    const { computeAlerts } = await import("./clock-service");
+    const days = ["16", "17", "18", "19", "20"];
+    const entries = days.flatMap((d, i) => [
+      e(`i${i}`, "in", `2026-11-${d}T08:00:00.000Z`),
+      e(`o${i}`, "out", `2026-11-${d}T${i === 0 ? "19:30" : "18:00"}:00.000Z`),
+    ]);
+    // descanso curto: sai às 23h do dia 21 e entra às 7h do dia 22
+    entries.push(e("x1", "in", "2026-11-21T15:00:00.000Z"), e("x2", "out", "2026-11-21T23:00:00.000Z"), e("x3", "in", "2026-11-22T07:00:00.000Z"), e("x4", "out", "2026-11-22T12:00:00.000Z"));
+    const alerts = computeAlerts(pairShifts(entries, new Date("2026-11-23T12:00:00Z")), "Europe/Lisbon", new Date("2026-11-23T12:00:00Z"));
+    const text = alerts.map((a) => a.text).join(" | ");
+    expect(text).toContain("11h30");
+    expect(text).toContain("mais de 10 horas");
+    expect(text).toContain("descansou só 8h00");
+    expect(text).toContain("mais de 48 horas");
+  });
+});

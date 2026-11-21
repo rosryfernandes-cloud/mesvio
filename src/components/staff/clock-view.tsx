@@ -22,7 +22,7 @@ type Shift = {
   outEntryId: string | null;
 };
 type Correction = { at: string; action: "add" | "edit" | "delete"; text: string };
-type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[] };
+type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[] };
 
 const KIND_LABEL: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
 
@@ -284,6 +284,23 @@ export function ClockView() {
             <strong>{forgotten.length === 1 ? "1 turno incompleto" : `${forgotten.length} turnos incompletos`}</strong> (saída esquecida ou entrada em falta). Toque em
             &ldquo;Corrigir&rdquo; na linha para acrescentar a hora que falta.
           </p>
+        )}
+        {data.alerts.length > 0 && (
+          <div className="grid gap-1.5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
+            <p className="font-semibold">Atenção aos limites da lei</p>
+            <ul className="grid gap-1">
+              {data.alerts.map((a, i) => (
+                <li key={i} className={a.level === "warn" ? "text-red-800" : "text-ink"}>
+                  {a.level === "warn" ? "⚠️ " : "ℹ️ "}
+                  {a.text}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-ink-soft">
+              Avisos para ajudar a cumprir o Código do Trabalho (máximo de 10 horas por dia, 11 horas de descanso entre turnos, 40 horas por semana mais horas
+              extra até 48). Confirme os casos concretos com o contabilista.
+            </p>
+          </div>
         )}
         <div>
           <button

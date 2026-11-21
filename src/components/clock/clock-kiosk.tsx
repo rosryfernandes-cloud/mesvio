@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EYES_CLOSED, EYES_OPEN, FRONTAL, loadFaceEngine, readEyes, readFace, TURNED } from "./face-engine";
+import { cachedView, enqueue, flush, queued, saveView } from "./offline-queue";
 
 type Kind = "in" | "out" | "pause" | "resume";
 type State = "off" | "working" | "paused";
@@ -16,7 +17,7 @@ type Step =
   | { kind: "camera"; emp: Employee; pin: string; action: Kind }
   | { kind: "face" }
   | { kind: "confirm"; match: Match; photo: Blob | null; auto?: boolean }
-  | { kind: "done"; name: string; what: Kind; at: string };
+  | { kind: "done"; name: string; what: Kind; at: string; offline?: boolean };
 
 const IDLE_MS = 45_000;
 const label: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
@@ -46,20 +47,73 @@ export function ClockKiosk({ token }: { token: string }) {
   const [name, setName] = useState("");
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [face, setFace] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [refused, setRefused] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>({ kind: "list" });
   const [now, setNow] = useState(() => new Date());
 
+  type View = { establishmentName: string; employees: Employee[]; face: boolean };
+  const apply = useCallback((v: View) => {
+    setName(v.establishmentName);
+    setEmployees(v.employees);
+    setFace(Boolean(v.face));
+  }, []);
+
   const load = useCallback(async () => {
+    // Primeiro envia o que ficou guardado sem internet (assim o estado de cada um vem certo).
+    if (queued(token).length > 0) {
+      const r = await flush(token);
+      setPending(r.remaining);
+      if (r.refused.length) setRefused((old) => [...old, ...r.refused]);
+    }
     const res = await fetch(`/api/ponto/${token}`, { cache: "no-store" }).catch(() => null);
-    if (!res) return setError("Sem ligação à internet. A tentar de novo…");
+    if (!res) {
+      // Sem internet: usa a última lista guardada no tablet.
+      setOffline(true);
+      const v = cachedView<View>(token);
+      if (v) apply(v);
+      else setError("Sem ligação à internet. A tentar de novo…");
+      return;
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setError(data.message ?? "Não foi possível abrir o picar ponto.");
+    setOffline(false);
     setError(null);
-    setName(data.establishmentName);
-    setEmployees(data.employees);
-    setFace(Boolean(data.face));
-  }, [token]);
+    apply(data);
+    saveView(token, data);
+  }, [token, apply]);
+
+  useEffect(() => {
+    setPending(queued(token).length);
+    const retry = setInterval(() => void load(), 20_000);
+    const online = () => void load();
+    window.addEventListener("online", online);
+    return () => {
+      clearInterval(retry);
+      window.removeEventListener("online", online);
+    };
+  }, [token, load]);
+
+  /** Sem internet: guarda no tablet e atualiza logo o estado da pessoa na lista. */
+  const saveOffline = useCallback(
+    async (emp: Employee, pin: string, action: Kind, photo: Blob | null) => {
+      const at = new Date().toISOString();
+      const n = await enqueue(token, { employeeId: emp.id, name: emp.name, pin, action, at }, photo);
+      setPending(n);
+      setOffline(true);
+      const state: State = action === "out" ? "off" : action === "pause" ? "paused" : "working";
+      const next: Kind = state === "off" ? "in" : state === "paused" ? "resume" : "out";
+      setEmployees((list) => {
+        const updated = (list ?? []).map((e) => (e.id === emp.id ? { ...e, state, next } : e));
+        saveView(token, { establishmentName: name, employees: updated, face });
+        return updated;
+      });
+      setStep({ kind: "done", name: emp.name, what: action, at, offline: true });
+    },
+    [token, name, face],
+  );
 
   useEffect(() => {
     void load();
@@ -89,10 +143,26 @@ export function ClockKiosk({ token }: { token: string }) {
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-red-800">{error}</p>}
+      {(offline || pending > 0) && (
+        <p role="status" className="mb-4 rounded-2xl bg-amber-50 px-4 py-3 text-ink">
+          {offline ? <strong>Sem internet. </strong> : null}
+          {offline ? "Pode picar com o nome e o PIN: os registos ficam guardados no tablet e são enviados quando a ligação voltar." : "A enviar os registos guardados…"}
+          {pending > 0 && ` (${pending} por enviar)`}
+        </p>
+      )}
+      {refused.length > 0 && (
+        <p role="alert" className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800">
+          {refused.length === 1 ? "1 registo guardado sem internet não foi aceite" : `${refused.length} registos guardados sem internet não foram aceites`} ({[...new Set(refused)].join(", ")}). Peça
+          ao responsável para os acrescentar no painel.{" "}
+          <button type="button" className="underline" onClick={() => setRefused([])}>
+            Fechar
+          </button>
+        </p>
+      )}
 
       {step.kind === "list" && (
         <>
-          {face && <FaceScan auto token={token} onMatch={(match, photo) => setStep({ kind: "confirm", match, photo, auto: true })} />}
+          {face && !offline && <FaceScan auto token={token} onMatch={(match, photo) => setStep({ kind: "confirm", match, photo, auto: true })} />}
           <p className="mb-4 text-lg text-ink-soft">{face ? "Ou toque no seu nome e use o PIN." : "Toque no seu nome."}</p>
           {employees && employees.length === 0 && <p className="text-ink-soft">Ainda não há funcionários. O responsável acrescenta-os no painel, no separador Ponto.</p>}
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -146,6 +216,7 @@ export function ClockKiosk({ token }: { token: string }) {
           emp={step.emp}
           pin={step.pin}
           action={step.action}
+          onOffline={(photo) => void saveOffline(step.emp, step.pin, step.action, photo)}
           onBack={() => setStep({ kind: "list" })}
           onWrongPin={() => setStep({ kind: "pin", emp: step.emp })}
           onDone={(r) => setStep({ kind: "done", name: r.name, what: r.kind, at: r.at })}
@@ -175,6 +246,7 @@ export function ClockKiosk({ token }: { token: string }) {
             {step.name} · {new Date(step.at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}
           </p>
           <p className="mt-2 text-xl text-ink-soft">{doneText[step.what].sub}</p>
+          {step.offline && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-2 text-ink">Guardado no tablet: é enviado quando a internet voltar.</p>}
         </div>
       )}
 
@@ -228,6 +300,7 @@ function Camera({
   emp,
   pin,
   action,
+  onOffline,
   onBack,
   onWrongPin,
   onDone,
@@ -236,6 +309,7 @@ function Camera({
   emp: Employee;
   pin: string;
   action: Kind;
+  onOffline: (photo: Blob | null) => void;
   onBack: () => void;
   onWrongPin: () => void;
   onDone: (r: { name: string; kind: Kind; at: string }) => void;
@@ -273,7 +347,8 @@ function Camera({
     if (photo) form.append("photo", photo, "ponto.jpg");
     const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
     setBusy(false);
-    if (!res) return setError("Sem ligação à internet. Tente de novo.");
+    // Sem internet: o PIN é verificado quando o registo for enviado.
+    if (!res || res.status >= 500) return onOffline(photo);
     const data = await res.json().catch(() => ({}));
     if (res.status === 403) return onWrongPin();
     if (!res.ok) return setError(data.message ?? "Não foi possível registar.");

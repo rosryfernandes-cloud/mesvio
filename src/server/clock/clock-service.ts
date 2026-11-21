@@ -262,6 +262,65 @@ export function pairShifts(entries: ClockEntryRow[], now = new Date()): ClockShi
   return shifts.sort((a, b) => (b.inAt ?? b.outAt ?? b.entries[0].at).localeCompare(a.inAt ?? a.outAt ?? a.entries[0].at));
 }
 
+// ───────────────────────── Alertas dos limites da lei ─────────────────────────
+
+export interface ClockAlert {
+  level: "warn" | "info";
+  employeeName: string;
+  text: string;
+}
+
+/** Limites do Código do Trabalho que o dono deve vigiar (avisos, não decisões jurídicas). */
+export const DAY_MAX_MIN = 10 * 60;
+export const REST_MIN_MIN = 11 * 60;
+export const WEEK_NORMAL_MIN = 40 * 60;
+export const WEEK_MAX_MIN = 48 * 60;
+
+export function computeAlerts(shifts: ClockShift[], timezone: string, now = new Date()): ClockAlert[] {
+  const hm = (m: number) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+  const day = (iso: string) => new Date(iso).toLocaleDateString("pt-PT", { timeZone: timezone, weekday: "short", day: "numeric", month: "short" });
+  const hour = (iso: string) => new Date(iso).toLocaleTimeString("pt-PT", { timeZone: timezone, hour: "2-digit", minute: "2-digit" });
+  const alerts: ClockAlert[] = [];
+  const byEmp = new Map<string, ClockShift[]>();
+  for (const s of shifts) {
+    if (!s.inAt) continue;
+    byEmp.set(s.employeeId, [...(byEmp.get(s.employeeId) ?? []), s]);
+  }
+  for (const list of byEmp.values()) {
+    list.sort((a, b) => a.inAt!.localeCompare(b.inAt!));
+    const name = list[0].employeeName;
+    for (const s of list) {
+      if (s.status === "closed" && s.minutes !== null && s.minutes > DAY_MAX_MIN) alerts.push({ level: "warn", employeeName: name, text: `${name} trabalhou ${hm(s.minutes)} em ${day(s.inAt!)} (mais de 10 horas).` });
+      if (s.status === "open") {
+        const so = Math.round((now.getTime() - ms(s.inAt!)) / 60_000) - s.pauseMinutes;
+        if (so > DAY_MAX_MIN) alerts.push({ level: "warn", employeeName: name, text: `${name} está a trabalhar há ${hm(so)} (mais de 10 horas).` });
+      }
+    }
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      if (!prev.outAt) continue;
+      const rest = Math.round((ms(list[i].inAt!) - ms(prev.outAt)) / 60_000);
+      if (rest >= 0 && rest < REST_MIN_MIN)
+        alerts.push({ level: "warn", employeeName: name, text: `${name} descansou só ${hm(rest)} entre ${day(prev.outAt)} às ${hour(prev.outAt)} e ${day(list[i].inAt!)} às ${hour(list[i].inAt!)} (mínimo de 11 horas).` });
+    }
+    // Semanas de segunda a domingo, na hora do restaurante.
+    const weeks = new Map<string, number>();
+    for (const s of list) {
+      if (s.minutes === null) continue;
+      const d = new Date(new Date(s.inAt!).toLocaleString("en-US", { timeZone: timezone }));
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      weeks.set(key, (weeks.get(key) ?? 0) + s.minutes);
+    }
+    for (const [week, total] of weeks) {
+      const label = new Date(`${week}T12:00:00Z`).toLocaleDateString("pt-PT", { day: "numeric", month: "short" });
+      if (total > WEEK_MAX_MIN) alerts.push({ level: "warn", employeeName: name, text: `${name} fez ${hm(total)} na semana de ${label} (mais de 48 horas).` });
+      else if (total > WEEK_NORMAL_MIN) alerts.push({ level: "info", employeeName: name, text: `${name} fez ${hm(total)} na semana de ${label}: ${hm(total - WEEK_NORMAL_MIN)} acima das 40 horas (horas extra).` });
+    }
+  }
+  return alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === "warn" ? -1 : 1)).slice(0, 30);
+}
+
 export async function listEntries(db: Db, s: Scope, from: Date, to: Date): Promise<ClockEntryRow[]> {
   return withTenant(db, tenantOf(s), async (tx) => {
     const rows = await tx

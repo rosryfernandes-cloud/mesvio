@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
-import { addEmployee, addManualEntry, deleteEntry, DESCRIPTOR_SCHEMA, editEntryTime, establishmentTimezone, getFaceEnabled, KIND_SCHEMA, kioskToken, listCorrections, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
+import { addEmployee, addManualEntry, computeAlerts, deleteEntry, DESCRIPTOR_SCHEMA, editEntryTime, establishmentTimezone, getFaceEnabled, KIND_SCHEMA, kioskToken, listCorrections, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
 
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
   const from = day.safeParse(url.searchParams.get("de")).data ?? addDays(to, -6);
   if (from > to || addDays(from, 62) < to) return json({ message: "Escolha um período até 2 meses." }, 400);
   const entries = await listEntries(db, ctx, localMidnight(from, tz), localMidnight(addDays(to, 1), tz));
+  const shifts = pairShifts(entries);
   return json({
     timezone: tz,
     today,
@@ -33,7 +34,8 @@ export async function GET(request: Request) {
     faceEnabled: await getFaceEnabled(db, ctx),
     corrections: await listCorrections(db, ctx, tz),
     entries,
-    shifts: pairShifts(entries),
+    shifts,
+    alerts: computeAlerts(shifts, tz),
   });
 }
 
