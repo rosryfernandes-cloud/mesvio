@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EYES_CLOSED, EYES_OPEN, loadFaceEngine, readFace } from "./face-engine";
+import { EYES_CLOSED, EYES_OPEN, loadFaceEngine, readEyes, readFace } from "./face-engine";
 
 type Employee = { id: string; name: string; next: "in" | "out" };
 type Match = { employeeId: string; name: string; next: "in" | "out"; ticket: string };
@@ -293,7 +293,8 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
         // descem bem abaixo disso e voltam a abrir. Um limite fixo falhava em quem tem olhos mais fechados.
         let sawOpen = false, sawClosed = false, idle = 0, openRef = 0;
         while (!stop) {
-          const r = await readFace(faceapi, video.current!);
+          // Só os olhos (rápido) até piscar; a assinatura da cara só se calcula depois.
+          const r = await readEyes(faceapi, video.current!);
           // Sem ninguém à frente, olha menos vezes (poupa bateria) e esquece um piscar a meio.
           idle = r && r.size >= 0.15 ? 0 : idle + 1;
           if (idle > 8) {
@@ -307,14 +308,19 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
             if (openRef > 0.18) sawOpen = true;
             setHint("Agora pisque os olhos.");
           } else if (!sawClosed) {
-            if (r.eyes < Math.min(EYES_CLOSED, openRef * 0.72)) sawClosed = true;
+            if (r.eyes < Math.min(EYES_CLOSED + 0.02, openRef * 0.8)) sawClosed = true;
             setHint("Pisque os olhos.");
-          } else if (r.eyes > Math.max(EYES_OPEN * 0.8, openRef * 0.88)) {
-            // Piscou: usa esta leitura (olhos abertos) para saber quem é.
+          } else if (r.eyes > Math.max(EYES_OPEN * 0.75, openRef * 0.86)) {
+            // Piscou: agora sim, a assinatura da cara (olhos abertos) para saber quem é.
             setHint("A reconhecer…");
+            const full = await readFace(faceapi, video.current!);
+            if (!full) {
+              sawOpen = sawClosed = false;
+              continue;
+            }
             const photo = await snap(video.current!);
             const form = new FormData();
-            form.append("descriptor", JSON.stringify(r.descriptor));
+            form.append("descriptor", JSON.stringify(full.descriptor));
             const res = await fetch(`/api/ponto/${token}`, { method: "POST", body: form }).catch(() => null);
             const data = res ? await res.json().catch(() => ({})) : {};
             if (stop) return;
@@ -329,7 +335,8 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
             await new Promise((res) => setTimeout(res, 2500));
             continue;
           }
-          await new Promise((res) => setTimeout(res, idle > 8 ? 600 : 120));
+          // Com alguém à frente, sem pausa (cada leitura já demora); sem ninguém, poupa bateria.
+          await new Promise((res) => setTimeout(res, idle > 8 ? 600 : 0));
         }
       } catch {
         if (!stop) setError(auto ? "Sem câmara: toque no seu nome e use o PIN." : "Não foi possível usar a câmara. Toque em Voltar e use o seu nome e PIN.");

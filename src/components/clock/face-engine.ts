@@ -56,6 +56,14 @@ export async function readFace(faceapi: FaceApi, video: HTMLVideoElement): Promi
   return { descriptor: Array.from(r.descriptor), eyes, size: r.detection.box.width / Math.max(video.videoWidth, 1) };
 }
 
+/** Leitura rápida só dos olhos (sem a assinatura): várias por segundo, para não perder um piscar. */
+export async function readEyes(faceapi: FaceApi, video: HTMLVideoElement): Promise<{ eyes: number; size: number } | null> {
+  const r = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 })).withFaceLandmarks();
+  if (!r) return null;
+  const pts = r.landmarks.positions;
+  return { eyes: (eyeRatio(pts.slice(36, 42)) + eyeRatio(pts.slice(42, 48))) / 2, size: r.detection.box.width / Math.max(video.videoWidth, 1) };
+}
+
 /** Olhos abertos e depois fechados (um piscar), com folga para cada pessoa. */
 export const EYES_OPEN = 0.26;
 export const EYES_CLOSED = 0.2;
