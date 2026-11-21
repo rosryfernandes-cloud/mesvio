@@ -199,8 +199,16 @@ export function ClockView() {
                 </button>
               )}
               {data.faceEnabled && e.hasFace && (
-                <button type="button" className={ghost} disabled={busy} onClick={() => void post({ action: "faceRemove", id: e.id }, `Cara de ${e.name} apagada.`)}>
-                  Apagar cara
+                <button
+                  type="button"
+                  className={`${ghost} border-red-300 text-red-700`}
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`Eliminar a cara de ${e.name}? Deixa de poder picar com a cara até a registar outra vez (o PIN continua a funcionar).`))
+                      void post({ action: "faceRemove", id: e.id }, `Cara de ${e.name} eliminada.`);
+                  }}
+                >
+                  Eliminar cara
                 </button>
               )}
               <button
