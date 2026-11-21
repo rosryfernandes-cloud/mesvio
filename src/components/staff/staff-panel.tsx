@@ -300,7 +300,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         <HelpAssistant />
       </div>
 
-      <nav id="seccoes-painel" className="mb-6 flex scroll-mt-4 gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]" aria-label="Secções do painel">
+      <nav id="seccoes-painel" className="mb-6 flex scroll-mt-4 gap-1 overflow-x-auto border-b border-line [scrollbar-width:none] sm:flex-wrap sm:overflow-visible" aria-label="Secções do painel">
         {(
           (menuOnly
             ? [
