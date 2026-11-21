@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EYES_CLOSED, EYES_OPEN, loadFaceEngine, readEyes, readFace } from "./face-engine";
+import { EYES_CLOSED, EYES_OPEN, FRONTAL, loadFaceEngine, readEyes, readFace, TURNED } from "./face-engine";
 
 type Employee = { id: string; name: string; next: "in" | "out" };
 type Match = { employeeId: string; name: string; next: "in" | "out"; ticket: string };
@@ -291,31 +291,31 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
         const faceapi = await loadFaceEngine();
         // Piscar adaptado a cada pessoa: mede os olhos abertos (máximo recente) e conta um piscar quando
         // descem bem abaixo disso e voltam a abrir. Um limite fixo falhava em quem tem olhos mais fechados.
-        let sawOpen = false, sawClosed = false, idle = 0, openRef = 0;
+        let sawOpen = false, sawClosed = false, idle = 0, openRef = 0, turned = false;
         while (!stop) {
           // Só os olhos (rápido) até piscar; a assinatura da cara só se calcula depois.
           const r = await readEyes(faceapi, video.current!);
           // Sem ninguém à frente, olha menos vezes (poupa bateria) e esquece um piscar a meio.
           idle = r && r.size >= 0.15 ? 0 : idle + 1;
           if (idle > 8) {
-            sawOpen = sawClosed = false;
+            sawOpen = sawClosed = turned = false;
             openRef = 0;
           }
+          if (r && r.size >= 0.15 && TURNED(r.yaw)) turned = true;
+          // Prova de vida: virou a cara e voltou a olhar de frente (ou piscou, se o modelo o apanhar).
+          const alive = (turned && r && FRONTAL(r.yaw)) || (sawClosed && r && r.eyes > Math.max(EYES_OPEN * 0.75, openRef * 0.86));
           if (r && r.size >= 0.15) openRef = Math.max(openRef * 0.97, r.eyes);
-          if (!r) setHint(auto ? "Olhe para a câmara e pisque os olhos." : "Ponha a cara dentro do oval.");
+          if (r && openRef > 0.18) sawOpen = true;
+          if (r && sawOpen && r.eyes < Math.min(EYES_CLOSED + 0.02, openRef * 0.8)) sawClosed = true;
+          if (!r) setHint(auto ? "Olhe para a câmara e vire a cara para o lado." : "Ponha a cara dentro do oval.");
           else if (r.size < 0.15) setHint("Chegue um pouco mais perto.");
-          else if (!sawOpen) {
-            if (openRef > 0.18) sawOpen = true;
-            setHint("Agora pisque os olhos.");
-          } else if (!sawClosed) {
-            if (r.eyes < Math.min(EYES_CLOSED + 0.02, openRef * 0.8)) sawClosed = true;
-            setHint("Pisque os olhos.");
-          } else if (r.eyes > Math.max(EYES_OPEN * 0.75, openRef * 0.86)) {
+          else if (!alive) setHint(turned ? "Agora olhe de frente." : "Vire a cara para o lado e volte.");
+          else {
             // Piscou: agora sim, a assinatura da cara (olhos abertos) para saber quem é.
             setHint("A reconhecer…");
             const full = await readFace(faceapi, video.current!);
             if (!full) {
-              sawOpen = sawClosed = false;
+              sawOpen = sawClosed = turned = false;
               continue;
             }
             const photo = await snap(video.current!);
@@ -331,7 +331,7 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
             }
             // Modo automático: avisa e volta a tentar daqui a pouco.
             setHint(data.message ?? "Não o reconheci. Tente outra vez ou use o seu nome e PIN.");
-            sawOpen = sawClosed = false;
+            sawOpen = sawClosed = turned = false;
             await new Promise((res) => setTimeout(res, 2500));
             continue;
           }

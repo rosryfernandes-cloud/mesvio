@@ -57,12 +57,19 @@ export async function readFace(faceapi: FaceApi, video: HTMLVideoElement): Promi
 }
 
 /** Leitura rápida só dos olhos (sem a assinatura): várias por segundo, para não perder um piscar. */
-export async function readEyes(faceapi: FaceApi, video: HTMLVideoElement): Promise<{ eyes: number; size: number } | null> {
+export async function readEyes(faceapi: FaceApi, video: HTMLVideoElement): Promise<{ eyes: number; size: number; yaw: number } | null> {
   const r = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 })).withFaceLandmarks();
   if (!r) return null;
   const pts = r.landmarks.positions;
-  return { eyes: (eyeRatio(pts.slice(36, 42)) + eyeRatio(pts.slice(42, 48))) / 2, size: r.detection.box.width / Math.max(video.videoWidth, 1) };
+  // Virar a cara: onde está a ponta do nariz (30) entre os dois lados do queixo (0 e 16). De frente ≈ 0,5.
+  const span = pts[16].x - pts[0].x;
+  const yaw = span > 0 ? (pts[30].x - pts[0].x) / span : 0.5;
+  return { eyes: (eyeRatio(pts.slice(36, 42)) + eyeRatio(pts.slice(42, 48))) / 2, size: r.detection.box.width / Math.max(video.videoWidth, 1), yaw };
 }
+
+/** Cara virada para um dos lados (prova de vida: uma foto não vira). */
+export const TURNED = (yaw: number) => yaw < 0.36 || yaw > 0.64;
+export const FRONTAL = (yaw: number) => yaw > 0.42 && yaw < 0.58;
 
 /** Olhos abertos e depois fechados (um piscar), com folga para cada pessoa. */
 export const EYES_OPEN = 0.26;

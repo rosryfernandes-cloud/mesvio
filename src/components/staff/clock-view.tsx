@@ -123,7 +123,7 @@ export function ClockView() {
       <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
         <h2 className="text-xl">Reconhecimento facial</h2>
         <p className="text-sm text-ink-soft">
-          Com o reconhecimento ligado, o funcionário só mostra a cara ao tablet, pisca os olhos e confirma o nome. O nome e o PIN continuam a funcionar
+          Com o reconhecimento ligado, o funcionário só mostra a cara ao tablet e vira-a um pouco para o lado, e o registo fica feito. O nome e o PIN continuam a funcionar
           para quem não quiser ou não for reconhecido.
         </p>
         {!data.faceEnabled && (
