@@ -89,12 +89,14 @@ export interface ClockEmployee {
   name: string;
   active: boolean;
   hasFace: boolean;
+  /** Valor bruto por hora em cêntimos (null = não definido). */
+  hourlyCents: number | null;
 }
 
 export async function listEmployees(db: Db, s: Scope): Promise<ClockEmployee[]> {
   return withTenant(db, tenantOf(s), (tx) =>
     tx
-      .select({ id: clockEmployees.id, name: clockEmployees.name, active: clockEmployees.active, hasFace: sql<boolean>`${clockEmployees.faceCiphertext} is not null` })
+      .select({ id: clockEmployees.id, name: clockEmployees.name, active: clockEmployees.active, hasFace: sql<boolean>`${clockEmployees.faceCiphertext} is not null`, hourlyCents: clockEmployees.hourlyCents })
       .from(clockEmployees)
       .where(eq(clockEmployees.establishmentId, s.establishmentId))
       .orderBy(desc(clockEmployees.active), asc(clockEmployees.name))
@@ -142,12 +144,13 @@ export async function addEmployee(db: Db, s: Scope, name: string, pin: string): 
   });
 }
 
-export async function updateEmployee(db: Db, s: Scope, id: string, patch: { name?: string; pin?: string; active?: boolean }): Promise<boolean> {
+export async function updateEmployee(db: Db, s: Scope, id: string, patch: { name?: string; pin?: string; active?: boolean; hourlyCents?: number | null }): Promise<boolean> {
   return withTenant(db, tenantOf(s), async (tx) => {
     const set: Partial<typeof clockEmployees.$inferInsert> = {};
     if (patch.name !== undefined) set.name = patch.name.trim();
     if (patch.pin !== undefined) set.pinHash = hashPin(patch.pin);
     if (patch.active !== undefined) set.active = patch.active;
+    if (patch.hourlyCents !== undefined) set.hourlyCents = patch.hourlyCents;
     if (Object.keys(set).length === 0) return true;
     const rows = await tx
       .update(clockEmployees)
@@ -260,6 +263,53 @@ export function pairShifts(entries: ClockEntryRow[], now = new Date()): ClockShi
     }
   }
   return shifts.sort((a, b) => (b.inAt ?? b.outAt ?? b.entries[0].at).localeCompare(a.inAt ?? a.outAt ?? a.entries[0].at));
+}
+
+// ───────────────────────── Custo de pessoal ─────────────────────────
+
+/** TSU paga pela empresa sobre os salários (regime geral). */
+export const TSU_EMPLOYER = 0.2375;
+
+export interface LaborCost {
+  /** Soma do valor bruto das horas trabalhadas (cêntimos). */
+  totalCents: number;
+  /** Com a TSU da empresa. */
+  withTsuCents: number;
+  byDay: { date: string; cents: number; minutes: number; people: number }[];
+  byEmployee: { employeeId: string; name: string; minutes: number; cents: number; hourlyCents: number | null }[];
+  /** Funcionários com horas mas sem valor/hora definido. */
+  missingRate: string[];
+}
+
+export function laborCost(shifts: ClockShift[], rates: Map<string, number | null>, timezone: string): LaborCost {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const byDay = new Map<string, { cents: number; minutes: number; people: Set<string> }>();
+  const byEmp = new Map<string, { name: string; minutes: number; cents: number }>();
+  const missing = new Set<string>();
+  for (const s of shifts) {
+    if (s.minutes === null || !s.inAt) continue;
+    const rate = rates.get(s.employeeId) ?? null;
+    if (rate === null) missing.add(s.employeeName);
+    const cents = rate === null ? 0 : Math.round((s.minutes / 60) * rate);
+    const d = day.format(new Date(s.inAt));
+    const bd = byDay.get(d) ?? { cents: 0, minutes: 0, people: new Set<string>() };
+    bd.cents += cents;
+    bd.minutes += s.minutes;
+    bd.people.add(s.employeeId);
+    byDay.set(d, bd);
+    const be = byEmp.get(s.employeeId) ?? { name: s.employeeName, minutes: 0, cents: 0 };
+    be.minutes += s.minutes;
+    be.cents += cents;
+    byEmp.set(s.employeeId, be);
+  }
+  const totalCents = [...byEmp.values()].reduce((t, e) => t + e.cents, 0);
+  return {
+    totalCents,
+    withTsuCents: Math.round(totalCents * (1 + TSU_EMPLOYER)),
+    byDay: [...byDay.entries()].map(([date, v]) => ({ date, cents: v.cents, minutes: v.minutes, people: v.people.size })).sort((a, b) => b.date.localeCompare(a.date)),
+    byEmployee: [...byEmp.entries()].map(([employeeId, v]) => ({ employeeId, ...v, hourlyCents: rates.get(employeeId) ?? null })).sort((a, b) => b.cents - a.cents),
+    missingRate: [...missing],
+  };
 }
 
 // ───────────────────────── Alertas dos limites da lei ─────────────────────────

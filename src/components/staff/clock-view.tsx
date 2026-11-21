@@ -6,7 +6,7 @@ import { ScheduleEditor } from "./schedule-editor";
 
 /** Picar ponto no painel: link do tablet, funcionários (nome e PIN) e registos com as horas. */
 
-type Employee = { id: string; name: string; active: boolean; hasFace: boolean };
+type Employee = { id: string; name: string; active: boolean; hasFace: boolean; hourlyCents: number | null };
 type Kind = "in" | "out" | "pause" | "resume";
 type Entry = { id: string; employeeId: string; employeeName: string; kind: Kind; at: string; hasPhoto: boolean; source: "tablet" | "manual"; originalAt: string | null };
 type Shift = {
@@ -25,10 +25,18 @@ type Shift = {
 type Correction = { at: string; action: "add" | "edit" | "delete"; text: string };
 type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[];
   notify: boolean;
+  cost: {
+    totalCents: number;
+    withTsuCents: number;
+    byDay: { date: string; cents: number; minutes: number; people: number }[];
+    byEmployee: { employeeId: string; name: string; minutes: number; cents: number; hourlyCents: number | null }[];
+    missingRate: string[];
+  };
   attendance: { employeeId: string; employeeName: string; date: string; start: string; end: string; status: "upcoming" | "ontime" | "late" | "absent" | "waiting"; lateMinutes: number; inAt: string | null }[];
 };
 
 const KIND_LABEL: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
+const eur = (c: number) => (c / 100).toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
 
 /** Diferença (ms) entre a hora local no fuso e UTC, num dado instante. */
 function offsetMs(instant: number, tz: string): number {
@@ -229,7 +237,23 @@ export function ClockView() {
                 {e.name}
                 {!e.active && <span className="ml-2 text-xs font-normal text-ink-soft">(desativado)</span>}
                 {data.faceEnabled && e.hasFace && <span className="ml-2 text-xs font-normal text-ok">· cara registada</span>}
+                {e.hourlyCents !== null && <span className="ml-2 text-xs font-normal text-ink-soft">· {eur(e.hourlyCents)}/h</span>}
               </span>
+              <button
+                type="button"
+                className={ghost}
+                disabled={busy}
+                onClick={() => {
+                  const v = window.prompt(`Valor bruto por hora de ${e.name} (ex.: 5,80). Deixe vazio para tirar.`, e.hourlyCents !== null ? (e.hourlyCents / 100).toFixed(2).replace(".", ",") : "");
+                  if (v === null) return;
+                  const t = v.trim().replace("€", "").replace(",", ".");
+                  const cents = t === "" ? null : Math.round(Number(t) * 100);
+                  if (cents !== null && (!Number.isFinite(cents) || cents < 0 || cents > 100_000)) return setMessage({ text: "Valor inválido. Use por exemplo 5,80.", error: true });
+                  void post({ action: "update", id: e.id, hourlyCents: cents }, cents === null ? `Valor/hora de ${e.name} tirado.` : `Valor/hora de ${e.name}: ${eur(cents)}.`);
+                }}
+              >
+                Valor/hora
+              </button>
               {data.faceEnabled && e.active && (
                 <button type="button" className={ghost} disabled={busy} onClick={() => setEnrolling(e)}>
                   {e.hasFace ? "Registar a cara de novo" : "Registar a cara"}
@@ -388,6 +412,41 @@ export function ClockView() {
           </button>
         </div>
 
+        {data.cost.byEmployee.length > 0 && (
+          <div className="grid gap-2 rounded-2xl border border-line bg-paper px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-semibold">Custo de pessoal no período</p>
+              <p>
+                <strong className="text-lg tabular-nums">{eur(data.cost.totalCents)}</strong>
+                <span className="ml-2 text-ink-soft">· com a TSU da empresa (23,75%): {eur(data.cost.withTsuCents)}</span>
+              </p>
+            </div>
+            {data.cost.missingRate.length > 0 && (
+              <p className="text-amber-700">Sem valor/hora: {data.cost.missingRate.join(", ")}. Carregue em &ldquo;Valor/hora&rdquo; na lista de funcionários.</p>
+            )}
+            <ul className="flex flex-wrap gap-2">
+              {data.cost.byEmployee.map((e) => (
+                <li key={e.employeeId} className="rounded-full bg-card px-3 py-1">
+                  {e.name}: <strong className="tabular-nums">{e.hourlyCents === null ? "—" : eur(e.cents)}</strong>
+                </li>
+              ))}
+            </ul>
+            {data.cost.byDay.length > 1 && (
+              <ul className="grid gap-0.5">
+                {data.cost.byDay.map((d) => (
+                  <li key={d.date} className="flex gap-3 tabular-nums">
+                    <span className="w-28 text-ink-soft">{new Date(`${d.date}T12:00:00Z`).toLocaleDateString("pt-PT", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</span>
+                    <span className="w-24">{eur(d.cents)}</span>
+                    <span className="text-ink-soft">
+                      {d.people} {d.people === 1 ? "pessoa" : "pessoas"} · {hm(d.minutes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-ink-soft">Valor bruto das horas trabalhadas (sem pausas). Não inclui subsídios, seguros nem outros encargos.</p>
+          </div>
+        )}
         {totals.size > 0 && (
           <div className="grid gap-1">
             <p className="text-sm font-semibold">Total no período</p>

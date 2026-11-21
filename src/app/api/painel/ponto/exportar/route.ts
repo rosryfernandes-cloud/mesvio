@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
-import { establishmentTimezone, listEntries, pairShifts } from "@/server/clock/clock-service";
+import { establishmentTimezone, listEmployees, listEntries, pairShifts } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight, localTime } from "@/server/clock/clock-dates";
 import { guardStaff, json } from "@/server/staff/http";
 
@@ -23,7 +23,9 @@ export async function GET(request: Request) {
   const db = await getDb();
   const tz = await establishmentTimezone(db, ctx);
   const shifts = pairShifts(await listEntries(db, ctx, localMidnight(from, tz), localMidnight(addDays(to, 1), tz))).reverse();
-  const lines = ["Funcionário;Data;Entrada;Saída;Pausas;Horas trabalhadas;Nota"];
+  const rates = new Map((await listEmployees(db, ctx)).map((e) => [e.id, e.hourlyCents]));
+  const lines = ["Funcionário;Data;Entrada;Saída;Pausas;Horas trabalhadas;Custo (bruto);Nota"];
+  const eur = (c: number) => (c / 100).toFixed(2).replace(".", ",");
   const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
   for (const s of shifts) {
     const ref = new Date(s.inAt ?? s.outAt ?? s.entries[0].at);
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
     ].filter(Boolean);
     const note = notes.join(" · ");
     const [y, m, d] = localDate(ref, tz).split("-");
-    lines.push([s.employeeName, `${d}/${m}/${y}`, s.inAt ? localTime(new Date(s.inAt), tz) : "", s.outAt ? localTime(new Date(s.outAt), tz) : "", s.pauseMinutes ? hm(s.pauseMinutes) : "", hours, note].map(cell).join(";"));
+    lines.push([s.employeeName, `${d}/${m}/${y}`, s.inAt ? localTime(new Date(s.inAt), tz) : "", s.outAt ? localTime(new Date(s.outAt), tz) : "", s.pauseMinutes ? hm(s.pauseMinutes) : "", hours, s.minutes !== null && rates.get(s.employeeId) != null ? eur(Math.round((s.minutes / 60) * rates.get(s.employeeId)!)) : "", note].map(cell).join(";"));
   }
   // BOM para o Excel abrir os acentos certos.
   return new Response(`﻿${lines.join("\r\n")}\r\n`, {

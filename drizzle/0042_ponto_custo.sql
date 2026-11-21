@@ -1,0 +1,1 @@
+ALTER TABLE "clock_employees" ADD COLUMN "hourly_cents" integer;

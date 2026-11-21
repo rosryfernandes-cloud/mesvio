@@ -105,3 +105,25 @@ describe("alertas da lei", () => {
     expect(text).toContain("mais de 48 horas");
   });
 });
+
+describe("custo de pessoal", () => {
+  it("multiplica as horas trabalhadas pelo valor/hora, por dia e por pessoa, com a TSU e quem falta definir", async () => {
+    const { laborCost } = await import("./clock-service");
+    const shifts = pairShifts(
+      [
+        e("1", "in", "2026-11-20T09:00:00.000Z"),
+        e("2", "pause", "2026-11-20T13:00:00.000Z"),
+        e("3", "resume", "2026-11-20T14:00:00.000Z"),
+        e("4", "out", "2026-11-20T18:00:00.000Z"),
+        e("5", "in", "2026-11-20T10:00:00.000Z", "b"),
+        e("6", "out", "2026-11-20T14:00:00.000Z", "b"),
+      ],
+      new Date("2026-11-21T00:00:00Z"),
+    );
+    const c = laborCost(shifts, new Map([["a", 600], ["b", null]]), "Europe/Lisbon");
+    expect(c.totalCents).toBe(8 * 600); // 8 h (9–18 menos 1 h de pausa) a 6,00 €
+    expect(c.withTsuCents).toBe(Math.round(4800 * 1.2375));
+    expect(c.missingRate).toEqual(["B"]);
+    expect(c.byDay[0]).toMatchObject({ date: "2026-11-20", people: 2, minutes: 12 * 60 });
+  });
+});

@@ -643,6 +643,8 @@ export const clockEmployees = pgTable(
     /** Assinaturas da cara (vetores de 128 números, nunca a foto), cifradas com AES-256-GCM (secret-box). */
     faceCiphertext: text("face_ciphertext"),
     faceEnrolledAt: timestamp("face_enrolled_at", { withTimezone: true }),
+    /** Valor bruto por hora, em cêntimos (para o custo de pessoal; só o dono e o gerente veem). */
+    hourlyCents: integer("hourly_cents"),
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
   },
