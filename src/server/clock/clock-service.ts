@@ -28,7 +28,7 @@ const OPEN_SHIFT_MS = 16 * 3600_000;
 /** Assinatura de uma cara: 128 números (modelo de reconhecimento a correr no tablet). */
 export const DESCRIPTOR_SCHEMA = z.array(z.number().min(-2).max(2)).length(128);
 /** Distância máxima para considerar a mesma pessoa (mais baixo = mais exigente). */
-export const FACE_MATCH_MAX = 0.5;
+export const FACE_MATCH_MAX = 0.55;
 /** A segunda pessoa mais parecida tem de ficar claramente mais longe (evita confundir irmãos). */
 const FACE_MARGIN = 0.06;
 const TICKET_MS = 60_000;

@@ -54,7 +54,7 @@ export function FaceEnroll({ name, onSave, onClose }: { name: string; onSave: (s
       let reading = null;
       for (let tries = 0; tries < 8 && !reading; tries++) {
         const r = await readFace(faceapi, video.current);
-        if (r && r.size > 0.18) reading = r;
+        if (r && r.size > 0.15) reading = r;
         else await new Promise((res) => setTimeout(res, 250));
       }
       if (!reading) {

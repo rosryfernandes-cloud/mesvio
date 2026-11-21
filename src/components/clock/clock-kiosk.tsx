@@ -289,21 +289,27 @@ function FaceScan({ token, onBack, onMatch, auto = false }: { token: string; onB
         await video.current.play();
         setHint("A preparar…");
         const faceapi = await loadFaceEngine();
-        let sawOpen = false, sawClosed = false, idle = 0;
+        // Piscar adaptado a cada pessoa: mede os olhos abertos (máximo recente) e conta um piscar quando
+        // descem bem abaixo disso e voltam a abrir. Um limite fixo falhava em quem tem olhos mais fechados.
+        let sawOpen = false, sawClosed = false, idle = 0, openRef = 0;
         while (!stop) {
           const r = await readFace(faceapi, video.current!);
           // Sem ninguém à frente, olha menos vezes (poupa bateria) e esquece um piscar a meio.
-          idle = r && r.size >= 0.2 ? 0 : idle + 1;
-          if (idle > 8) sawOpen = sawClosed = false;
+          idle = r && r.size >= 0.15 ? 0 : idle + 1;
+          if (idle > 8) {
+            sawOpen = sawClosed = false;
+            openRef = 0;
+          }
+          if (r && r.size >= 0.15) openRef = Math.max(openRef * 0.97, r.eyes);
           if (!r) setHint(auto ? "Olhe para a câmara e pisque os olhos." : "Ponha a cara dentro do oval.");
-          else if (r.size < 0.2) setHint("Chegue um pouco mais perto.");
+          else if (r.size < 0.15) setHint("Chegue um pouco mais perto.");
           else if (!sawOpen) {
-            if (r.eyes > EYES_OPEN) sawOpen = true;
+            if (openRef > 0.18) sawOpen = true;
             setHint("Agora pisque os olhos.");
           } else if (!sawClosed) {
-            if (r.eyes < EYES_CLOSED) sawClosed = true;
+            if (r.eyes < Math.min(EYES_CLOSED, openRef * 0.72)) sawClosed = true;
             setHint("Pisque os olhos.");
-          } else if (r.eyes > EYES_OPEN) {
+          } else if (r.eyes > Math.max(EYES_OPEN * 0.8, openRef * 0.88)) {
             // Piscou: usa esta leitura (olhos abertos) para saber quem é.
             setHint("A reconhecer…");
             const photo = await snap(video.current!);
