@@ -46,3 +46,40 @@ describe("picar ponto: pausas e correções (base de dados)", () => {
     expect(hist.find((h) => h.action === "edit")!.text).toContain("Maria");
   });
 });
+
+describe("picar ponto: escalas, atrasos e avisos ao dono", () => {
+  it("compara a escala com as entradas e avisa uma só vez de quem não picou", async () => {
+    const { saveWeek, getWeek, attendance, checkScheduleAlerts } = await import("./clock-schedule");
+    const t = await import("@/server/db/schema");
+    const db = await createTestDb();
+    const token = await kioskToken(db, s);
+    const maria = (await addEmployee(db, s, "Maria", "1234")).id;
+    const joao = (await addEmployee(db, s, "João", "9999")).id;
+    // Semana de 16/11 (segunda). Sexta 20/11: Maria 09:00-15:00, João 10:00-16:00 (hora de Lisboa = UTC no inverno).
+    await saveWeek(db, s, "2026-11-16", [
+      { employeeId: maria, date: "2026-11-20", slots: [{ start: "09:00", end: "15:00" }] },
+      { employeeId: joao, date: "2026-11-20", slots: [{ start: "10:00", end: "16:00" }] },
+    ]);
+    expect((await getWeek(db, s, "2026-11-16")).length).toBe(2);
+    await punch(db, token, maria, "1234", null, undefined, at("09:12"));
+    const now = at("11:00");
+    const shifts = pairShifts(await listEntries(db, s, at("00:00"), at("23:59")), now);
+    const att = attendance(await getWeek(db, s, "2026-11-16"), shifts, new Map([[maria, "Maria"], [joao, "João"]]), "Europe/Lisbon", now);
+    expect(att.find((a) => a.employeeId === maria)).toMatchObject({ status: "late", lateMinutes: 12 });
+    expect(att.find((a) => a.employeeId === joao)).toMatchObject({ status: "absent" });
+
+    // Aviso ao dono: o dono demo com um aparelho registado neste restaurante.
+    await db.insert(t.pushSubscriptions).values({ organizationId: s.organizationId, establishmentId: s.establishmentId, userId: s.userId, endpoint: "https://push.example/1", p256dh: "x".repeat(20), auth: "y".repeat(12) });
+    const sentBodies: string[] = [];
+    const send = async (_sub: unknown, payload: string) => {
+      sentBodies.push(JSON.parse(payload).body);
+      return { statusCode: 201 };
+    };
+    expect(await checkScheduleAlerts(db, now, send)).toBe(1);
+    expect(sentBodies[0]).toContain("João ainda não picou a entrada");
+    expect(await checkScheduleAlerts(db, at("11:05"), send)).toBe(0); // não repete
+    // Maria não picou a saída: 45 min depois do fim (15:00) avisa.
+    expect(await checkScheduleAlerts(db, at("15:50"), send)).toBe(1);
+    expect(sentBodies[1]).toContain("Maria ainda não picou a saída");
+  });
+});

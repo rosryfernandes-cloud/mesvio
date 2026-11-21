@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FaceEnroll } from "./face-enroll";
+import { ScheduleEditor } from "./schedule-editor";
 
 /** Picar ponto no painel: link do tablet, funcionários (nome e PIN) e registos com as horas. */
 
@@ -22,7 +23,10 @@ type Shift = {
   outEntryId: string | null;
 };
 type Correction = { at: string; action: "add" | "edit" | "delete"; text: string };
-type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[] };
+type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[];
+  notify: boolean;
+  attendance: { employeeId: string; employeeName: string; date: string; start: string; end: string; status: "upcoming" | "ontime" | "late" | "absent" | "waiting"; lateMinutes: number; inAt: string | null }[];
+};
 
 const KIND_LABEL: Record<Kind, string> = { in: "Entrada", out: "Saída", pause: "Pausa", resume: "Regresso da pausa" };
 
@@ -265,6 +269,31 @@ export function ClockView() {
         </ul>
       </section>
 
+      <ScheduleEditor today={data.today} employees={data.employees} onSaved={(text) => {
+        setMessage({ text, error: false });
+        void load(range ?? undefined);
+      }} />
+
+      <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
+        <h2 className="text-xl">Avisos no telemóvel</h2>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={data.notify}
+            disabled={busy}
+            onChange={(e) => void post({ action: "notify", on: e.target.checked }, e.target.checked ? "Avisos ligados." : "Avisos desligados.")}
+            className="mt-1 size-5 accent-[var(--color-brand)]"
+          />
+          <span>
+            <span className="font-semibold">Avisar quando alguém da escala não picar</span>
+            <span className="block text-sm text-ink-soft">
+              Se alguém não picar a entrada 15 minutos depois da hora da escala, ou continuar sem picar a saída 45 minutos depois do fim, o dono e os gerentes
+              recebem um aviso no telemóvel. Para receber, ligue as notificações neste aparelho (no topo do painel).
+            </span>
+          </span>
+        </label>
+      </section>
+
       <section className="grid gap-4 rounded-3xl border border-line bg-card p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="text-xl">Registos e horas</h2>
@@ -284,6 +313,29 @@ export function ClockView() {
             <strong>{forgotten.length === 1 ? "1 turno incompleto" : `${forgotten.length} turnos incompletos`}</strong> (saída esquecida ou entrada em falta). Toque em
             &ldquo;Corrigir&rdquo; na linha para acrescentar a hora que falta.
           </p>
+        )}
+        {data.attendance.some((a) => a.status !== "upcoming") && (
+          <div className="grid gap-1.5 rounded-2xl border border-line bg-paper px-4 py-3 text-sm">
+            <p className="font-semibold">Escala e entradas</p>
+            <ul className="grid gap-1">
+              {data.attendance
+                .filter((a) => a.status !== "upcoming")
+                .slice(-40)
+                .reverse()
+                .map((a, i) => (
+                  <li key={i} className="flex flex-wrap gap-x-2">
+                    <span className="w-28 shrink-0 text-ink-soft">
+                      {new Date(`${a.date}T12:00:00Z`).toLocaleDateString("pt-PT", { weekday: "short", day: "numeric", timeZone: "UTC" })} · {a.start}
+                    </span>
+                    <span className="font-semibold">{a.employeeName}</span>
+                    {a.status === "ontime" && <span className="text-ok">a horas ({time(a.inAt!)})</span>}
+                    {a.status === "late" && <span className="text-amber-700">chegou {a.lateMinutes} min atrasado ({time(a.inAt!)})</span>}
+                    {a.status === "absent" && <span className="font-semibold text-danger">não picou a entrada</span>}
+                    {a.status === "waiting" && <span className="text-ink-soft">ainda não picou</span>}
+                  </li>
+                ))}
+            </ul>
+          </div>
         )}
         {data.alerts.length > 0 && (
           <div className="grid gap-1.5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">

@@ -288,6 +288,13 @@
       "when": 1795286976255,
       "tag": "0040_ponto_pausas_correcoes",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795288984799,
+      "tag": "0041_ponto_escalas",
+      "breakpoints": true
     }
   ]
 }

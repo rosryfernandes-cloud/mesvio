@@ -3,6 +3,7 @@ import { getDb } from "@/server/db/client";
 import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { addEmployee, addManualEntry, computeAlerts, deleteEntry, DESCRIPTOR_SCHEMA, editEntryTime, establishmentTimezone, getFaceEnabled, KIND_SCHEMA, kioskToken, listCorrections, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
+import { attendance, getNotify, getSchedules, setNotify } from "@/server/clock/clock-schedule";
 import { guardStaff, json } from "@/server/staff/http";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,8 @@ export async function GET(request: Request) {
     entries,
     shifts,
     alerts: computeAlerts(shifts, tz),
+    notify: await getNotify(db, ctx),
+    attendance: attendance(await getSchedules(db, ctx, from, to), shifts, new Map((await listEmployees(db, ctx)).map((e) => [e.id, e.name])), tz),
   });
 }
 
@@ -49,6 +52,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("addEntry"), employeeId: z.uuid(), kind: KIND_SCHEMA, at: z.iso.datetime({ offset: true }) }),
   z.object({ action: z.literal("editEntry"), id: z.uuid(), at: z.iso.datetime({ offset: true }) }),
   z.object({ action: z.literal("deleteEntry"), id: z.uuid() }),
+  z.object({ action: z.literal("notify"), on: z.boolean() }),
 ]);
 
 export async function POST(request: Request) {
@@ -79,6 +83,10 @@ export async function POST(request: Request) {
     if (at.getTime() > Date.now() + 5 * 60_000) return json({ message: "Não pode registar horas no futuro." }, 400);
     const ok = d.action === "addEntry" ? await addManualEntry(db, ctx, d.employeeId, d.kind, at) : await editEntryTime(db, ctx, d.id, at);
     return ok ? json({ ok: true }) : json({ message: "Registo não encontrado." }, 404);
+  }
+  if (d.action === "notify") {
+    await setNotify(db, ctx, d.on);
+    return json({ ok: true });
   }
   if (d.action === "deleteEntry") return (await deleteEntry(db, ctx, d.id)) ? json({ ok: true }) : json({ message: "Registo não encontrado." }, 404);
   return json({ kioskToken: await kioskToken(db, ctx, true) });

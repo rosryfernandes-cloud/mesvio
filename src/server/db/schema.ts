@@ -91,6 +91,8 @@ export const establishments = pgTable(
      * depois de informar os funcionários por escrito; o PIN fica sempre disponível como alternativa.
      */
     clockFaceEnabled: boolean("clock_face_enabled").notNull().default(false),
+    /** Avisar o dono no telemóvel quando alguém não pica a entrada ou a saída da escala. */
+    clockNotify: boolean("clock_notify").notNull().default(true),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -287,6 +289,30 @@ export const serviceRequests = pgTable(
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (t) => [index("service_requests_open_idx").on(t.establishmentId, t.resolvedAt), index("service_requests_table_idx").on(t.tableId, t.createdAt)],
+);
+
+/**
+ * Escala: o horário previsto de cada funcionário num dia (pode haver dois turnos, ex.: almoço e jantar).
+ * Serve para ver atrasos e faltas e para avisar o dono no telemóvel.
+ */
+export const clockSchedules = pgTable(
+  "clock_schedules",
+  {
+    id: id(),
+    organizationId: orgId(),
+    establishmentId: uuid("establishment_id").notNull().references(() => establishments.id),
+    employeeId: uuid("employee_id").notNull().references(() => clockEmployees.id),
+    /** Dia no fuso do restaurante (AAAA-MM-DD). */
+    workDate: date("work_date", { mode: "string" }).notNull(),
+    /** "HH:MM"; se o fim for menor que o início, o turno acaba no dia seguinte. */
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    /** Já se avisou o dono de que não picou a entrada / a saída (para não repetir). */
+    lateNotifiedAt: timestamp("late_notified_at", { withTimezone: true }),
+    outNotifiedAt: timestamp("out_notified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("clock_schedules_est_date_idx").on(t.establishmentId, t.workDate), index("clock_schedules_emp_date_idx").on(t.employeeId, t.workDate)],
 );
 
 /** Formato guardado em `establishments.daily_menu_settings` (validado em daily-menu.ts). */

@@ -3,6 +3,7 @@ import { getDb } from "@/server/db/client";
 import { runMaintenance } from "@/server/runtime/maintenance";
 import { syncAllSubscriptions } from "@/server/billing/subscriptions";
 import { stripeClient } from "@/server/payments/stripe-provider";
+import { checkScheduleAlerts } from "@/server/clock/clock-schedule";
 
 export const dynamic = "force-dynamic";
 // Na Vercel: tempo máximo de uma execução do cron (esvazia a fila em lotes até acabar).
@@ -26,5 +27,10 @@ export async function GET(request: Request) {
   // estado das mensalidades (cartão recusado, cancelamentos).
   const hourly = new Date().getUTCMinutes() === 0;
   const subscriptions = hourly && process.env.STRIPE_SECRET_KEY ? await syncAllSubscriptions(db, stripeClient()).catch(() => null) : null;
-  return NextResponse.json({ ...result, subscriptions }, { headers: { "Cache-Control": "no-store" } });
+  // Picar ponto: avisar o dono de quem não picou a entrada ou a saída da escala (nunca deixa o cron falhar).
+  const clockAlerts = await checkScheduleAlerts(db).catch((err) => {
+    console.error("[ponto] avisos da escala falharam", err);
+    return null;
+  });
+  return NextResponse.json({ ...result, subscriptions, clockAlerts }, { headers: { "Cache-Control": "no-store" } });
 }

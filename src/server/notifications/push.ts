@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import webpush from "web-push";
 import { formatEur } from "@/lib/money";
 import { getDb, type Db } from "@/server/db/client";
-import { diningTables, establishments, platformAdmins, pushSubscriptions } from "@/server/db/schema";
+import { diningTables, establishments, memberships, platformAdmins, pushSubscriptions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { keepAlive } from "@/server/runtime/keep-alive";
 import type { StaffContext } from "@/server/staff/context";
@@ -173,6 +173,31 @@ export async function notifyPlatformAdmins(systemDb: Db, message: PushMessage, s
   let sent = 0;
   for (const [org, list] of Map.groupBy(unique, (s) => s.organizationId)) sent += await deliver(systemDb, org, list, message, send);
   return sent;
+}
+
+/**
+ * Avisos para quem gere o restaurante (donos e gerentes), nos aparelhos onde ligaram as notificações.
+ * Ligação de sistema (tarefas automáticas, ex.: alguém não picou a entrada da escala).
+ */
+export async function notifyManagers(systemDb: Db, organizationId: string, establishmentId: string, message: PushMessage, send: PushSender | null = vapidSender()): Promise<number> {
+  if (!send) return 0;
+  const people = await systemDb
+    .select({ userId: memberships.userId })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.organizationId, organizationId),
+        inArray(memberships.role, ["owner", "manager"]),
+        or(isNull(memberships.establishmentId), eq(memberships.establishmentId, establishmentId)),
+      ),
+    );
+  if (people.length === 0) return 0;
+  const subs = await systemDb
+    .select()
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.establishmentId, establishmentId), inArray(pushSubscriptions.userId, people.map((p) => p.userId))));
+  if (subs.length === 0) return 0;
+  return deliver(systemDb, organizationId, subs, message, send);
 }
 
 /** Envia uma notificação qualquer depois da resposta (sem chaves VAPID não faz nada). */
