@@ -6,6 +6,7 @@ import { can, manageableRoles } from "@/server/staff/context";
 import { getStaffContext } from "@/server/staff/http";
 import { getBoard } from "@/server/staff/staff-service";
 import { StaffPanel } from "@/components/staff/staff-panel";
+import { getExtras } from "@/server/extras/extras-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Painel", robots: { index: false, follow: false } };
@@ -19,6 +20,7 @@ export default async function StaffPanelPage() {
       initialBoard={await getBoard(db, ctx)}
       me={{
         isPlatformAdmin: (await findPlatformAdmin(db, ctx.userId)) !== null,
+        extras: await getExtras(db, ctx.organizationId, ctx.establishmentId),
         displayName: ctx.displayName,
         role: ctx.role,
         establishmentId: ctx.establishmentId,

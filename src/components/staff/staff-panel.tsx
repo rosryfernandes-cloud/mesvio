@@ -11,6 +11,8 @@ import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
 import { DailyMenuView } from "./daily-menu-view";
 import { ClockView } from "./clock-view";
+import { CommandView } from "./command-view";
+import { ExtraLinks } from "./extra-links";
 import { SummaryView } from "./summary-view";
 import { ConfirmInline } from "./confirm-inline";
 import { BrandingView } from "./branding-view";
@@ -29,7 +31,7 @@ const POLL_MS = 3000;
 /** Com outro separador à frente, continua a ver pedidos para tocar (o browser pode espaçar mais). */
 const POLL_HIDDEN_MS = 10_000;
 
-type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "ponto" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
+type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "ponto" | "comandas" | "ligacoes" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
 export interface PanelUser {
   displayName: string;
@@ -40,6 +42,8 @@ export interface PanelUser {
   canViewTeam: boolean;
   manageableRoles: StaffRole[];
   isPlatformAdmin: boolean;
+  /** Extras ligados neste restaurante (Central). */
+  extras: { enabled: string[]; tvToken?: string; siteToken?: string };
 }
 
 export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: PanelUser }) {
@@ -47,6 +51,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
   const [board, setBoard] = useState(initialBoard);
   // Plano só ementa: não há pedidos nem contas, por isso o painel abre na Ementa (ou nos Esgotados, para a equipa).
   const menuOnly = board.plan === "menu";
+  // Extras: a equipa MESVIO vê todos (para testar); os donos só os que estão ligados na Central.
+  const extra = (k: string) => me.isPlatformAdmin || me.extras.enabled.includes(k);
   const homeTab: Tab = menuOnly ? (me.canEditSettings ? "carta" : "esgotados") : "pedidos";
   const [tab, setTab] = useState<Tab>(homeTab);
   // Se o plano mudar com o painel aberto, não ficar numa secção que deixou de existir.
@@ -296,7 +302,12 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       <InstallPrompt />
       {!menuOnly && <NotificationsCard />}
 
-      <div className="mb-2 flex justify-end">
+      <div className="mb-2 flex flex-wrap justify-end gap-2">
+        {extra("cozinha") && !menuOnly && (
+          <a href="/painel/cozinha" className="inline-flex min-h-10 items-center rounded-full border border-line bg-card px-4 text-sm font-semibold">
+            👨‍🍳 Ecrã da cozinha
+          </a>
+        )}
         <HelpAssistant />
       </div>
 
@@ -308,17 +319,19 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
                 "esgotados",
                 ...(me.canEditSettings ? (["mesas"] as const) : []),
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
-                // Picar ponto em testes: por agora só a equipa MESVIO o vê (os donos ainda não).
-                ...(me.isPlatformAdmin ? (["ponto"] as const) : []),
+                ...(extra("ponto") && me.canEditSettings ? (["ponto"] as const) : []),
+                ...((extra("tv") || extra("site")) && me.canEditSettings ? (["ligacoes"] as const) : []),
               ]
             : [
                 "pedidos",
+                ...(extra("comandeira") ? (["comandas"] as const) : []),
                 ...(me.canEditSettings ? (["resumo"] as const) : []),
                 "mesas",
                 "esgotados",
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
                 ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
-                ...(me.isPlatformAdmin ? (["ponto"] as const) : []),
+                ...(extra("ponto") && me.canEditSettings ? (["ponto"] as const) : []),
+                ...((extra("tv") || extra("site")) && me.canEditSettings ? (["ligacoes"] as const) : []),
               ]) as Tab[]
         ).map((t) => (
           <button
@@ -330,7 +343,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", ponto: "Ponto", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
+            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", ponto: "Ponto", comandas: "Comandas", ligacoes: "TV e site", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -375,6 +388,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "carta" && <MenuEditor />}
       {tab === "dia" && <DailyMenuView />}
       {tab === "ponto" && <ClockView />}
+      {tab === "comandas" && <CommandView />}
+      {tab === "ligacoes" && <ExtraLinks extras={me.extras} tv={extra("tv")} site={extra("site")} />}
       {tab === "ementa" && <BrandingView establishmentName={board.establishmentName} />}
       {tab === "traducoes" && <TranslationsView />}
       {tab === "fotos" && <PhotosView />}

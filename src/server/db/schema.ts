@@ -93,6 +93,11 @@ export const establishments = pgTable(
     clockFaceEnabled: boolean("clock_face_enabled").notNull().default(false),
     /** Avisar o dono no telemóvel quando alguém não pica a entrada ou a saída da escala. */
     clockNotify: boolean("clock_notify").notNull().default(true),
+    /**
+     * Extras pagos à parte (src/lib/extras.ts), ligados pela equipa MESVIO na Central: lista do que está
+     * ligado e os links secretos da TV e do site. Vazio = nenhum extra.
+     */
+    extras: jsonb("extras").$type<ExtrasRow>().notNull().default({ enabled: [] }),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -314,6 +319,9 @@ export const clockSchedules = pgTable(
   },
   (t) => [index("clock_schedules_est_date_idx").on(t.establishmentId, t.workDate), index("clock_schedules_emp_date_idx").on(t.employeeId, t.workDate)],
 );
+
+/** Formato de `establishments.extras`. */
+export type ExtrasRow = { enabled: string[]; tvToken?: string; siteToken?: string };
 
 /** Formato guardado em `establishments.daily_menu_settings` (validado em daily-menu.ts). */
 export type DailyMenuSettingsRow = {

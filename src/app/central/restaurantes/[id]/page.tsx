@@ -13,6 +13,10 @@ import { OwnMenuSwitch } from "@/components/central/own-menu-switch";
 import { ZoneSoftLink } from "@/components/central/zonesoft-link";
 import { getZoneSoftStatus } from "@/server/pos/zonesoft/zsroi-service";
 import { PlanPicker } from "@/components/central/plan-picker";
+import { ExtrasCard } from "@/components/central/extras-card";
+import { getExtras } from "@/server/extras/extras-service";
+import { headers } from "next/headers";
+import { resolvePublicBaseUrl } from "@/server/tables/table-qr";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Restaurante" };
@@ -44,6 +48,9 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
   const s = d.summary;
   const zs = s.posProvider === "zonesoft" ? await readWithRetry(() => getZoneSoftStatus(db, id)) : null;
   const zones = [...new Set(d.tables.map((t) => t.zone ?? "Sem zona"))];
+  const extras = await readWithRetry(() => getExtras(db, s.organizationId, id));
+  const h = await headers();
+  const baseUrl = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
 
   return (
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
@@ -170,6 +177,8 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
           )}
         </section>
       </div>
+
+      <ExtrasCard establishmentId={id} initial={extras} baseUrl={baseUrl} />
 
       <section aria-labelledby="lugares" className="mt-6 rounded-3xl border border-line bg-card p-5">
         <h2 id="lugares" className="text-lg">

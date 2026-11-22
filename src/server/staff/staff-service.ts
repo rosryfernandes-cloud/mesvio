@@ -170,9 +170,10 @@ export type StaffAction =
   | "confirm" // POS recebeu sem confirmar → staff confirma
   | "retry" // precisa de atenção → tentar enviar de novo
   | "handled" // precisa de atenção → staff lançou à mão no POS
-  | "cancel"; // precisa de atenção → não avança
+  | "cancel" // precisa de atenção → não avança
+  | "ready"; // ecrã da cozinha: pedido aceite → pronto/servido
 
-export const STAFF_ACTIONS: StaffAction[] = ["approve", "reject", "confirm", "retry", "handled", "cancel"];
+export const STAFF_ACTIONS: StaffAction[] = ["approve", "reject", "confirm", "retry", "handled", "cancel", "ready"];
 
 export type ActionResult = { ok: true } | { ok: false; code: "NOT_FOUND" | "CONFLICT"; message: string };
 
@@ -184,6 +185,7 @@ const TRANSITIONS: Record<StaffAction, { from: OrderStatus; to: OrderStatus | nu
   retry: { from: "NEEDS_ATTENTION", to: "FAILED_RETRYING" },
   handled: { from: "NEEDS_ATTENTION", to: "ACCEPTED" },
   cancel: { from: "NEEDS_ATTENTION", to: "CANCELLED" },
+  ready: { from: "ACCEPTED", to: "SERVED" },
 };
 
 export async function applyStaffAction(

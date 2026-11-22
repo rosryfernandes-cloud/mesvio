@@ -57,6 +57,11 @@ export interface PlaceOrderDeps extends WorkerDeps {
   inlineWaitMs?: number;
   /** Mantém vivo o envio que continua depois da resposta (por omissão, `after()` do Next). */
   waitUntil?: (work: Promise<unknown>) => void;
+  /**
+   * Comandeira digital: pedido registado por um empregado no painel. Não espera aprovação nem
+   * pagamento (paga-se no fim) e fica registado como pedido da equipa.
+   */
+  byStaff?: { userId: string; name: string };
 }
 
 export interface RequestContext {
@@ -87,7 +92,8 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
   if (!planAllowsOrdering(table.plan) || !table.pos.capabilities.createOrder) {
     return { ok: false, code: "ORDERING_DISABLED", message: "Este restaurante ainda não recebe pedidos pela app." };
   }
-  const payFirst = table.orderingMode === "pay_first";
+  const staff = deps.byStaff;
+  const payFirst = !staff && table.orderingMode === "pay_first";
   if (payFirst && !(deps.paymentsAvailable ?? canCharge(activePaymentProvider(), table.stripeAccountId))) {
     return { ok: false, code: "ORDERING_DISABLED", message: "Aqui paga-se ao pedir e os pagamentos estão indisponíveis. Chame um funcionário." };
   }
@@ -140,7 +146,7 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
   // Aprovação pelo staff: modo manual ligado, ou pedido acima do valor-limite do restaurante (auditoria S3).
   // Nos lugares "pagar ao pedir" o limite não se aplica: o próprio pagamento prova que o pedido é real.
   const needsApproval =
-    table.manualAcceptance || (!payFirst && table.approvalThresholdCents !== null && totalGrossCents > table.approvalThresholdCents);
+    !staff && (table.manualAcceptance || (!payFirst && table.approvalThresholdCents !== null && totalGrossCents > table.approvalThresholdCents));
 
   // Pedido + linhas + evento + tarefa de envio na MESMA transação: ou fica tudo gravado, ou nada.
   const orderId = await withTenant(db, tenant, async (tx) => {
@@ -181,7 +187,8 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
       organizationId: table.organizationId,
       orderId: order.id,
       toStatus: payFirst ? "AWAITING_PAYMENT" : "RECEIVED",
-      source: "customer",
+      source: staff ? "staff" : "customer",
+      ...(staff ? { detail: { by: staff.userId, name: staff.name } } : {}),
       createdAt: now,
     });
     // Com aprovação (ou à espera de pagamento), a tarefa de envio só é criada mais tarde.
