@@ -246,6 +246,17 @@ describe("visão geral", () => {
     await set("past_due");
     expect(await alertsOf()).toContain("Bar Praia Azul: mensalidade em atraso.");
     expect((await getPlatformOverview(db, now)).totals.mrrCents).toBe(0);
+    // Marcado como teste: sai dos números e dos alertas, mas continua na lista (aba "Teste").
+    await set("active");
+    const before = (await getPlatformOverview(db, now)).totals.restaurants;
+    await db.update(t.establishments).set({ isTest: true }).where(eq(t.establishments.id, est.id));
+    const ot = await getPlatformOverview(db, now);
+    expect(ot.totals.mrrCents).toBe(0);
+    expect(ot.totals.restaurants).toBe(before - 1);
+    expect(await alertsOf()).toEqual([]);
+    expect(ot.establishments.find((x) => x.id === est.id)?.isTest).toBe(true);
+    expect(ot.establishments.find((x) => x.id === DEMO_ESTABLISHMENT.id)?.isTest).toBe(true);
+    await db.update(t.establishments).set({ isTest: false }).where(eq(t.establishments.id, est.id));
     // Quem nunca recebeu pedidos ainda está a arrancar: não há aviso de parado.
     expect((await getPlatformOverview(db, now)).alerts.some((a) => a.establishmentId === DEMO_ESTABLISHMENT.id && a.text.includes("sem pedidos"))).toBe(false);
   });

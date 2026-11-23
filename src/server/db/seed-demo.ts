@@ -39,6 +39,7 @@ export async function seedDemo(db: Db, { users = true }: { users?: boolean } = {
         address: DEMO_ESTABLISHMENT.address,
         timezone: DEMO_ESTABLISHMENT.timezone,
         paymentsEnabled: true,
+        isTest: true,
         stripeAccountId: process.env.STRIPE_DEMO_CONNECTED_ACCOUNT || null,
       })
       .onConflictDoUpdate({

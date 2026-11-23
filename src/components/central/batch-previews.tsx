@@ -106,6 +106,16 @@ export function BatchPreviews() {
               </li>
             ))}
           </ul>
+          {!running && done > 0 && (
+            <p role="status" className="rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">
+              {done === 1 ? "1 link criado" : `${done} links criados`}: já pode enviá-{done === 1 ? "lo" : "los"} em{" "}
+              <a href="#enviadas" className="font-semibold underline">
+                &quot;Links enviados&quot;
+              </a>
+              , mais abaixo.
+              {pending > 0 && " Os que deram erro não impedem o envio: tente outra vez só se mudar o link ou a ementa (capturas de ecrã no cartão de cima)."}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={run} disabled={running || pending === 0} className="min-h-11 rounded-xl bg-brand px-5 font-semibold text-white disabled:opacity-50">
               {running ? `A criar… (${done} de ${chosen})` : pending === 0 && done > 0 ? "Concluído ✓" : done > 0 ? `Tentar os ${pending} que faltam` : `Criar ${chosen} links`}

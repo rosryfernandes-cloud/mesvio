@@ -29,10 +29,14 @@ const NO_BILLING = { label: "Sem subscrição", className: "bg-line text-ink-sof
 const formatDay = (iso: string) => new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Lisbon" });
 const ALERT_CLASS = { danger: "bg-danger-soft text-danger", warning: "bg-amber-50 text-amber-900", info: "bg-brand-soft text-brand" };
 
-export default async function CentralOverviewPage() {
+export default async function CentralOverviewPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const admin = await requirePlatformAdmin();
   const db = await getDb();
   const o = await readWithRetry(() => getPlatformOverview(db));
+  const showTest = (await searchParams).aba === "teste";
+  const realList = o.establishments.filter((e) => !e.isTest);
+  const testList = o.establishments.filter((e) => e.isTest);
+  const list = showTest ? testList : realList;
   const openDemos = await readWithRetry(() => countOpenDemoRequests(db));
   const month = new Date(o.periodStart).toLocaleDateString("pt-PT", { month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
   const kpis = [
@@ -98,15 +102,36 @@ export default async function CentralOverviewPage() {
 
       <section aria-labelledby="restaurantes" className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 id="restaurantes" className="text-lg">
-            Restaurantes
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="restaurantes" className="text-lg">
+              Restaurantes
+            </h2>
+            <nav aria-label="Tipo de restaurante" className="flex gap-1 rounded-full border border-line bg-card p-1 text-sm font-semibold">
+              {[
+                { href: "/central#restaurantes", label: "Clientes", n: realList.length, active: !showTest },
+                { href: "/central?aba=teste#restaurantes", label: "Teste", n: testList.length, active: showTest },
+              ].map((t) => (
+                <Link
+                  key={t.label}
+                  prefetch={false}
+                  href={t.href}
+                  aria-current={t.active ? "page" : undefined}
+                  className={`min-h-9 rounded-full px-3 py-1.5 ${t.active ? "bg-brand text-white" : "text-ink-soft hover:text-ink"}`}
+                >
+                  {t.label} <span className="tabular-nums opacity-80">{t.n}</span>
+                </Link>
+              ))}
+            </nav>
+          </div>
           <Link href="/central/restaurantes/novo" className="min-h-10 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white">
             Novo restaurante
           </Link>
         </div>
-        {o.establishments.length === 0 ? (
-          <p className="mt-3 rounded-2xl border border-dashed border-line px-6 py-10 text-center text-ink-soft">Ainda não há restaurantes.</p>
+        {showTest && <p className="mt-2 text-sm text-ink-soft">Restaurantes de teste e demonstração. Não contam nos números de cima nem nos alertas. Para mudar, abra o restaurante e use o interruptor &ldquo;Restaurante de teste&rdquo;.</p>}
+        {list.length === 0 ? (
+          <p className="mt-3 rounded-2xl border border-dashed border-line px-6 py-10 text-center text-ink-soft">
+            {showTest ? "Ainda não há restaurantes de teste. Abra um restaurante e ligue \u201cRestaurante de teste\u201d." : "Ainda não há clientes."}
+          </p>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-3xl border border-line bg-card">
             <table className="w-full min-w-[70rem] text-left text-sm">
@@ -124,7 +149,7 @@ export default async function CentralOverviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {o.establishments.map((e) => {
+                {list.map((e) => {
                   const pos = POS_STATE[e.posStatus] ?? POS_STATE.not_configured;
                   const billing = BILLING_STATE[e.billingStatus ?? ""] ?? (e.billingStatus ? { label: e.billingStatus, className: "bg-line text-ink-soft" } : NO_BILLING);
                   return (

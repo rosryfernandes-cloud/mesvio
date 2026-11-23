@@ -14,6 +14,7 @@ import { ZoneSoftLink } from "@/components/central/zonesoft-link";
 import { getZoneSoftStatus } from "@/server/pos/zonesoft/zsroi-service";
 import { PlanPicker } from "@/components/central/plan-picker";
 import { ExtrasCard } from "@/components/central/extras-card";
+import { TestSwitch } from "@/components/central/test-switch";
 import { getExtras } from "@/server/extras/extras-service";
 import { headers } from "next/headers";
 import { resolvePublicBaseUrl } from "@/server/tables/table-qr";
@@ -54,7 +55,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
 
   return (
     <CentralShell adminName={admin.displayName ?? admin.email ?? ""}>
-      <Link prefetch={false} href="/central" className="text-sm text-ink-soft underline">
+      <Link prefetch={false} href={s.isTest ? "/central?aba=teste#restaurantes" : "/central"} className="text-sm text-ink-soft underline">
         ← Visão geral
       </Link>
       {criado && (
@@ -64,7 +65,10 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
       )}
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl tracking-tight">{s.name}</h1>
+          <h1 className="text-3xl tracking-tight">
+            {s.name}
+            {s.isTest && <span className="ml-2 rounded-full bg-amber-100 px-2.5 py-0.5 align-middle text-sm font-semibold text-amber-900">Teste</span>}
+          </h1>
           <p className="mt-1 text-sm text-ink-soft">
             {s.legalName} · NIF {d.nif}
             {d.address && ` · ${d.address}`}
@@ -72,6 +76,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
           <div className="mt-2">
             <CompanyForm establishmentId={id} legalName={s.legalName} nif={d.nif} billingEmail={d.billingEmail ?? null} name={s.name} />
           </div>
+          <TestSwitch establishmentId={id} isTest={s.isTest} />
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenPanelButton establishmentId={id} />

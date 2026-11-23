@@ -101,6 +101,8 @@ export const establishments = pgTable(
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
+    /** Restaurante de teste ou demonstração (ex.: Areia): na Central fica na aba "Teste" e não conta nos números nem nos alertas. */
+    isTest: boolean("is_test").notNull().default(false),
     /**
      * Quando true, cada pedido fica à espera de aprovação no painel antes de seguir para o POS
      * (proteção contra pedidos falsos). Pedidos que o POS só "recebe" sem confirmar também

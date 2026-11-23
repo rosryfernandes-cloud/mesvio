@@ -348,6 +348,8 @@ export interface EstablishmentSummary {
   stripeConnected: boolean;
   /** Plano contratado (o que a app deixa fazer). */
   plan: Plan;
+  /** Restaurante de teste/demonstração: aba própria na Central, fora dos totais e dos alertas. */
+  isTest: boolean;
   /** Estado da mensalidade na Stripe (active, trialing, past_due…); null = ainda sem subscrição. */
   billingStatus: string | null;
   billingPeriodEnd: string | null;
@@ -452,6 +454,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
         posStatus: posIntegrations.status,
         stripeAccountId: establishments.stripeAccountId,
         plan: establishments.plan,
+        isTest: establishments.isTest,
         billingStatus: establishments.billingStatus,
         billingPeriodEnd: establishments.billingPeriodEnd,
         brandLogoUrl: establishments.brandLogoUrl,
@@ -520,6 +523,7 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
       lastOrderAt: last ? new Date(last).toISOString() : null,
       stripeConnected: !!e.stripeAccountId,
       plan: e.plan,
+      isTest: e.isTest,
       billingStatus: e.billingStatus,
       billingPeriodEnd: e.billingPeriodEnd ? e.billingPeriodEnd.toISOString() : null,
       daysSinceLastOrder: last ? Math.floor((now.getTime() - new Date(last).getTime()) / DAY_MS) : null,
@@ -538,8 +542,10 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
     };
   });
 
+  // Os restaurantes de teste não contam nos números nem geram alertas.
+  const real = establishmentsOut.filter((e) => !e.isTest);
   const alerts: PlatformAlert[] = [];
-  for (const e of establishmentsOut) {
+  for (const e of real) {
     if (e.needsAttention > 0)
       alerts.push({ level: "danger", establishmentId: e.id, text: `${e.name}: ${e.needsAttention} pedido(s) não chegaram ao POS nas últimas 24 h.` });
     if (e.posStatus === "failing" || e.posStatus === "degraded")
@@ -564,18 +570,19 @@ export async function getPlatformOverview(db: Db, now = new Date()): Promise<Pla
   }
   for (const [org, n] of deadM) {
     const e = establishmentsOut.find((x) => x.organizationId === org);
+    if (e?.isTest) continue;
     alerts.push({ level: "danger", establishmentId: e?.id, text: `${e?.name ?? "Organização"}: ${n} envio(s) ao POS desistidos nos últimos 7 dias.` });
   }
 
   return {
     periodStart: from.toISOString(),
     totals: {
-      restaurants: establishmentsOut.length,
-      ordersThisMonth: establishmentsOut.reduce((a, e) => a + e.ordersThisMonth, 0),
-      netCentsThisMonth: establishmentsOut.reduce((a, e) => a + e.netCentsThisMonth, 0),
-      commissionCentsThisMonth: establishmentsOut.reduce((a, e) => a + e.commissionCentsThisMonth, 0),
+      restaurants: real.length,
+      ordersThisMonth: real.reduce((a, e) => a + e.ordersThisMonth, 0),
+      netCentsThisMonth: real.reduce((a, e) => a + e.netCentsThisMonth, 0),
+      commissionCentsThisMonth: real.reduce((a, e) => a + e.commissionCentsThisMonth, 0),
       // Só as mensalidades a ser cobradas: em experiência ou em atraso não contam.
-      mrrCents: establishmentsOut.reduce((a, e) => a + (e.billingStatus === "active" ? PLAN_MONTHLY_CENTS[e.plan] : 0), 0),
+      mrrCents: real.reduce((a, e) => a + (e.billingStatus === "active" ? PLAN_MONTHLY_CENTS[e.plan] : 0), 0),
     },
     establishments: establishmentsOut,
     alerts: alerts.sort((a, b) => ["danger", "warning", "info"].indexOf(a.level) - ["danger", "warning", "info"].indexOf(b.level)),
