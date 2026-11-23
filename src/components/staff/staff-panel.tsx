@@ -52,7 +52,8 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
   // Plano só ementa: não há pedidos nem contas, por isso o painel abre na Ementa (ou nos Esgotados, para a equipa).
   const menuOnly = board.plan === "menu";
   // Extras: a equipa MESVIO vê todos (para testar); os donos só os que estão ligados na Central.
-  const extra = (k: string) => me.isPlatformAdmin || me.extras.enabled.includes(k);
+  // Só os extras ligados na Central (também para a equipa MESVIO: para testar, ligam-se no Areia).
+  const extra = (k: string) => me.extras.enabled.includes(k);
   const homeTab: Tab = menuOnly ? (me.canEditSettings ? "carta" : "esgotados") : "pedidos";
   const [tab, setTab] = useState<Tab>(homeTab);
   // Se o plano mudar com o painel aberto, não ficar numa secção que deixou de existir.
