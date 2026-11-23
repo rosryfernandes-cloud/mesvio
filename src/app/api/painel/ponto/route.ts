@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { canUseExtra } from "@/server/extras/staff-gate";
+import { findPlatformAdmin } from "@/server/platform/admin-auth";
 import { addEmployee, addManualEntry, computeAlerts, deleteEntry, laborCost, DESCRIPTOR_SCHEMA, editEntryTime, establishmentTimezone, getFaceEnabled, KIND_SCHEMA, kioskToken, listCorrections, listEmployees, listEntries, NAME_SCHEMA, pairShifts, PIN_SCHEMA, setEmployeeFace, setFaceEnabled, updateEmployee } from "@/server/clock/clock-service";
 import { addDays, localDate, localMidnight } from "@/server/clock/clock-dates";
 import { attendance, getNotify, getSchedules, setNotify } from "@/server/clock/clock-schedule";
@@ -35,6 +36,8 @@ export async function GET(request: Request) {
     cost: laborCost(shifts, new Map(employees.map((e) => [e.id, e.hourlyCents])), tz),
     kioskToken: await kioskToken(db, ctx),
     faceEnabled: await getFaceEnabled(db, ctx),
+    // Reconhecimento facial: só a equipa MESVIO o pode ligar, até haver a revisão jurídica (RGPD).
+    faceAllowed: (await findPlatformAdmin(db, ctx.userId)) !== null,
     corrections: await listCorrections(db, ctx, tz),
     entries,
     shifts,
@@ -72,6 +75,8 @@ export async function POST(request: Request) {
     return ok ? json({ ok: true }) : json({ message: "Funcionário não encontrado." }, 404);
   }
   if (d.action === "faceEnabled") {
+    // Desligar é sempre possível; ligar só pela equipa MESVIO, até haver a revisão jurídica (RGPD).
+    if (d.enabled && (await findPlatformAdmin(db, ctx.userId)) === null) return json({ message: "O reconhecimento facial ainda não está disponível. Use o nome e o PIN." }, 403);
     await setFaceEnabled(db, ctx, d.enabled);
     return json({ ok: true });
   }

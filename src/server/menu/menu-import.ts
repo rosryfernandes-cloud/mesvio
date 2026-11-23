@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { aiApiKey, askClaudeJson, describeAiError, parseJson } from "@/server/ai/claude";
+import { prepareMenuPages } from "./menu-pages";
 
 /**
  * Lê fotografias de uma ementa em papel e devolve uma proposta para o dono rever. Não grava nada:
@@ -72,7 +73,7 @@ const anthropicReader: MenuReader = async (source) => {
   const content = source.webText
     ? [{ type: "text" as const, text: `Text of the web page ${source.webText.url}:\n\n${source.webText.text}\n\nTranscribe the menu on this page.` }]
     : [
-        ...source.pages.map((p) =>
+        ...(await prepareMenuPages(source.pages)).map((p) =>
           p.mediaType === "application/pdf"
             ? { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: p.data.toString("base64") } }
             : { type: "image" as const, source: { type: "base64" as const, media_type: p.mediaType, data: p.data.toString("base64") } },

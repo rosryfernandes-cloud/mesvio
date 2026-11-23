@@ -23,7 +23,7 @@ type Shift = {
   outEntryId: string | null;
 };
 type Correction = { at: string; action: "add" | "edit" | "delete"; text: string };
-type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[];
+type Data = { timezone: string; today: string; from: string; to: string; employees: Employee[]; kioskToken: string; faceEnabled: boolean; faceAllowed?: boolean; shifts: Shift[]; corrections: Correction[]; alerts: { level: "warn" | "info"; employeeName: string; text: string }[];
   notify: boolean;
   cost: {
     totalCents: number;
@@ -165,6 +165,8 @@ export function ClockView() {
         </div>
       </section>
 
+      {/* Só a equipa MESVIO vê esta secção até haver a revisão jurídica; se já estiver ligado, o dono vê-a para poder desligar. */}
+      {(data.faceAllowed || data.faceEnabled) && (
       <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
         <h2 className="text-xl">Reconhecimento facial</h2>
         <p className="text-sm text-ink-soft">
@@ -194,6 +196,7 @@ export function ClockView() {
           </button>
         </div>
       </section>
+      )}
 
       <section className="grid gap-3 rounded-3xl border border-line bg-card p-5">
         <h2 className="text-xl">Funcionários</h2>
