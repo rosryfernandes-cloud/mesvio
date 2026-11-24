@@ -1,0 +1,1 @@
+ALTER TABLE "establishments" ADD COLUMN "house_suggestions" jsonb DEFAULT '{"enabled":false,"refs":[]}'::jsonb NOT NULL;

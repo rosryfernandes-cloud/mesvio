@@ -102,6 +102,8 @@ export const establishments = pgTable(
      * ligado e os links secretos da TV e do site. Vazio = nenhum extra.
      */
     extras: jsonb("extras").$type<ExtrasRow>().notNull().default({ enabled: [] }),
+    /** Sugestões da casa (src/server/menu/house-suggestions.ts): pratos da ementa em destaque no topo; o dono liga e escolhe. */
+    houseSuggestions: jsonb("house_suggestions").$type<HouseSuggestionsRow>().notNull().default({ enabled: false, refs: [] }),
     orderingEnabled: boolean("ordering_enabled").notNull().default(true),
     /** Plano contratado (src/lib/plan.ts): o que a app deixa fazer neste restaurante. */
     plan: text("plan", { enum: ["menu", "orders", "payments"] }).notNull().default("payments"),
@@ -328,6 +330,7 @@ export const clockSchedules = pgTable(
 
 /** Formato de `establishments.extras`. */
 export type ExtrasRow = { enabled: string[]; tvToken?: string; siteToken?: string };
+export type HouseSuggestionsRow = { enabled: boolean; refs: string[] };
 
 /** Formato guardado em `establishments.daily_menu_settings` (validado em daily-menu.ts). */
 export type DailyMenuSettingsRow = {

@@ -1,5 +1,6 @@
 import "server-only";
 import { planAllowsOrdering, type Plan } from "@/lib/plan";
+import { getHouseSuggestions } from "./house-suggestions";
 import { isWellFormedTableToken } from "@/server/tables/table-token";
 import { getDb, type Db } from "@/server/db/client";
 import { cache } from "react";
@@ -34,6 +35,8 @@ export interface TableMenuView {
   ordering: { enabled: boolean; reason?: string };
   /** Plano "menu": só a ementa (sem pedir, sem chamar o empregado). */
   plan: Plan;
+  /** Sugestões da casa: referências dos pratos em destaque (só os que estão na ementa), ou vazio. */
+  suggestions: string[];
   /** Para cada artigo, os que os clientes mais pedem com ele (pedidos reais do restaurante). */
   pairings: Record<string, string[]>;
   /** Avaliações ligadas no painel: botão "Avaliar" na ementa (em todos os planos). */
@@ -66,6 +69,8 @@ export async function getTableMenu(
     // O menu do dia nunca impede a ementa de abrir.
     loadDailyMenuForTable(db, found.organizationId, found.establishmentId, found.timezone).catch(() => null),
   ]);
+  // As sugestões também nunca impedem a ementa de abrir.
+  const picks = await getHouseSuggestions(db, found.organizationId, found.establishmentId).catch(() => null);
   const categories = [...catalog.categories]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((c) => ({
@@ -109,6 +114,7 @@ export async function getTableMenu(
         ? { enabled: true }
         : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },
     plan: found.plan,
+    suggestions: picks?.enabled ? picks.refs.filter((ref) => categories.some((c) => c.products.some((p) => p.ref === ref))) : [],
     pairings,
     reviews: found.reviews ?? { enabled: false, googleUrl: null },
     dailyMenu,

@@ -11,6 +11,7 @@ export const es: Messages = {
     dailyMenuHalf: "½ Menú",
     dailyMenuFull: "Menú",
     dailyMenuToday: "Hoy al mediodía",
+    houseSuggestions: "Sugerencias de la casa",
     ok: "OK",
     close: "Cerrar",
     categories: "Categorías",

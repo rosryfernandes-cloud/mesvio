@@ -97,6 +97,8 @@ export function MenuOrdering({ menu, tableToken }: Props) {
   }
 
   const daily = menu.dailyMenu;
+  // Sugestões da casa: os pratos escolhidos no painel, com os dados atuais da ementa (preço, foto, esgotado).
+  const picks = menu.suggestions.map((ref) => products.get(ref)).filter((p): p is MenuProductView => !!p);
 
   return (
     <>
@@ -123,6 +125,38 @@ export function MenuOrdering({ menu, tableToken }: Props) {
         </div>
       )}
       {daily && dailyOpen && <DailyMenuSheet daily={daily} onClose={() => setDailyOpen(false)} />}
+      {picks.length > 0 && (
+        <section aria-label={t.menu.houseSuggestions} className="pt-5">
+          <h2 className="px-4 text-lg font-extrabold">⭐ {t.menu.houseSuggestions}</h2>
+          <ul className="mt-2 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+            {picks.map((p) => {
+              const tappable = canOrder && p.available;
+              const body = (
+                <>
+                  {p.imageUrl && (
+                    // Foto do prato (do painel ou do POS); sem foto, o cartão fica só com o nome e o preço.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imageUrl} alt="" referrerPolicy="no-referrer" className="mb-2 h-24 w-full rounded-xl object-cover" />
+                  )}
+                  <span className="line-clamp-2 block text-sm font-bold leading-snug">{p.name}</span>
+                  <span className="mt-1 block text-sm text-ink-soft tabular-nums">{p.available ? formatEur(p.priceCents) : t.product.soldOut}</span>
+                </>
+              );
+              return (
+                <li key={p.ref} className={`${picks.some((x) => x.imageUrl) ? "w-40" : "w-36"} shrink-0 snap-start`}>
+                  {tappable ? (
+                    <button type="button" onClick={() => setSelected(p)} className="block h-full w-full rounded-2xl border border-line bg-card p-3 text-left active:border-brand">
+                      {body}
+                    </button>
+                  ) : (
+                    <div className={`h-full rounded-2xl border border-line bg-card p-3 ${p.available ? "" : "opacity-50"}`}>{body}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <nav
         ref={navRef}
         aria-label={t.menu.nav}

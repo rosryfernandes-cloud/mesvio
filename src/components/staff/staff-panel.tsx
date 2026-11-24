@@ -10,6 +10,7 @@ import type { StaffRole } from "@/server/staff/context";
 import { ROLE_LABEL, TeamView } from "./team-view";
 import { TablesView } from "./tables-view";
 import { DailyMenuView } from "./daily-menu-view";
+import { SuggestionsView } from "./suggestions-view";
 import { ClockView } from "./clock-view";
 import { CommandView } from "./command-view";
 import { ExtraLinks } from "./extra-links";
@@ -31,7 +32,7 @@ const POLL_MS = 3000;
 /** Com outro separador à frente, continua a ver pedidos para tocar (o browser pode espaçar mais). */
 const POLL_HIDDEN_MS = 10_000;
 
-type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "ponto" | "comandas" | "ligacoes" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
+type Tab = "pedidos" | "resumo" | "mesas" | "esgotados" | "equipa" | "carta" | "dia" | "sugestoes" | "ponto" | "comandas" | "ligacoes" | "fotos" | "ementa" | "traducoes" | "avaliacoes";
 
 export interface PanelUser {
   displayName: string;
@@ -316,7 +317,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
         {(
           (menuOnly
             ? [
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "sugestoes", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
                 "esgotados",
                 ...(me.canEditSettings ? (["mesas"] as const) : []),
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
@@ -330,7 +331,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
                 "mesas",
                 "esgotados",
                 ...(me.canViewTeam ? (["equipa"] as const) : []),
-                ...(me.canEditSettings ? (["carta", "dia", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
+                ...(me.canEditSettings ? (["carta", "dia", "sugestoes", "fotos", "ementa", "traducoes", "avaliacoes"] as const) : []),
                 ...(extra("ponto") && me.canEditSettings ? (["ponto"] as const) : []),
                 ...((extra("tv") || extra("site")) && me.canEditSettings ? (["ligacoes"] as const) : []),
               ]) as Tab[]
@@ -344,7 +345,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
               tab === t ? "border-brand text-brand" : "border-transparent text-ink-soft"
             }`}
           >
-            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", ponto: "Ponto", comandas: "Comandas", ligacoes: "TV e site", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
+            {{ pedidos: "Pedidos", resumo: "Resumo", mesas: menuOnly ? "QR e plano" : "Mesas", esgotados: "Esgotados", equipa: "Equipa", carta: "Ementa", dia: "Menu do dia", sugestoes: "Sugestões", ponto: "Ponto", comandas: "Comandas", ligacoes: "TV e site", fotos: "Fotos", ementa: "Aparência", traducoes: "Línguas", avaliacoes: "Avaliações" }[t]}
           </button>
         ))}
       </nav>
@@ -388,6 +389,7 @@ export function StaffPanel({ initialBoard, me }: { initialBoard: Board; me: Pane
       {tab === "equipa" && <TeamView manageableRoles={me.manageableRoles} />}
       {tab === "carta" && <MenuEditor />}
       {tab === "dia" && <DailyMenuView />}
+      {tab === "sugestoes" && <SuggestionsView />}
       {tab === "ponto" && <ClockView />}
       {tab === "comandas" && <CommandView />}
       {tab === "ligacoes" && <ExtraLinks extras={me.extras} tv={extra("tv")} site={extra("site")} />}
