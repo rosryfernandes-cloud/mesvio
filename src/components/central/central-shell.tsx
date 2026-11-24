@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { LogoutButton } from "./logout-button";
+import { CentralAssistant } from "./central-assistant";
 
 /**
  * Cabeçalho do painel central (só depois do 2FA). Navegação do Next (sem recarregar a página),
@@ -39,7 +40,8 @@ export function CentralShell({ adminName, children }: { adminName: string; child
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pt-8 pb-24 sm:px-6">{children}</main>
+      <CentralAssistant />
     </div>
   );
 }
