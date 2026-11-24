@@ -91,6 +91,8 @@ export async function createServiceRequest(
     if (!table?.active) return { ok: false, code: "TABLE_NOT_FOUND", message: "Mesa não encontrada." };
     // Plano só com a ementa: não há chamadas ao staff pela app.
     if (!planAllowsOrdering(table.plan)) return { ok: false, code: "NOT_ALLOWED", message: "Chame um funcionário." };
+    // Nos lugares "só ementa" a conta é tratada com o empregado; "Chamar empregado" continua.
+    if (kind === "bill" && table.orderingMode === "menu_only") return { ok: false, code: "NOT_ALLOWED", message: "Peça a conta ao empregado." };
     // Nos lugares que pagam ao pedir (camas) não há conta para pedir.
     if (kind === "bill" && effectiveOrderingMode(table.plan, table.orderingMode) === "pay_first") {
       return { ok: false, code: "NOT_ALLOWED", message: "Aqui paga ao pedir: não há conta por pagar." };

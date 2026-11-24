@@ -51,8 +51,12 @@ export const orderStatus = pgEnum("order_status", [
   "CANCELLED",
 ]);
 export const commissionBasis = pgEnum("commission_basis", ["NET", "GROSS"]);
-/** "pay_later": paga a conta no fim (mesas). "pay_first": paga cada pedido ao pedir (espreguiçadeiras, balcão). */
-export const orderingMode = pgEnum("ordering_mode", ["pay_later", "pay_first"]);
+/**
+ * "pay_later": paga a conta no fim (mesas). "pay_first": paga cada pedido ao pedir (espreguiçadeiras, balcão).
+ * "menu_only": só a ementa, sem pedir pela app (ex.: a sala de um restaurante que só tem pedidos nas camas);
+ * o "Chamar empregado" continua, e a equipa pode lançar pedidos pela comandeira.
+ */
+export const orderingMode = pgEnum("ordering_mode", ["pay_later", "pay_first", "menu_only"]);
 export const ledgerEntryType = pgEnum("ledger_entry_type", ["ACCRUAL", "REVERSAL", "ADJUSTMENT"]);
 export const saleDocStatus = pgEnum("sale_doc_status", ["INVOICED", "CANCELLED", "CREDITED"]);
 export const statementStatus = pgEnum("statement_status", ["DRAFT", "APPROVED", "INVOICED", "PAID", "VOID"]);

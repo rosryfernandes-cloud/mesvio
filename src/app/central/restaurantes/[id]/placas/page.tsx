@@ -373,7 +373,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
   const base = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
   const natural = new Intl.Collator("pt", { numeric: true });
   const brand = demo ? DEFAULT_BRAND : (est.brandColor ?? DEFAULT_BRAND);
-  const active = tables.filter((t) => t.active).map((t) => ({ ...t, payFirst: effectiveOrderingMode(est.plan, t.mode) === "pay_first" }));
+  const active = tables.filter((t) => t.active).map((t) => ({ ...t, payFirst: effectiveOrderingMode(est.plan, t.mode) === "pay_first", menuOnly: t.mode === "menu_only" }));
   // Folha de palmeira só em quem tem camas (praia); num restaurante de cidade fica só a onda.
   const beach = active.some((t) => t.payFirst);
   const payments = planAllowsPayments(est.plan);
@@ -383,7 +383,7 @@ export default async function SignsPage({ params, searchParams }: Props) {
     active
       .filter((t) => who === "todos" || (who === "camas" ? t.payFirst : !t.payFirst))
       .sort((a, b) => natural.compare(a.label, b.label))
-      .map(async (t) => ({ ...t, svg: await qrSvg(tableUrl(base, t.publicToken)), cta: callToAction(est.plan, t.payFirst) })),
+      .map(async (t) => ({ ...t, svg: await qrSvg(tableUrl(base, t.publicToken)), cta: t.menuOnly ? { pt: "Vê a ementa", en: "See the menu" } : callToAction(est.plan, t.payFirst) })),
   );
   // A placa base é uma só (o lugar vai no autocolante); a folha de autocolantes leva 20 por página A4.
   const places = format === "base" ? [{ id: "base", label: "", svg: "", cta: demo ? { pt: "Pede aqui", en: "Order here" } : callToAction(est.plan, false) }] : perPlace;

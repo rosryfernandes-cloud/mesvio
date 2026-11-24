@@ -56,7 +56,9 @@ export async function loadOrderView(db: Db, orderId: string, tr: MenuTranslator 
   if (!o) return null;
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).orderBy(asc(orderItems.lineNo));
   const { mode, plan, invoicing, provider, ...rest } = o;
-  const orderingMode = effectiveOrderingMode(plan, mode);
+  // Pedidos de lugares "só ementa" só vêm da comandeira: mostram-se como os das mesas (conta no fim).
+  const effective = effectiveOrderingMode(plan, mode);
+  const orderingMode = effective === "menu_only" ? "pay_later" : effective;
   // Pago ao pedir: a fatura pede-se sobre o pagamento confirmado deste pedido.
   let invoice: OrderView["invoice"];
   const posInvoices = orderingMode === "pay_first" && provider === "zonesoft";

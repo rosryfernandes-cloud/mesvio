@@ -202,7 +202,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
                       target="_blank"
                       rel="noopener"
                       className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm ${t.active ? "border-line" : "border-dashed text-ink-soft"}`}
-                      title={t.orderingMode === "pay_first" ? "Paga ao pedir" : "Paga no fim"}
+                      title={t.orderingMode === "pay_first" ? "Paga ao pedir" : t.orderingMode === "menu_only" ? "Só ementa" : "Paga no fim"}
                     >
                       {t.label}
                     </a>

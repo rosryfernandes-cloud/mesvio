@@ -56,7 +56,7 @@ export interface DemoTable extends PosTable {
   publicToken: string;
   active: boolean;
   zone: string;
-  orderingMode: "pay_later" | "pay_first";
+  orderingMode: "pay_later" | "pay_first" | "menu_only";
 }
 
 export const DEMO_TABLES: DemoTable[] = [

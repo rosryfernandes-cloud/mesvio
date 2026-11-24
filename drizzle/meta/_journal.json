@@ -316,6 +316,13 @@
       "when": 1795434833489,
       "tag": "0044_restaurantes_teste",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795519531347,
+      "tag": "0045_mesas_so_ementa",
+      "breakpoints": true
     }
   ]
 }

@@ -247,7 +247,7 @@ export interface TableOverview {
   tableId: string;
   label: string;
   zone: string | null;
-  orderingMode: "pay_later" | "pay_first";
+  orderingMode: "pay_later" | "pay_first" | "menu_only";
   /** null = mesa livre. */
   bill: TableBill | null;
   /** Pedidos por resolver nesta conta (aprovar, confirmar, precisa de atenção…). */

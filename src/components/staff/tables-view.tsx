@@ -607,7 +607,7 @@ function CallBadges({ calls }: { calls: TableOverview["calls"] }) {
 /** Acrescentar mesas ou espreguiçadeiras pelo painel (dono/gerente), numeradas a seguir às que existem. */
 function AddPlacesCard({ paymentsInPlan, onAdded }: { paymentsInPlan: boolean; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"pay_later" | "pay_first">("pay_later");
+  const [mode, setMode] = useState<"pay_later" | "pay_first" | "menu_only">("pay_later");
   const [count, setCount] = useState("5");
   const [prefix, setPrefix] = useState("Mesa");
   const [zone, setZone] = useState("");
@@ -661,7 +661,7 @@ function AddPlacesCard({ paymentsInPlan, onAdded }: { paymentsInPlan: boolean; o
           <select
             value={mode}
             onChange={(e) => {
-              const next = e.target.value as "pay_later" | "pay_first";
+              const next = e.target.value as "pay_later" | "pay_first" | "menu_only";
               setMode(next);
               setPrefix(next === "pay_first" ? "Cama" : "Mesa");
             }}
@@ -669,6 +669,7 @@ function AddPlacesCard({ paymentsInPlan, onAdded }: { paymentsInPlan: boolean; o
           >
             <option value="pay_later">Mesas (pagam no fim)</option>
             <option value="pay_first">{paymentsInPlan ? "Espreguiçadeiras (pagam ao pedir)" : "Espreguiçadeiras"}</option>
+            <option value="menu_only">Só ementa (sem pedidos pela app)</option>
           </select>
         </label>
         <label className="text-sm font-semibold">
@@ -677,7 +678,7 @@ function AddPlacesCard({ paymentsInPlan, onAdded }: { paymentsInPlan: boolean; o
         </label>
         <label className="text-sm font-semibold">
           Zona <span className="font-normal text-ink-soft">(opcional)</span>
-          <input value={zone} onChange={(e) => setZone(e.target.value)} maxLength={40} placeholder={mode === "pay_first" ? "Praia" : "Esplanada"} className={field} />
+          <input value={zone} onChange={(e) => setZone(e.target.value)} maxLength={40} placeholder={mode === "pay_first" ? "Praia" : mode === "menu_only" ? "Sala" : "Esplanada"} className={field} />
         </label>
       </div>
       {note && <p className={`text-sm ${note.error ? "text-danger" : "text-ok"}`}>{note.text}</p>}

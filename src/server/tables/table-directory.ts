@@ -22,7 +22,7 @@ export interface ResolvedTable {
   /** Pedidos acima deste valor esperam aprovação (null = sem limite). */
   approvalThresholdCents: number | null;
   /** "pay_first": cada pedido é pago ao pedir (espreguiçadeiras) e só depois segue para o POS. */
-  orderingMode: "pay_later" | "pay_first";
+  orderingMode: "pay_later" | "pay_first" | "menu_only";
   /** Plano do restaurante (o orderingMode acima já vem ajustado a ele). */
   plan: Plan;
   zone: string | null;

@@ -47,7 +47,7 @@ const tablesInput = z.object({
   count: z.int().min(0).max(300),
   prefix: z.string().trim().min(1).max(30),
   zone: z.string().trim().max(40).optional(),
-  orderingMode: z.enum(["pay_later", "pay_first"]),
+  orderingMode: z.enum(["pay_later", "pay_first", "menu_only"]),
 });
 
 export const createRestaurantSchema = z.object({

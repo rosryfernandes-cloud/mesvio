@@ -34,7 +34,7 @@ function Message({ m }: { m: { text: string; error: boolean } | null }) {
 /** Acrescentar mesas ou espreguiçadeiras (numeradas a seguir às existentes). */
 export function AddTablesForm({ establishmentId }: { establishmentId: string }) {
   const { busy, message, submit } = useSubmit(`/api/central/restaurantes/${establishmentId}/mesas`);
-  const [mode, setMode] = useState<"pay_later" | "pay_first">("pay_later");
+  const [mode, setMode] = useState<"pay_later" | "pay_first" | "menu_only">("pay_later");
   return (
     <form
       className="grid gap-3"
@@ -56,11 +56,12 @@ export function AddTablesForm({ establishmentId }: { establishmentId: string }) 
           Tipo
           <select
             value={mode}
-            onChange={(e) => setMode(e.target.value as "pay_later" | "pay_first")}
+            onChange={(e) => setMode(e.target.value as "pay_later" | "pay_first" | "menu_only")}
             className={field}
           >
             <option value="pay_later">Mesas (pagam no fim)</option>
             <option value="pay_first">Espreguiçadeiras (pagam ao pedir)</option>
+            <option value="menu_only">Só ementa (sem pedidos pela app)</option>
           </select>
         </label>
         <label className="text-sm font-semibold">
@@ -69,7 +70,7 @@ export function AddTablesForm({ establishmentId }: { establishmentId: string }) 
         </label>
         <label className="text-sm font-semibold">
           Zona
-          <input key={`z-${mode}`} name="zone" defaultValue={mode === "pay_first" ? "Praia" : "Esplanada"} maxLength={40} className={field} />
+          <input key={`z-${mode}`} name="zone" defaultValue={mode === "pay_first" ? "Praia" : mode === "menu_only" ? "Sala" : "Esplanada"} maxLength={40} className={field} />
         </label>
       </div>
       <Message m={message} />

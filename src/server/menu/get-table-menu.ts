@@ -28,7 +28,7 @@ export interface MenuProductView {
 
 export interface TableMenuView {
   establishment: { name: string; address?: string };
-  table: { label: string; zone: string | null; orderingMode: "pay_later" | "pay_first" };
+  table: { label: string; zone: string | null; orderingMode: "pay_later" | "pay_first" | "menu_only" };
   /** `section`: nome mostrado (traduzido); `sectionKey`: nome original, estável entre línguas. */
   categories: { ref: string; name: string; section?: string; sectionKey?: string; products: MenuProductView[] }[];
   ordering: { enabled: boolean; reason?: string };
@@ -55,7 +55,8 @@ export async function getTableMenu(
   const catalog = withLocalAvailability(await cachedPosCatalog(found.pos, found.establishmentId), found.locallyUnavailable);
   const locale = deps.locale ?? DEFAULT_LOCALE;
   // Só fora do português há traduções a ler (uma consulta, no tenant do restaurante).
-  const canOrder = planAllowsOrdering(found.plan) && found.pos.capabilities.createOrder;
+  const menuOnlyTable = found.orderingMode === "menu_only";
+  const canOrder = planAllowsOrdering(found.plan) && found.pos.capabilities.createOrder && !menuOnlyTable;
   const [tr, photos, showPhotos, pairings, dailyMenu]: [MenuTranslator, Map<string, string>, boolean, Record<string, string[]>, DailyMenuView | null] = await Promise.all([
     loadMenuTranslations(db, found.organizationId, found.establishmentId, locale),
     productImageUrls(db, found.organizationId, found.establishmentId),
@@ -102,6 +103,8 @@ export async function getTableMenu(
     categories,
     ordering: !planAllowsOrdering(found.plan)
       ? { enabled: false, reason: "Ementa digital: peça ao empregado." }
+      : menuOnlyTable
+        ? { enabled: false, reason: "Ementa digital: peça ao empregado." }
       : found.pos.capabilities.createOrder
         ? { enabled: true }
         : { enabled: false, reason: "Este restaurante ainda não recebe pedidos pela app." },

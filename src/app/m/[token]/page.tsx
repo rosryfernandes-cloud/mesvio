@@ -33,6 +33,8 @@ export default async function TableMenuPage({ params }: Props) {
   const [menu, branding] = await Promise.all([getTableMenu(token, locale), getTableBrandingForRequest(token)]);
   if (!menu) notFound();
   const payFirst = menu.table.orderingMode === "pay_first";
+  // Lugar "só ementa": sem conta nem pedidos pela app, mas com "Chamar empregado".
+  const menuOnlyTable = menu.table.orderingMode === "menu_only";
 
   return (
     <div className="mx-auto max-w-2xl pb-28">
@@ -44,7 +46,7 @@ export default async function TableMenuPage({ params }: Props) {
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <LanguageSwitcher />
-            {menu.plan !== "menu" && (
+            {menu.plan !== "menu" && !menuOnlyTable && (
               <Link
                 href={`/m/${token}/conta`}
                 className="inline-flex min-h-9 items-center rounded-full border border-line bg-card px-3.5 text-sm font-medium hover:border-brand hover:text-brand"
@@ -79,7 +81,7 @@ export default async function TableMenuPage({ params }: Props) {
       )}
 
       {/* Plano só com a ementa: não é "por agora", é assim — sem aviso. */}
-      {!menu.ordering.enabled && menu.plan !== "menu" && (
+      {!menu.ordering.enabled && menu.plan !== "menu" && !menuOnlyTable && (
         <div role="status" className="mx-4 mt-4 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm">
           <strong className="font-semibold">{t.menu.viewOnlyTitle}</strong> {t.menu.viewOnlyBody}
         </div>

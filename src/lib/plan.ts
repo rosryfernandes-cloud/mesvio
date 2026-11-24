@@ -27,8 +27,10 @@ export const planAllowsPayments = (plan: Plan) => plan === "payments";
  * Sem o plano de pagamentos, os lugares "pagar ao pedir" (camas) pedem como uma mesa normal e
  * pagam no restaurante: o pedido não pode ficar preso à espera de um pagamento que não existe.
  */
-export const effectiveOrderingMode = (plan: Plan, mode: "pay_later" | "pay_first"): "pay_later" | "pay_first" =>
-  planAllowsPayments(plan) ? mode : "pay_later";
+export type OrderingMode = "pay_later" | "pay_first" | "menu_only";
+/** "Só ementa" vale em qualquer plano; pagar ao pedir só com o plano de pagamentos. */
+export const effectiveOrderingMode = (plan: Plan, mode: OrderingMode): OrderingMode =>
+  mode === "menu_only" ? "menu_only" : planAllowsPayments(plan) ? mode : "pay_later";
 
 /**
  * Mensalidade de cada plano, em cêntimos, sem IVA (o que aparece no site e se cobra na subscrição).

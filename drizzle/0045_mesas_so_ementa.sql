@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ordering_mode" ADD VALUE 'menu_only';

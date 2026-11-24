@@ -93,6 +93,10 @@ export async function placeOrder(raw: unknown, ctx: RequestContext, deps: PlaceO
     return { ok: false, code: "ORDERING_DISABLED", message: "Este restaurante ainda não recebe pedidos pela app." };
   }
   const staff = deps.byStaff;
+  // Lugares "só ementa": o cliente não pede pela app (a equipa pode, pela comandeira).
+  if (!staff && table.orderingMode === "menu_only") {
+    return { ok: false, code: "ORDERING_DISABLED", message: "Aqui a ementa é só para consultar: peça ao empregado." };
+  }
   const payFirst = !staff && table.orderingMode === "pay_first";
   if (payFirst && !(deps.paymentsAvailable ?? canCharge(activePaymentProvider(), table.stripeAccountId))) {
     return { ok: false, code: "ORDERING_DISABLED", message: "Aqui paga-se ao pedir e os pagamentos estão indisponíveis. Chame um funcionário." };
