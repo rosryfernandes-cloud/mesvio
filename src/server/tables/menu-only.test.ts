@@ -81,3 +81,37 @@ describe("editar um lugar na Central", () => {
     expect((await updateTable(db, admin, DEMO_ESTABLISHMENT.id, row.id, {})).ok).toBe(false);
   });
 });
+
+describe("eliminar um lugar na Central", () => {
+  it("apaga uma mesa sem histórico, a próxima mesa criada volta a usar o número, e recusa apagar uma mesa com pedidos", async () => {
+    const { addTables, deleteTable } = await import("@/server/platform/platform-service");
+    const { DEMO_ESTABLISHMENT } = await import("@/server/pos/mock/demo-data");
+    const { findPlatformAdmin } = await import("@/server/platform/admin-auth");
+    const { DEMO_PLATFORM_ADMIN } = await import("@/server/db/seed-demo");
+    const admin = (await findPlatformAdmin(db, DEMO_PLATFORM_ADMIN.userId))!;
+    const EST = DEMO_ESTABLISHMENT.id;
+    const labels = async () => (await db.select({ label: diningTables.label }).from(diningTables).where(eq(diningTables.establishmentId, EST))).map((r) => r.label);
+
+    expect((await addTables(db, admin, EST, { count: 1, prefix: "Teste", orderingMode: "pay_later" })).ok).toBe(true);
+    expect((await addTables(db, admin, EST, { count: 1, prefix: "Teste", orderingMode: "pay_later" })).ok).toBe(true);
+    expect(await labels()).toEqual(expect.arrayContaining(["Teste 1", "Teste 2"]));
+    const [t2] = await db.select({ id: diningTables.id }).from(diningTables).where(eq(diningTables.label, "Teste 2"));
+    expect(await deleteTable(db, admin, EST, t2.id)).toMatchObject({ ok: true, label: "Teste 2" });
+    expect(await labels()).not.toContain("Teste 2");
+    await addTables(db, admin, EST, { count: 1, prefix: "Teste", orderingMode: "pay_later" });
+    expect(await labels()).toContain("Teste 2");
+
+    // Uma mesa com pedidos não se apaga (fica o histórico): usa-se "Retirar".
+    const table = DEMO_TABLES.find((t) => t.orderingMode === "pay_later")!;
+    const pos = new MockPosAdapter();
+    const placed = await placeOrder(
+      { tableToken: table.publicToken, idempotencyKey: randomUUID(), lines: [{ productRef: "D361", quantity: 1 }] },
+      { clientIpHash: randomUUID() },
+      { db, resolvePos: () => pos, backoffMs: () => 0 },
+    );
+    expect(placed.ok).toBe(true);
+    const [withOrder] = await db.select({ id: diningTables.id }).from(diningTables).where(eq(diningTables.publicToken, table.publicToken));
+    const refused = await deleteTable(db, admin, EST, withOrder.id);
+    expect(refused.ok).toBe(false);
+  });
+});

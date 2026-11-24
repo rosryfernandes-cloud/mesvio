@@ -14,7 +14,10 @@ import {
   outbox,
   posIntegrations,
   products,
+  reviews,
+  serviceRequests,
   staffProfiles,
+  tableSessions,
 } from "@/server/db/schema";
 import { generateTableToken } from "@/server/tables/table-token";
 import type { UserDirectory } from "@/server/auth/user-directory";
@@ -116,11 +119,15 @@ export async function insertTables(tx: Db, organizationId: string, establishment
     .where(eq(diningTables.establishmentId, establishmentId));
   const prefix = input.prefix.trim();
   const numbers = existing.map((t) => t.label.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`))?.[1]).filter(Boolean).map(Number);
-  const start = (numbers.length ? Math.max(...numbers) : 0) + 1;
+  // Números livres por ordem: um número de um lugar eliminado volta a ser usado (ex.: apaga-se a
+  // "Mesa 41" de teste e a próxima mesa criada volta a ser a 41). Lugares retirados guardam o número.
+  const used = new Set(numbers);
+  const free: number[] = [];
+  for (let n = 1; free.length < input.count; n++) if (!used.has(n)) free.push(n);
   const refPrefix = input.orderingMode === "pay_first" ? prefix.slice(0, 1).toUpperCase() : "";
   const usedRefs = new Set(existing.map((t) => t.posTableRef));
   const rows = Array.from({ length: input.count }, (_, i) => {
-    const n = start + i;
+    const n = free[i];
     let ref = `${refPrefix}${n}`;
     while (usedRefs.has(ref)) ref = `${ref}b`;
     usedRefs.add(ref);
@@ -250,6 +257,33 @@ export async function updateTable(
     if (!row) return { ok: false, code: "NOT_FOUND", message: "Lugar não encontrado." };
     await audit(tx, admin, org, "platform.update_table", establishmentId, { tableId, ...parsed.data });
     return { ok: true, ...row };
+  });
+}
+
+/**
+ * Elimina um lugar de vez (ex.: uma mesa de teste ou criada por engano). Só é possível se nunca teve
+ * pedidos nem avaliações: aí guarda-se o histórico e usa-se "Retirar". As chamadas e as sessões da
+ * mesa (sem valor fiscal) vão com ela. O número fica livre para a próxima mesa criada.
+ */
+export async function deleteTable(db: Db, admin: PlatformAdmin, establishmentId: string, tableId: string): Promise<PlatformResult<{ label: string }>> {
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  return db.transaction(async (tx) => {
+    const [table] = await tx
+      .select({ label: diningTables.label })
+      .from(diningTables)
+      .where(and(eq(diningTables.id, tableId), eq(diningTables.establishmentId, establishmentId)));
+    if (!table) return { ok: false, code: "NOT_FOUND", message: "Lugar não encontrado." };
+    const [hasOrder] = await tx.select({ id: orders.id }).from(orders).where(eq(orders.tableId, tableId)).limit(1);
+    const [hasReview] = await tx.select({ id: reviews.id }).from(reviews).where(eq(reviews.tableId, tableId)).limit(1);
+    if (hasOrder || hasReview) {
+      return { ok: false, code: "INVALID", message: `"${table.label}" já tem ${hasOrder ? "pedidos" : "avaliações"} e não pode ser eliminado: use "Retirar este lugar".` };
+    }
+    await tx.delete(serviceRequests).where(eq(serviceRequests.tableId, tableId));
+    await tx.delete(tableSessions).where(eq(tableSessions.tableId, tableId));
+    await tx.delete(diningTables).where(eq(diningTables.id, tableId));
+    await audit(tx, admin, org, "platform.delete_table", establishmentId, { tableId, label: table.label });
+    return { ok: true, label: table.label };
   });
 }
 

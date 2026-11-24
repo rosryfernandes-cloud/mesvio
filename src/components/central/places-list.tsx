@@ -100,13 +100,13 @@ function EditPlace({ establishmentId, place, onClose, onDone }: { establishmentI
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function send(body: Record<string, unknown>, done: string) {
+  async function send(body: Record<string, unknown> | null, done: string) {
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/central/restaurantes/${establishmentId}/mesas/${place.id}`, {
-      method: "POST",
+      method: body ? "POST" : "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: body ? JSON.stringify(body) : undefined,
     }).catch(() => null);
     const d = res ? await res.json().catch(() => ({})) : {};
     setBusy(false);
@@ -169,6 +169,21 @@ function EditPlace({ establishmentId, place, onClose, onDone }: { establishmentI
             Fechar
           </button>
         </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (
+              window.confirm(
+                `Eliminar "${place.label}" de vez? O lugar e o QR deixam de existir (se o QR já estiver impresso, nunca mais funciona) e o número fica livre para a próxima mesa. Só dá para lugares que nunca tiveram pedidos.`,
+              )
+            )
+              void send(null, `"${place.label}" eliminado. O número fica livre para a próxima mesa.`);
+          }}
+          className="min-h-10 rounded-xl border border-danger/40 px-3 text-sm font-semibold text-danger"
+        >
+          Eliminar de vez
+        </button>
       </form>
     </div>
   );
