@@ -211,6 +211,31 @@ export async function addTables(db: Db, admin: PlatformAdmin, establishmentId: s
 }
 
 /**
+ * Retira (ou repõe) um lugar: o QR deixa de abrir e o lugar sai do painel, mas os pedidos antigos
+ * ficam no histórico. Ao repor, volta com o mesmo QR (as placas impressas continuam a servir).
+ */
+export async function setTableActive(
+  db: Db,
+  admin: PlatformAdmin,
+  establishmentId: string,
+  tableId: string,
+  active: boolean,
+): Promise<PlatformResult<{ active: boolean }>> {
+  const org = await establishmentOrg(db, establishmentId);
+  if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(diningTables)
+      .set({ active })
+      .where(and(eq(diningTables.id, tableId), eq(diningTables.establishmentId, establishmentId)))
+      .returning({ label: diningTables.label });
+    if (!row) return { ok: false, code: "NOT_FOUND", message: "Lugar não encontrado." };
+    await audit(tx, admin, org, active ? "platform.table_restored" : "platform.table_removed", establishmentId, { tableId, label: row.label });
+    return { ok: true, active };
+  });
+}
+
+/**
  * Passa o restaurante para "sem POS": a ementa atual (MockPOS ou POS) é copiada para a ementa
  * própria, editável no painel, e os pedidos passam a sair em talão na cozinha. Fotos, traduções e
  * esgotados mantêm-se (as referências dos pratos são as mesmas).

@@ -44,3 +44,22 @@ describe('lugares "só ementa" (ex.: a sala, com pedidos só nas camas)', () => 
     expect(bill.ok).toBe(false);
   });
 });
+
+describe("retirar um lugar na Central", () => {
+  it("o QR deixa de abrir a ementa e volta a abrir quando o lugar é reposto", async () => {
+    const { setTableActive } = await import("@/server/platform/platform-service");
+    const { DEMO_ESTABLISHMENT } = await import("@/server/pos/mock/demo-data");
+    const { findPlatformAdmin } = await import("@/server/platform/admin-auth");
+    const { DEMO_PLATFORM_ADMIN } = await import("@/server/db/seed-demo");
+    const table = DEMO_TABLES[0];
+    const [row] = await db.select({ id: diningTables.id }).from(diningTables).where(eq(diningTables.publicToken, table.publicToken));
+    const admin = (await findPlatformAdmin(db, DEMO_PLATFORM_ADMIN.userId))!;
+    const pos = new MockPosAdapter();
+    const open = () => getTableMenu(table.publicToken, { db, directory: createDbTableDirectory(db, () => pos) });
+    expect(await open()).not.toBeNull();
+    expect((await setTableActive(db, admin, DEMO_ESTABLISHMENT.id, row.id, false)).ok).toBe(true);
+    expect(await open()).toBeNull();
+    expect((await setTableActive(db, admin, DEMO_ESTABLISHMENT.id, row.id, true)).ok).toBe(true);
+    expect(await open()).not.toBeNull();
+  });
+});

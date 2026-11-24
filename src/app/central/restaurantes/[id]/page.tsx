@@ -15,6 +15,7 @@ import { getZoneSoftStatus } from "@/server/pos/zonesoft/zsroi-service";
 import { PlanPicker } from "@/components/central/plan-picker";
 import { ExtrasCard } from "@/components/central/extras-card";
 import { TestSwitch } from "@/components/central/test-switch";
+import { PlacesList } from "@/components/central/places-list";
 import { getExtras } from "@/server/extras/extras-service";
 import { headers } from "next/headers";
 import { resolvePublicBaseUrl } from "@/server/tables/table-qr";
@@ -48,7 +49,6 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
   const { criado } = await searchParams;
   const s = d.summary;
   const zs = s.posProvider === "zonesoft" ? await readWithRetry(() => getZoneSoftStatus(db, id)) : null;
-  const zones = [...new Set(d.tables.map((t) => t.zone ?? "Sem zona"))];
   const extras = await readWithRetry(() => getExtras(db, s.organizationId, id));
   const h = await headers();
   const baseUrl = resolvePublicBaseUrl(process.env.NEXT_PUBLIC_APP_URL, h.get("host"), h.get("x-forwarded-proto"));
@@ -186,31 +186,7 @@ export default async function EstablishmentPage({ params, searchParams }: Props)
       <ExtrasCard establishmentId={id} initial={extras} baseUrl={baseUrl} />
 
       <section aria-labelledby="lugares" className="mt-6 rounded-3xl border border-line bg-card p-5">
-        <h2 id="lugares" className="text-lg">
-          Lugares
-        </h2>
-        {zones.map((zone) => (
-          <div key={zone} className="mt-3">
-            <p className="text-xs font-semibold tracking-wide text-ink-soft uppercase">{zone}</p>
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {d.tables
-                .filter((t) => (t.zone ?? "Sem zona") === zone)
-                .map((t) => (
-                  <li key={t.id}>
-                    <a
-                      href={`/m/${t.publicToken}`}
-                      target="_blank"
-                      rel="noopener"
-                      className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm ${t.active ? "border-line" : "border-dashed text-ink-soft"}`}
-                      title={t.orderingMode === "pay_first" ? "Paga ao pedir" : t.orderingMode === "menu_only" ? "Só ementa" : "Paga no fim"}
-                    >
-                      {t.label}
-                    </a>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        ))}
+        <PlacesList establishmentId={id} tables={d.tables} />
         <div className="mt-5 border-t border-line pt-4">
           <AddTablesForm establishmentId={id} />
         </div>
