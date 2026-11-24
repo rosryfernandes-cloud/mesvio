@@ -210,30 +210,52 @@ export async function addTables(db: Db, admin: PlatformAdmin, establishmentId: s
   });
 }
 
+export const updateTableSchema = z
+  .object({
+    label: z.string().trim().min(1, "Escreva o nome do lugar.").max(30, "O nome tem no máximo 30 caracteres.").optional(),
+    zone: z.string().trim().max(40, "A zona tem no máximo 40 caracteres.").optional(),
+    orderingMode: z.enum(["pay_later", "pay_first", "menu_only"]).optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), "Nada para mudar.");
+
 /**
- * Retira (ou repõe) um lugar: o QR deixa de abrir e o lugar sai do painel, mas os pedidos antigos
- * ficam no histórico. Ao repor, volta com o mesmo QR (as placas impressas continuam a servir).
+ * Edita um lugar na Central: nome, zona, tipo (mesa, espreguiçadeira ou só ementa) e se está ativo.
+ * Retirar (active=false) faz o QR deixar de abrir e tira o lugar do painel; os pedidos antigos ficam.
+ * O QR nunca muda aqui: as placas impressas continuam a servir.
  */
-export async function setTableActive(
+export async function updateTable(
   db: Db,
   admin: PlatformAdmin,
   establishmentId: string,
   tableId: string,
-  active: boolean,
-): Promise<PlatformResult<{ active: boolean }>> {
+  raw: unknown,
+): Promise<PlatformResult<{ label: string; zone: string | null; orderingMode: string; active: boolean }>> {
+  const parsed = updateTableSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", message: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   const org = await establishmentOrg(db, establishmentId);
   if (!org) return { ok: false, code: "NOT_FOUND", message: "Restaurante não encontrado." };
+  const { label, zone, orderingMode, active } = parsed.data;
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(diningTables)
-      .set({ active })
+      .set({
+        ...(label !== undefined && { label }),
+        ...(zone !== undefined && { zone: zone || null }),
+        ...(orderingMode !== undefined && { orderingMode }),
+        ...(active !== undefined && { active }),
+      })
       .where(and(eq(diningTables.id, tableId), eq(diningTables.establishmentId, establishmentId)))
-      .returning({ label: diningTables.label });
+      .returning({ label: diningTables.label, zone: diningTables.zone, orderingMode: diningTables.orderingMode, active: diningTables.active });
     if (!row) return { ok: false, code: "NOT_FOUND", message: "Lugar não encontrado." };
-    await audit(tx, admin, org, active ? "platform.table_restored" : "platform.table_removed", establishmentId, { tableId, label: row.label });
-    return { ok: true, active };
+    await audit(tx, admin, org, "platform.update_table", establishmentId, { tableId, ...parsed.data });
+    return { ok: true, ...row };
   });
 }
+
+/** Retirar (ou repor) um lugar: atalho de `updateTable`. */
+export const setTableActive = (db: Db, admin: PlatformAdmin, establishmentId: string, tableId: string, active: boolean) =>
+  updateTable(db, admin, establishmentId, tableId, { active });
 
 /**
  * Passa o restaurante para "sem POS": a ementa atual (MockPOS ou POS) é copiada para a ementa

@@ -63,3 +63,21 @@ describe("retirar um lugar na Central", () => {
     expect(await open()).not.toBeNull();
   });
 });
+
+describe("editar um lugar na Central", () => {
+  it("muda o nome, a zona e o tipo sem mudar o QR, e recusa um nome vazio", async () => {
+    const { updateTable } = await import("@/server/platform/platform-service");
+    const { DEMO_ESTABLISHMENT } = await import("@/server/pos/mock/demo-data");
+    const { findPlatformAdmin } = await import("@/server/platform/admin-auth");
+    const { DEMO_PLATFORM_ADMIN } = await import("@/server/db/seed-demo");
+    const admin = (await findPlatformAdmin(db, DEMO_PLATFORM_ADMIN.userId))!;
+    const table = DEMO_TABLES.find((t) => t.orderingMode === "pay_later")!;
+    const [row] = await db.select({ id: diningTables.id }).from(diningTables).where(eq(diningTables.publicToken, table.publicToken));
+    const r = await updateTable(db, admin, DEMO_ESTABLISHMENT.id, row.id, { label: "Mesa 1 Sala", zone: "Sala", orderingMode: "menu_only" });
+    expect(r).toMatchObject({ ok: true, label: "Mesa 1 Sala", zone: "Sala", orderingMode: "menu_only", active: true });
+    const [after] = await db.select().from(diningTables).where(eq(diningTables.id, row.id));
+    expect(after.publicToken).toBe(table.publicToken);
+    expect((await updateTable(db, admin, DEMO_ESTABLISHMENT.id, row.id, { label: "  " })).ok).toBe(false);
+    expect((await updateTable(db, admin, DEMO_ESTABLISHMENT.id, row.id, {})).ok).toBe(false);
+  });
+});
