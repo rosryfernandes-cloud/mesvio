@@ -330,6 +330,13 @@
       "when": 1795522010486,
       "tag": "0046_sugestoes_da_casa",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795705286519,
+      "tag": "0047_avisos_central",
+      "breakpoints": true
     }
   ]
 }

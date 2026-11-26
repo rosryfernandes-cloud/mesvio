@@ -4,7 +4,7 @@ import { z } from "zod";
 import webpush from "web-push";
 import { formatEur } from "@/lib/money";
 import { getDb, type Db } from "@/server/db/client";
-import { diningTables, establishments, memberships, platformAdmins, pushSubscriptions } from "@/server/db/schema";
+import { diningTables, establishments, memberships, platformAdmins, platformPushSubscriptions, pushSubscriptions } from "@/server/db/schema";
 import { resolveTableToken, withTenant } from "@/server/db/tenant";
 import { keepAlive } from "@/server/runtime/keep-alive";
 import type { StaffContext } from "@/server/staff/context";
@@ -167,12 +167,58 @@ export async function notifyPlatformAdmins(systemDb: Db, message: PushMessage, s
   if (!send) return 0;
   const admins = await systemDb.select({ userId: platformAdmins.userId }).from(platformAdmins);
   if (admins.length === 0) return 0;
-  const subs = await systemDb.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, admins.map((a) => a.userId)));
-  // O mesmo aparelho pode estar ligado em vários restaurantes: uma notificação por aparelho.
-  const unique = [...new Map(subs.map((s) => [s.endpoint, s])).values()];
+  const ids = admins.map((a) => a.userId);
+  // Aparelhos ligados na Central (os principais) e, como antes, os ligados no painel de um restaurante.
+  const central = await systemDb.select().from(platformPushSubscriptions).where(inArray(platformPushSubscriptions.userId, ids));
+  const sent = await deliverPlatform(systemDb, central, message, send);
+  const subs = await systemDb.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, ids));
+  // O mesmo aparelho pode estar ligado em vários restaurantes e na Central: uma notificação por aparelho.
+  const already = new Set(central.map((c) => c.endpoint));
+  const unique = [...new Map(subs.filter((s) => !already.has(s.endpoint)).map((s) => [s.endpoint, s])).values()];
+  let total = sent;
+  for (const [org, list] of Map.groupBy(unique, (s) => s.organizationId)) total += await deliver(systemDb, org, list, message, send);
+  return total;
+}
+
+/** Envia aos aparelhos ligados na Central; apaga os que já não existem (404/410). */
+async function deliverPlatform(systemDb: Db, subs: (typeof platformPushSubscriptions.$inferSelect)[], message: PushMessage, send: PushSender): Promise<number> {
+  const gone: string[] = [];
   let sent = 0;
-  for (const [org, list] of Map.groupBy(unique, (s) => s.organizationId)) sent += await deliver(systemDb, org, list, message, send);
+  await Promise.all(
+    subs.map(async (sub) => {
+      try {
+        await send(sub, JSON.stringify(message));
+        sent++;
+      } catch (err) {
+        const status = (err as { statusCode?: number }).statusCode;
+        if (status === 404 || status === 410) gone.push(sub.id);
+        else console.error("[notificações] envio falhou (Central)", status ?? err);
+      }
+    }),
+  );
+  if (gone.length) await systemDb.delete(platformPushSubscriptions).where(inArray(platformPushSubscriptions.id, gone));
   return sent;
+}
+
+/** Central: este aparelho passa a receber os avisos da equipa MESVIO. */
+export async function savePlatformSubscription(systemDb: Db, userId: string, raw: unknown): Promise<boolean> {
+  const parsed = subscriptionSchema.safeParse(raw);
+  if (!parsed.success) return false;
+  const { endpoint, keys } = parsed.data;
+  await systemDb.delete(platformPushSubscriptions).where(eq(platformPushSubscriptions.endpoint, endpoint));
+  await systemDb.insert(platformPushSubscriptions).values({ userId, endpoint, p256dh: keys.p256dh, auth: keys.auth });
+  return true;
+}
+
+export async function removePlatformSubscription(systemDb: Db, userId: string, endpoint: string): Promise<void> {
+  await systemDb.delete(platformPushSubscriptions).where(and(eq(platformPushSubscriptions.endpoint, endpoint), eq(platformPushSubscriptions.userId, userId)));
+}
+
+/** Central: aviso de teste para os aparelhos da própria pessoa. */
+export async function notifyPlatformTest(systemDb: Db, userId: string, send: PushSender | null = vapidSender()): Promise<number> {
+  if (!send) return 0;
+  const subs = await systemDb.select().from(platformPushSubscriptions).where(eq(platformPushSubscriptions.userId, userId));
+  return deliverPlatform(systemDb, subs, { title: "MESVIO Central", body: "Os avisos estão a funcionar. ✓", tag: "teste-central", url: "/central/demonstracao" }, send);
 }
 
 /**

@@ -111,6 +111,9 @@ export async function getPreviewByToken(db: Db, token: string, now = new Date())
   return row && row.expiresAt > now ? row : null;
 }
 
+/** Depois de quanto tempo sem abrir uma nova abertura do link volta a avisar a equipa. */
+export const REOPEN_ALERT_GAP_MS = 30 * 60_000;
+
 /** O dono abriu o link (contado pelo navegador, não por pré-visualizações automáticas de links). */
 export async function recordPreviewView(db: Db, token: string, now = new Date()): Promise<boolean> {
   const p = await getPreviewByToken(db, token, now);
@@ -119,9 +122,19 @@ export async function recordPreviewView(db: Db, token: string, now = new Date())
     .update(menuPreviews)
     .set({ viewCount: sql`${menuPreviews.viewCount} + 1`, firstViewedAt: p.firstViewedAt ?? now, lastViewedAt: now })
     .where(eq(menuPreviews.id, p.id));
-  if (!p.firstViewedAt) {
+  // Aviso à equipa na 1.ª abertura e sempre que voltam a abrir depois de uma pausa (reabrir = interesse).
+  const reopened = p.lastViewedAt && now.getTime() - new Date(p.lastViewedAt).getTime() >= REOPEN_ALERT_GAP_MS;
+  if (!p.firstViewedAt || reopened) {
+    const nth = p.viewCount + 1;
     queuePush((sys) =>
-      notifyPlatformAdmins(sys, { title: "Abriram a ementa 👀", body: `${p.restaurantName} abriu a pré-visualização. Bom momento para ligar.`, tag: `preview-${p.id}`, url: "/central/demonstracao" }),
+      notifyPlatformAdmins(sys, {
+        title: p.firstViewedAt ? `Voltaram a abrir a ementa 🔥 (${nth}.ª vez)` : "Abriram a ementa 👀",
+        body: p.firstViewedAt
+          ? `${p.restaurantName} está a ver a ementa outra vez. Liga agora, enquanto está a olhar para ela.`
+          : `${p.restaurantName} abriu a pré-visualização. Bom momento para ligar.`,
+        tag: `preview-${p.id}`,
+        url: "/central/demonstracao",
+      }),
     );
   }
   return true;

@@ -4,6 +4,7 @@ import { CentralShell } from "@/components/central/central-shell";
 import { QuickDemo } from "@/components/central/quick-demo";
 import { PreviewList } from "@/components/central/preview-list";
 import { BatchPreviews } from "@/components/central/batch-previews";
+import { CentralAlerts } from "@/components/central/central-alerts";
 import { getDb } from "@/server/db/client";
 import { readWithRetry } from "@/server/db/read-retry";
 import { listPreviews } from "@/server/platform/menu-previews";
@@ -24,6 +25,7 @@ export default async function DemoPage() {
         também criar um link privado para lhe enviar por email, WhatsApp ou Instagram. Para o restaurante passar a cliente, crie-o em
         &quot;Novo restaurante&quot;.
       </p>
+      <CentralAlerts />
       <QuickDemo />
       <BatchPreviews />
       <section aria-labelledby="enviadas" className="mt-10">

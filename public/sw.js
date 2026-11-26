@@ -28,7 +28,9 @@ self.addEventListener("notificationclick", (event) => {
   const url = (event.notification.data && event.notification.data.url) || "/painel";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
-      const open = windows.find((w) => new URL(w.url).pathname.startsWith("/painel"));
+      // Abre a mesma área do aviso (painel do restaurante ou Central), não outra que esteja aberta.
+      const area = new URL(url, self.location.origin).pathname.split("/").slice(0, 2).join("/") || "/painel";
+      const open = windows.find((w) => new URL(w.url).pathname.startsWith(area));
       if (open) return open.focus();
       return self.clients.openWindow(url);
     }),

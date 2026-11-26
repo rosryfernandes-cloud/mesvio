@@ -190,6 +190,19 @@ export const staffProfiles = pgTable("staff_profiles", {
  * Equipa da MESVIO com acesso ao painel central (todos os restaurantes). Sem políticas RLS: só o
  * servidor lê esta tabela. O 2FA (TOTP) é obrigatório; os segredos ficam cifrados (AES-256-GCM).
  */
+/**
+ * Aparelhos onde a equipa MESVIO ligou os avisos na Central (abriram um link de demonstração, pediram
+ * para ativar, novo pedido de demonstração). Sem restaurante: só a ligação de sistema lhes chega (RLS sem políticas).
+ */
+export const platformPushSubscriptions = pgTable("platform_push_subscriptions", {
+  id: id(),
+  userId: uuid("user_id").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: createdAt(),
+});
+
 export const platformAdmins = pgTable("platform_admins", {
   userId: uuid("user_id").primaryKey(),
   email: text("email"),

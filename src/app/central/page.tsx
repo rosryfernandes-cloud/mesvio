@@ -7,6 +7,7 @@ import { getPlatformOverview } from "@/server/platform/platform-service";
 import { CentralShell } from "@/components/central/central-shell";
 import { formatEur } from "@/lib/money";
 import { countOpenDemoRequests } from "@/server/contact/demo-requests";
+import { CentralAlerts } from "@/components/central/central-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,8 @@ export default async function CentralOverviewPage({ searchParams }: { searchPara
           </li>
         ))}
       </ul>
+
+      <CentralAlerts />
 
       {openDemos > 0 && (
         <Link
