@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const field = "mt-1 block w-full rounded-xl border border-line bg-card px-4 py-3 text-base";
@@ -24,7 +24,26 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const verifying = useRef(false);
+
+  // Contagem decrescente do "Reenviar código" (não deixa pedir vários códigos seguidos).
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function resend() {
+    setBusy(true);
+    setError(null);
+    const r = await post("/api/painel/auth/codigo", { email });
+    setBusy(false);
+    if (!r.ok) return setError(r.message ?? "Não foi possível enviar o código.");
+    setCodigo("");
+    setCooldown(60);
+    setInfo("Enviámos um código novo. Use só o do email mais recente: os anteriores deixam de funcionar.");
+  }
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +52,8 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
     const r = await post("/api/painel/auth/codigo", { email });
     setBusy(false);
     if (!r.ok) return setError(r.message ?? "Não foi possível enviar o código.");
-    setInfo(r.message ?? null);
+    setInfo(null);
+    setCooldown(60);
     setStep("code");
   }
 
@@ -59,8 +79,9 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
   return step === "email" ? (
     <form onSubmit={sendCode} className="mt-8 grid gap-4">
       <label className="text-sm font-semibold">
-        Email
+        O seu email
         <input className={field} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+        <span className="mt-1 block text-xs font-normal text-ink-soft">O email onde recebeu o convite da MESVIO. Não precisa de palavra-passe.</span>
       </label>
       {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
       <button type="submit" disabled={busy} className={primary}>{busy ? "A enviar…" : "Enviar código"}</button>
@@ -68,7 +89,13 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
     </form>
   ) : (
     <form onSubmit={verify} className="mt-8 grid gap-4">
-      {info && <p className="rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">{info}</p>}
+      <div className="rounded-xl bg-[#ecfdf3] px-4 py-3 text-sm text-ok">
+        <p>
+          Se <strong>{email}</strong> tiver acesso, enviámos um código de entrada. Vem de <strong>nao-responder@mesvio.pt</strong>: se não o vir,
+          procure no Spam ou em Promoções.
+        </p>
+        {info && <p className="mt-1 font-semibold">{info}</p>}
+      </div>
       <label className="text-sm font-semibold">
         Código do email
         <input
@@ -82,9 +109,15 @@ export function EmailCodeLogin({ redirectTo = "/painel", hint = "Só entram pess
       </label>
       {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
       <button type="submit" disabled={busy || codigo.length < 6} className={primary}>{busy ? "A verificar…" : "Entrar"}</button>
-      <button type="button" onClick={() => { setStep("email"); setCodigo(""); setError(null); }} className="text-sm text-ink-soft underline">
-        Usar outro email
-      </button>
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+        <button type="button" disabled={busy || cooldown > 0} onClick={() => void resend()} className="text-sm text-ink-soft underline disabled:no-underline disabled:opacity-60">
+          {cooldown > 0 ? `Reenviar código (${cooldown} s)` : "Reenviar código"}
+        </button>
+        <button type="button" onClick={() => { setStep("email"); setCodigo(""); setError(null); setInfo(null); }} className="text-sm text-ink-soft underline">
+          Usar outro email
+        </button>
+      </div>
+      <p className="text-center text-xs text-ink-soft">Não chega nenhum email? Confirme que é o email do convite, ou peça ao dono do restaurante (ou à MESVIO) para o convidar outra vez.</p>
     </form>
   );
 }

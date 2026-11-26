@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.verifyOtp({ email, token: parsed.data.codigo, type: "email" });
-  if (error || !data.user) return NextResponse.json({ message: "Código inválido ou expirado." }, { status: 401 });
+  if (error || !data.user) return NextResponse.json({ message: "Código errado ou expirado. Use o código do email mais recente, ou carregue em Reenviar código." }, { status: 401 });
 
   // Conta válida mas sem nenhum restaurante (ex.: foi removida da equipa) nem acesso ao painel
   // central: não fica com sessão.

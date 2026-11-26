@@ -33,6 +33,11 @@ export default async function StaffLoginPage({ searchParams }: { searchParams: P
           O link expirou ou já foi usado. Entre com o seu email.
         </p>
       )}
+      {erro === "acesso" && (
+        <p role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
+          Esta conta não tem acesso a nenhum restaurante. Peça ao dono do restaurante para o convidar outra vez.
+        </p>
+      )}
       {mode === "supabase" && <EmailCodeLogin />}
       {mode === "dev" && <DevLogin users={(await listDevUsers(await getDb())).map(({ organizationId, ...u }) => u)} />}
       {mode === "unavailable" && (
