@@ -8,6 +8,7 @@ import {
   outreachShortText,
   outreachSubject,
 } from "@/lib/outreach-email";
+import { ProposalDialog } from "./proposal-dialog";
 
 export type PreviewRow = {
   id: string;
@@ -42,15 +43,19 @@ export function PreviewList({
   rows,
   baseUrl,
   sender,
+  senderFull,
 }: {
   rows: PreviewRow[];
   baseUrl: string;
   sender: string;
+  /** Nome completo para assinar as propostas (ex.: "Rodrigo Fernandes"). */
+  senderFull?: string;
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<PreviewRow | null>(null);
   const now = Date.now();
 
   const flash = (key: string) => {
@@ -306,6 +311,13 @@ export function PreviewList({
                       >
                         Abrir
                       </a>
+                      <button
+                        type="button"
+                        onClick={() => setProposal(r)}
+                        className="min-h-10 rounded-xl border border-brand bg-paper px-3 text-sm font-semibold text-brand"
+                      >
+                        📄 Proposta
+                      </button>
                     </>
                   )}
                   {!expired &&
@@ -345,6 +357,16 @@ export function PreviewList({
           );
         })}
       </ul>
+      {proposal && (
+        <ProposalDialog
+          restaurant={proposal.restaurantName}
+          url={`${baseUrl}/p/${proposal.token}`}
+          email={proposal.contactEmail}
+          sender={senderFull ?? sender}
+          baseUrl={baseUrl}
+          onClose={() => setProposal(null)}
+        />
+      )}
     </>
   );
 }

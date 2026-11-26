@@ -41,6 +41,7 @@ export default async function DemoPage() {
         <PreviewList
           baseUrl={baseUrl}
           sender={(admin.displayName ?? "Rodrigo").split(" ")[0]}
+          senderFull={admin.displayName ?? undefined}
           rows={previews.map(({ firstViewedAt: _first, ...p }) => ({
             ...p,
             emailedAt: p.emailedAt?.toISOString() ?? null,
