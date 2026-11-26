@@ -17,6 +17,34 @@ export type ProposalInput = {
   plan: Plan;
   sunbeds: boolean;
   extras: ExtraKey[];
+  /** Extras apresentados como opcionais ("se quiserem"): explicados, mas não somam ao preço. */
+  optionalExtras?: ExtraKey[];
+};
+
+/** Como funciona cada extra, para a proposta (mais completo do que a frase do catálogo). */
+export const EXTRA_DETAILS: Record<ExtraKey, string[]> = {
+  comandeira: [
+    "O empregado abre a comandeira no telemóvel dele, escolhe a mesa ou a espreguiçadeira e toca nos pratos, com as opções (ponto da carne, tamanho) e notas como &ldquo;sem cebola&rdquo;.",
+    "Ao enviar, o pedido sai logo em talão na cozinha e no bar e soma à conta do lugar, tal como os pedidos feitos pelo QR.",
+    "Ideal para quem prefere pedir ao empregado: acabam os papéis e as idas à cozinha para entregar o pedido.",
+  ],
+  cozinha: [
+    "Um tablet na cozinha (ou no bar) mostra os pedidos por ordem de chegada, com o tempo de espera de cada um.",
+    "A cozinha marca &ldquo;Pronto&rdquo; com um toque e a sala sabe logo que pode levar o pedido.",
+    "Funciona com os pedidos do QR e da comandeira, e pode substituir os talões em papel.",
+  ],
+  tv: [
+    "Um link que se abre na TV do restaurante: o menu do dia e a ementa passam sozinhos, em letra grande.",
+    "Muda sozinho quando mudam a ementa no painel.",
+  ],
+  site: [
+    "Uma página pública do restaurante com a ementa, o menu do dia, o horário, a morada e um botão para ligar.",
+    "Atualiza-se sozinha com a ementa do painel. Basta pôr o link no Google Maps e no Instagram.",
+  ],
+  ponto: [
+    "Um tablet à entrada onde a equipa pica a entrada, as pausas e a saída com nome e PIN, com uma selfie de prova.",
+    "O dono vê quem está a trabalhar, as horas de cada um e os atrasos, faz a escala da semana e exporta um Excel para o contabilista.",
+  ],
 };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -134,7 +162,6 @@ export function proposalEmail(p: ProposalInput): { subject: string; html: string
     H("Extras incluídos nesta proposta");
     LIST(extras.map((k) => ["➕", `${EXTRAS[k].label} (${EXTRAS[k].price}):`, EXTRAS[k].hint]));
   }
-
   H("O que fica no restaurante");
   IMG("placa-qr.jpg", "Placa com QR em cima da mesa, com o logótipo do restaurante");
   P(`Em cada ${p.sunbeds ? "mesa e espreguiçadeira" : "mesa"} fica uma <strong>placa com o QR desse lugar</strong>, com o logótipo e as cores do restaurante. Escolhemos juntos o desenho.`);
@@ -155,6 +182,18 @@ export function proposalEmail(p: ProposalInput): { subject: string; html: string
   );
   if (p.plan === "menu") {
     P("Se um dia quiserem ir mais longe, a mesma ementa pode passar a receber <strong>pedidos da mesa</strong> (o pedido sai logo na cozinha, com &ldquo;Chamar empregado&rdquo; e &ldquo;Pedir a conta&rdquo;), por 59 € por mês, sem mudar nada do que já está feito. Para já, a ementa digital chega perfeitamente para começar.");
+  }
+
+  const optional = (p.optionalExtras ?? []).filter((k) => k in EXTRAS && !extras.includes(k));
+  if (optional.length) {
+    H("Se quiserem, também temos");
+    P("Não estão incluídos no preço acima: ligam-se quando quiserem, a qualquer momento, e desligam-se da mesma forma.");
+    for (const k of optional) {
+      h.push(`<p style="margin:10px 0 4px"><strong>➕ ${EXTRAS[k].label}</strong> <span style="color:#4a5a55">· ${EXTRAS[k].price.replace("+", "mais ")}</span></p>`);
+      t.push(`\n+ ${EXTRAS[k].label} (${EXTRAS[k].price.replace("+", "mais ")})`);
+      h.push(`<ul style="margin:0 0 12px;padding-left:20px">${EXTRA_DETAILS[k].map((d) => `<li>${d}</li>`).join("")}</ul>`);
+      t.push(...EXTRA_DETAILS[k].map((d) => `  - ${d.replace(/&ldquo;|&rdquo;/g, '"')}`));
+    }
   }
 
   H("O que preciso de vocês para avançar");

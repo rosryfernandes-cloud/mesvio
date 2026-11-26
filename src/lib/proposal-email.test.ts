@@ -11,6 +11,11 @@ describe("proposta por email", () => {
     expect(p.html).toContain("1,5% + 0,25 €");
     expect(p.html).toContain("Olá Giovana");
     expect(p.html).toContain("84 € por mês"); // 69 + 10 + 5
+    const o = proposalEmail({ ...base, plan: "payments", sunbeds: true, extras: [], optionalExtras: ["comandeira", "cozinha"] });
+    expect(o.html).toContain("69 € por mês");
+    expect(o.html).toContain("Se quiserem, também temos");
+    expect(o.html).toContain("Comandeira digital");
+    expect(o.html).not.toContain("Extras incluídos");
     expect(p.text).toContain("https://mesvio.pt/p/abc");
     expect(p.text).toContain("920 636 605");
   });

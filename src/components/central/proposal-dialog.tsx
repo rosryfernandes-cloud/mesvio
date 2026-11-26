@@ -31,6 +31,7 @@ export function ProposalDialog({
   const [plan, setPlan] = useState<Plan>("payments");
   const [sunbeds, setSunbeds] = useState(false);
   const [extras, setExtras] = useState<ExtraKey[]>([]);
+  const [extrasOptional, setExtrasOptional] = useState(true);
   const [phone, setPhone] = useState("920 636 605");
   const [to, setTo] = useState(email ?? "");
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,8 +45,20 @@ export function ProposalDialog({
     }
   }, []);
 
-  const monthly = PLAN_MONTHLY_CENTS[plan] + extras.reduce((t, k) => t + extraCents(k), 0);
-  const build = () => proposalEmail({ restaurant, contactName: contactName.trim() || undefined, url, sender, phone, baseUrl, plan, sunbeds, extras });
+  const monthly = PLAN_MONTHLY_CENTS[plan] + (extrasOptional ? 0 : extras.reduce((t, k) => t + extraCents(k), 0));
+  const build = () =>
+    proposalEmail({
+      restaurant,
+      contactName: contactName.trim() || undefined,
+      url,
+      sender,
+      phone,
+      baseUrl,
+      plan,
+      sunbeds,
+      extras: extrasOptional ? [] : extras,
+      optionalExtras: extrasOptional ? extras : [],
+    });
 
   async function copy(): Promise<boolean> {
     try {
@@ -116,6 +129,16 @@ export function ProposalDialog({
               </label>
             ))}
           </div>
+          {extras.length > 0 && (
+            <div className="mt-1 grid grid-cols-2 gap-1 text-sm" role="radiogroup" aria-label="Como apresentar os extras">
+              <label className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 ${extrasOptional ? "border-brand font-semibold" : "border-line"}`}>
+                <input type="radio" checked={extrasOptional} onChange={() => setExtrasOptional(true)} /> Opcionais (&ldquo;se quiserem&rdquo;)
+              </label>
+              <label className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 ${!extrasOptional ? "border-brand font-semibold" : "border-line"}`}>
+                <input type="radio" checked={!extrasOptional} onChange={() => setExtrasOptional(false)} /> Incluídos no preço
+              </label>
+            </div>
+          )}
         </fieldset>
 
         <div className="grid gap-2 sm:grid-cols-2">
